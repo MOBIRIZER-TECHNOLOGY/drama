@@ -70,6 +70,8 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const [favorite, setFavorite] = useState(series.is_favorite);
   const [reportOpen, setReportOpen] = useState(false);
   const [synopsisOpen, setSynopsisOpen] = useState(false);
+  const synopsisRef = useRef<HTMLParagraphElement>(null);
+  const [synopsisClamped, setSynopsisClamped] = useState(false);
   const [continueNumber, setContinueNumber] = useState(series.continue_episode_number);
   const [ageGate, setAgeGate] = useState<AgeGate>({ open: false, retry: null, busy: false, error: null });
   const inFlight = useRef(new Set<string>());
@@ -181,16 +183,36 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
     });
   }, [unlockTarget, series.id, balance]);
 
-  const syncUrl = (n: number) => {
+  // Whether the clamped synopsis is actually overflowing. Read from layout rather than guessed, and re-read on
+  // resize because the same text clamps at one width and not another.
+  useEffect(() => {
+    const el = synopsisRef.current;
+    if (!el) return;
+    const measure = () => setSynopsisClamped(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [series.synopsis]);
+
+  /**
+   * Reflect the current episode in the URL.
+   *
+   * An explicit choice pushes, so Back steps to the previous episode; an automatic advance replaces, so
+   * finishing six episodes does not bury the page under six history entries. Everything used to replace, which
+   * meant Back left the series altogether after watching anything.
+   */
+  const syncUrl = (n: number, { push = false }: { push?: boolean } = {}) => {
     const url = new URL(window.location.href);
     url.searchParams.set("ep", String(n));
-    window.history.replaceState(window.history.state, "", url.toString());
+    const method = push ? window.history.pushState : window.history.replaceState;
+    method.call(window.history, window.history.state, "", url.toString());
   };
 
   /** Select an episode: always requests a fresh grant (signed URLs expire). */
   const select = (ep: EpisodeOut, { explicit = true }: { explicit?: boolean } = {}) => {
     setCurrentId(ep.id);
-    syncUrl(ep.number);
+    syncUrl(ep.number, { push: explicit });
     if (status === "anonymous" && !ep.is_free) {
       if (explicit) openAuth();
       return;
@@ -365,8 +387,30 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const toggle = async (kind: "like" | "favorite") => {
     if (status !== "authenticated") return openAuth();
     const path = kind === "like" ? "/v1/series/{series_id}/like" : "/v1/series/{series_id}/favorite";
+
+    // Flip locally first and revert on failure. Waiting for the round trip meant the heart stayed empty for a
+    // second on 3G, which reads as a button that does not work — so people tap it again.
+    const wasLiked = liked;
+    const wasCount = likeCount;
+    const wasFavorite = favorite;
+    if (kind === "like") {
+      setLiked(!wasLiked);
+      setLikeCount((c) => Math.max(0, c + (wasLiked ? -1 : 1)));
+    } else {
+      setFavorite(!wasFavorite);
+    }
+
     const { data, error } = await call(() => clientApi.POST(path, { params: { path: { series_id: series.id } } }));
-    if (error) return toast(error.message, "error");
+    if (error) {
+      if (kind === "like") {
+        setLiked(wasLiked);
+        setLikeCount(wasCount);
+      } else {
+        setFavorite(wasFavorite);
+      }
+      return toast(error.message, "error");
+    }
+    // Settle on the server's answer, which is authoritative if the two ever disagree.
     if (kind === "like") {
       setLiked(data.active);
       if (typeof data.count === "number") setLikeCount(data.count);
@@ -530,8 +574,15 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
 
           {series.synopsis && (
             <div className="mt-4">
-              <p className={`text-sm leading-relaxed text-ink2 ${synopsisOpen ? "" : "line-clamp-3"}`}>{series.synopsis}</p>
-              {series.synopsis.length > 180 && (
+              <p
+                ref={synopsisRef}
+                className={`text-sm leading-relaxed text-ink2 ${synopsisOpen ? "" : "line-clamp-3"}`}
+              >
+                {series.synopsis}
+              </p>
+              {/* Measured rather than guessed from a character count: three clamped lines is ~120 characters at
+                  360px and ~260 at desktop, so any fixed threshold is wrong on one of them. */}
+              {(synopsisOpen || synopsisClamped) && (
                 <button type="button" onClick={() => setSynopsisOpen((v) => !v)} className="mt-1 text-xs font-medium text-accent hover:underline">
                   {synopsisOpen ? t("common.less", "Show less") : t("common.more", "Show more")}
                 </button>

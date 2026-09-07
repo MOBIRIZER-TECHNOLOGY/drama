@@ -102,6 +102,7 @@
   "home.error_title": "We couldn't load the home page",
   "home.featured": "Featured",
   "home.go_to_slide": "Slide {n} of {count}",
+  "home.top_10": "Top 10 this week",
   "home.watch_now": "Watch now",
   "landing.cta": "Create a free account",
   "landing.cta_bonus": "Get {n} free coins",

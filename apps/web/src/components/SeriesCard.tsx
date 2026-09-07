@@ -11,6 +11,7 @@ export function SeriesCard({
   className = "",
   episodesLabel = "eps",
   freeLabel = "Free",
+  rank,
 }: {
   series: SeriesCardT;
   lang: string;
@@ -18,15 +19,29 @@ export function SeriesCard({
   className?: string;
   episodesLabel?: string;
   freeLabel?: string;
+  /** Position in a ranked rail. A numbered row is the highest-CTR format in this category. */
+  rank?: number;
 }) {
   const href = localeHref(lang, `/series/${series.slug}`);
   return (
     <Link
       href={href}
-      className={`group block w-[9.5rem] shrink-0 snap-start sm:w-44 md:w-48 ${className}`}
-      aria-label={series.title}
+      className={`group block shrink-0 snap-start ${rank ? "ms-6 w-[9.5rem] sm:w-44 md:w-48" : "w-[9.5rem] sm:w-44 md:w-48"} ${className}`}
+      aria-label={rank ? `${rank}. ${series.title}` : series.title}
     >
-      <div className="relative aspect-[9/16] overflow-hidden rounded-md border border-line bg-surface">
+      <div className="relative aspect-[9/16] rounded-md border border-line bg-surface">
+        {/* Outline numeral hanging off the poster's leading edge — the standard ranked-rail treatment, and why
+            the card carries a leading margin when ranked. */}
+        {rank ? (
+          <span
+            aria-hidden
+            className="font-display pointer-events-none absolute bottom-0 start-0 z-10 -translate-x-[0.42em] select-none text-[5rem] font-bold leading-[0.72] text-ground sm:text-[6rem] rtl:translate-x-[0.42em]"
+            style={{ WebkitTextStroke: "2px var(--k-line-strong)" }}
+          >
+            {rank}
+          </span>
+        ) : null}
+        <div className="absolute inset-0 overflow-hidden rounded-md">
         {series.cover_url ? (
           <Image
             src={series.cover_url}
@@ -78,6 +93,7 @@ export function SeriesCard({
           <span className="rounded-pill bg-accent/90 p-3 text-accent-ink">
             <IconPlay size={22} />
           </span>
+        </div>
         </div>
       </div>
       <h3 className="mt-2 line-clamp-2 text-sm font-medium leading-snug text-ink">{series.title}</h3>

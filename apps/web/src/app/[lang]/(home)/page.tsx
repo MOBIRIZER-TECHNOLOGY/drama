@@ -57,19 +57,29 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
       )}
       <div className="mx-auto mt-8 flex max-w-[1400px] flex-col gap-10 sm:mt-10">
         <PersonalRails />
-        {others.map((rail) => (
-          <Rail key={rail.key} title={rail.title} id={`rail-${rail.key}`}>
-            {rail.items.map((s) => (
-              <SeriesCard
-                key={s.id}
-                series={s}
-                lang={lang}
-                episodesLabel={t("series.eps", "eps")}
-                freeLabel={t("series.free", "Free")}
-              />
-            ))}
-          </Rail>
-        ))}
+        {others.map((rail) => {
+          // The catalogue's own ordering is already a ranking, so `top_picks` renders numbered. A ranked row is
+          // the highest-CTR rail format in this category and it cost one prop.
+          const ranked = rail.key === "top_picks";
+          return (
+            <Rail
+              key={rail.key}
+              title={ranked ? t("home.top_10", "Top 10 this week") : rail.title}
+              id={`rail-${rail.key}`}
+            >
+              {(ranked ? rail.items.slice(0, 10) : rail.items).map((s, i) => (
+                <SeriesCard
+                  key={s.id}
+                  series={s}
+                  lang={lang}
+                  rank={ranked ? i + 1 : undefined}
+                  episodesLabel={t("series.eps", "eps")}
+                  freeLabel={t("series.free", "Free")}
+                />
+              ))}
+            </Rail>
+          );
+        })}
         {others.length === 0 && featured && (
           <Rail title={featured.title}>
             {featured.items.map((s) => (
