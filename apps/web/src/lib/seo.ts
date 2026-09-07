@@ -31,7 +31,9 @@ export function tvSeriesJsonLd(series: SeriesDetail, lang: string): Record<strin
 export function videoObjectJsonLd(series: SeriesDetail, episode: EpisodeOut, lang: string): Record<string, unknown> | null {
   const thumbnail = episode.thumbnail_url;
   if (!thumbnail) return null;
-  const url = `${absoluteUrl(lang, `/series/${series.slug}`)}?ep=${episode.number}`;
+  // The episode's own page, not `?ep=N`: a query parameter is not indexed as a page, so the whole episode
+  // long tail was invisible and this payload described a URL that would never rank.
+  const url = absoluteUrl(lang, `/series/${series.slug}/${episode.number}`);
   return {
     "@context": "https://schema.org",
     "@type": "VideoObject",

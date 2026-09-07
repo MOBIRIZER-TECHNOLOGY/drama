@@ -7,6 +7,8 @@ import { fetchSitemap } from "@/lib/server-data";
 export const revalidate = 3600;
 
 const STATIC_PATHS = ["/", "/series", "/shorts"];
+/** Episodes listed per series. Sitemaps cap at 50,000 URLs; this keeps one long series from consuming it. */
+const EPISODE_URL_CAP = 120;
 
 function url(lang: string, path: string): string {
   return `${SITE_URL}${localeHref(lang, path)}`;
@@ -42,6 +44,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
       alternates: alternates(path, SUPPORTED_LANGS),
     });
+
+    // One URL per episode. "<series> episode 12 watch online" is the highest-volume query class in this
+    // category, and until episodes had their own routes none of it was crawlable. Capped so a 200-episode
+    // back-catalogue cannot push the sitemap past the 50,000-URL limit on its own.
+    const episodes = Math.min(s.episode_count ?? 0, EPISODE_URL_CAP);
+    for (let n = 1; n <= episodes; n += 1) {
+      const episodePath = `${path}/${n}`;
+      entries.push({
+        url: url(DEFAULT_LANG, episodePath),
+        lastModified: new Date(s.updated_at),
+        changeFrequency: "monthly",
+        priority: 0.5,
+        alternates: alternates(episodePath, SUPPORTED_LANGS),
+      });
+    }
   }
   for (const slug of feed.data.pages) {
     const path = `/p/${slug}`;

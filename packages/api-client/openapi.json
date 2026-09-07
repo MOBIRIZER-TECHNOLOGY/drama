@@ -12259,6 +12259,11 @@
             },
             "type": "array",
             "title": "Langs"
+          },
+          "episode_count": {
+            "type": "integer",
+            "title": "Episode Count",
+            "default": 0
           }
         },
         "type": "object",

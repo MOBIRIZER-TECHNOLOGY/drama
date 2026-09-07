@@ -4019,6 +4019,11 @@ export interface components {
             updated_at: string;
             /** Langs */
             langs: string[];
+            /**
+             * Episode Count
+             * @default 0
+             */
+            episode_count: number;
         };
         /** SitemapOut */
         SitemapOut: {

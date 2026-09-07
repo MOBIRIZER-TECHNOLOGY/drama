@@ -65,6 +65,10 @@ class SitemapEntry(BaseModel):
     slug: str
     updated_at: datetime
     langs: list[str]
+    # Highest published episode number, so the sitemap can list one URL per episode. "<series> episode 12 watch
+    # online" is the highest-volume query class in this category and every episode lived behind ?ep=N, which is
+    # a query parameter Google will not index as a page.
+    episode_count: int = 0
 
 
 class SitemapOut(BaseModel):
@@ -75,15 +79,40 @@ class SitemapOut(BaseModel):
 @router.get("/sitemap", response_model=SitemapOut)
 async def sitemap(db: DB) -> SitemapOut:
     """Feed for the web sitemap: published series with their available languages, and published CMS pages."""
+    from sqlalchemy import func
     from sqlalchemy.orm import selectinload
 
-    from app.models.catalog import PublishStatus, Series
+    from app.models.catalog import Episode, PublishStatus, Series
 
-    rows = await db.scalars(
-        select(Series).where(Series.status == PublishStatus.published).options(selectinload(Series.translations))
+    rows = list(
+        (
+            await db.scalars(
+                select(Series)
+                .where(Series.status == PublishStatus.published)
+                .options(selectinload(Series.translations))
+            )
+        ).all()
+    )
+    counts = dict(
+        (
+            await db.execute(
+                select(Episode.series_id, func.count())
+                .where(
+                    Episode.series_id.in_([s.id for s in rows]),
+                    Episode.status == PublishStatus.published,
+                )
+                .group_by(Episode.series_id)
+            )
+        ).all()
     )
     series = [
-        SitemapEntry(slug=s.slug, updated_at=s.updated_at, langs=[t.lang for t in s.translations]) for s in rows.all()
+        SitemapEntry(
+            slug=s.slug,
+            updated_at=s.updated_at,
+            langs=[t.lang for t in s.translations],
+            episode_count=counts.get(s.id, 0),
+        )
+        for s in rows
     ]
     pages = [p.slug for p in (await db.scalars(select(CmsPage).where(CmsPage.is_published.is_(True)))).all()]
     return SitemapOut(series=series, pages=pages)
