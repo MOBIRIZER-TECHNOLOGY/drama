@@ -1516,7 +1516,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Moderate Series */
+        /**
+         * Moderate Series
+         * @description Act on a moderation item, and record who decided what.
+         *
+         *     Clearing an AI safety flag, unpublishing a title and changing its rating are all content decisions someone
+         *     may have to defend later — a takedown dispute, a store review, a complaint. None of them left a trace.
+         */
         post: operations["moderate_series_v1_admin_moderation_series__series_id__post"];
         delete?: never;
         options?: never;

@@ -10,6 +10,7 @@ const KEYS = {
   pushToken: "katha.push_token",
   pushAsked: "katha.push_asked",
   pendingRoute: "katha.pending_route",
+  recentSearches: "katha.recent_searches",
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

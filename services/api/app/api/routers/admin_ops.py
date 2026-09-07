@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 
-from app.api.deps import DB, AdminRole, require_role
+from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
 from app.models.catalog import Series, SeriesTranslation
 from app.models.engagement import ContactMessage, Report, ReportStatus
@@ -313,13 +313,24 @@ class ModerateSeriesIn(BaseModel):
 
 
 @router.post("/moderation/series/{series_id}", response_model=Ok)
-async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB) -> Ok:
+async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB, admin: CurrentAdmin) -> Ok:
+    """Act on a moderation item, and record who decided what.
+
+    Clearing an AI safety flag, unpublishing a title and changing its rating are all content decisions someone
+    may have to defend later — a takedown dispute, a store review, a complaint. None of them left a trace.
+    """
     from app.models.catalog import PublishStatus
     from app.models.catalog import Series as S
 
     s_ = await db.get(S, series_id)
     if s_ is None:
         raise NotFound("Series")
+
+    before = {
+        "moderation_flags": list(s_.moderation_flags or []),
+        "status": s_.status.value,
+        "content_rating": s_.content_rating,
+    }
     if body.action == "clear_flags":
         s_.moderation_flags = []
     elif body.action == "unpublish":
@@ -328,6 +339,21 @@ async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB) 
         s_.content_rating = body.content_rating
     if body.note is not None:
         s_.moderation_note = body.note
+
+    audit.record(
+        db,
+        admin=admin,
+        action=f"moderation.{body.action}",
+        target_type="series",
+        target_id=s_.id,
+        note=body.note,
+        before=before,
+        after={
+            "moderation_flags": list(s_.moderation_flags or []),
+            "status": s_.status.value,
+            "content_rating": s_.content_rating,
+        },
+    )
     await db.commit()
     return Ok()
 

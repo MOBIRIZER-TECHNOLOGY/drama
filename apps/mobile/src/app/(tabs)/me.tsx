@@ -8,11 +8,12 @@ import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { NotificationSettings } from "@/components/notification-settings";
 import { Button, Card, Divider, ListRow, Pill, Screen, Text, Toast } from "@/components/ui";
+import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
 import { api } from "@/lib/api";
+import { unwrap , errorMessage } from "@/lib/errors";
 import { pickAndUploadAvatar } from "@/lib/avatar";
 import { getAppVersion } from "@/lib/device";
-import { errorMessage } from "@/lib/errors";
 import { formatDate } from "@/lib/format";
 import { clearCaches } from "@/lib/storage";
 import { useAuth } from "@/providers/auth";
@@ -27,6 +28,10 @@ export default function MeScreen() {
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const signedIn = status === "signed_in";
+  const episodePrice = config.economy.episode_price;
+  const isVip = Boolean(user?.is_vip);
+  // Read on this screen so the streak can be shown where the viewer already is, rather than two taps away.
+  const checkin = useQuery(async () => unwrap(await api.GET("/v1/rewards/checkin")), [], { enabled: signedIn });
   const language = config.languages.find((l) => l.code === lang);
 
   const firstFocus = useRef(true);
@@ -179,6 +184,10 @@ export default function MeScreen() {
               <Icon name="coin" size={18} />
               <Text variant="display">{signedIn ? balance : "—"}</Text>
             </View>
+            {/* A balance is unreadable until it is tied to what it buys. */}
+            {signedIn && episodePrice > 0 ? (
+              <Text variant="caption">{t("wallet.equivalent", { n: Math.floor(balance / episodePrice) })}</Text>
+            ) : null}
           </View>
           <Button
             title={t("wallet.top_up")}
@@ -190,14 +199,37 @@ export default function MeScreen() {
           />
         </Card>
 
+        {/* VIP was a passive pill when active and nothing at all when not — a free ARPU line left undrawn. */}
+        {signedIn && !isVip ? (
+          <Card style={styles.walletCard}>
+            <View style={{ flex: 1 }}>
+              <Text variant="label">{t("me.vip_title")}</Text>
+              <Text variant="caption">{t("me.vip_body")}</Text>
+            </View>
+            <Button title={t("me.vip_cta")} variant="secondary" small onPress={() => router.push("/wallet")} />
+          </Card>
+        ) : null}
+
         <Card style={{ padding: 0 }}>
           <ListRow
             title={t("rewards.title")}
-            subtitle="Daily check-in and tasks"
+            subtitle={
+              checkin.data && checkin.data.streak_day > 0
+                ? checkin.data.checked_in_today
+                  ? t("rewards.checked_in_short", { d: checkin.data.streak_day })
+                  : t("rewards.streak_at_risk", { d: checkin.data.streak_day })
+                : t("me.rewards_hint")
+            }
             onPress={() => {
               if (requireAuth()) router.push("/rewards");
             }}
-            right={<Icon name="gift" size={18} />}
+            right={
+              <View style={styles.giftRow}>
+                {/* A dot when there is something to claim: a daily habit needs a visual pull. */}
+                {checkin.data && !checkin.data.checked_in_today ? <View style={styles.dot} /> : null}
+                <Icon name="gift" size={18} />
+              </View>
+            }
           />
           <Divider />
           <ListRow
@@ -285,6 +317,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarBadge: { position: "absolute", bottom: 0, left: 0, right: 0, backgroundColor: colors.accent, alignItems: "center", paddingVertical: 1 },
+  giftRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
   walletCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderColor: colors.gold, borderRadius: radii.lg },
   coinRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionLabel: { marginTop: spacing.sm, marginBottom: -spacing.sm, textTransform: "uppercase", letterSpacing: 1 },
