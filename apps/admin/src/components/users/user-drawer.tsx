@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { api, call, type Schemas } from "@/lib/api";
 import { useAdmin } from "@/lib/auth";
-import { fmtDateTime, fmtNumber } from "@/lib/format";
+import { fmtDateTime, fmtMoney, fmtNumber } from "@/lib/format";
 import { useFieldErrors } from "@/lib/forms";
 import { useQuery } from "@/lib/use-query";
 import { useToast } from "@/components/toast";
@@ -59,6 +59,10 @@ export function UserDrawer({
 
   const ledger = useQuery(`ledger:${user.id}:${user.coin_balance}`, () =>
     call(api.GET("/v1/admin/users/{user_id}/ledger", { params: { path: { user_id: user.id }, query: { limit: 50 } } })),
+  );
+  // VIP state and purchases, keyed on the balance so a coin grant refreshes it alongside the ledger.
+  const detail = useQuery(`user:${user.id}:${user.coin_balance}`, () =>
+    call(api.GET("/v1/admin/users/{user_id}", { params: { path: { user_id: user.id } } })),
   );
 
   async function setStatus(status: Schemas["UserStatus"]) {
@@ -214,7 +218,15 @@ export function UserDrawer({
               </div>
             </form>
             <form ref={vip.formRef} onSubmit={submitVip} className="rounded-card border border-line p-4" noValidate>
-              <h3 className="mb-3 text-sm font-semibold">Grant VIP</h3>
+              <h3 className="mb-1 text-sm font-semibold">Grant VIP</h3>
+              {/* Without this an agent grants blind and can stack a second month onto an active pass. */}
+              <p className="mb-3 text-xs text-muted">
+                {detail.data?.is_vip
+                  ? `Active until ${fmtDateTime(detail.data.vip_ends_at)} — a grant extends from that date.`
+                  : detail.data
+                    ? "No active VIP."
+                    : "Checking current VIP…"}
+              </p>
               <div className="grid gap-3">
                 <Field label="Days" required error={vip.errors.days}>
                   <Input
@@ -240,6 +252,46 @@ export function UserDrawer({
         )}
 
         <section>
+          <h3 className="mb-2 text-sm font-semibold">Purchases</h3>
+          <div className="mb-6 rounded-card border border-line">
+            {detail.error && !detail.data ? (
+              <ErrorState message={detail.error} onRetry={detail.refetch} />
+            ) : !detail.data ? (
+              <LoadingState />
+            ) : detail.data.purchases.length === 0 ? (
+              <EmptyState title="No purchases" description="Orders appear here once this account checks out." />
+            ) : (
+              <Table minWidth={520}>
+                <thead>
+                  <tr>
+                    <Th>When</Th>
+                    <Th>Pack</Th>
+                    <Th>Gateway</Th>
+                    <Th>Status</Th>
+                    <Th className="text-right">Amount</Th>
+                    <Th className="text-right">Coins</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.data.purchases.map((p) => (
+                    <tr key={p.id} className="hover:bg-surface-2/50">
+                      <Td className="whitespace-nowrap text-xs text-muted">{fmtDateTime(p.paid_at ?? p.created_at)}</Td>
+                      <Td className="text-sm">{p.pack_name ?? "—"}</Td>
+                      <Td className="capitalize text-xs" title={p.gateway_payment_id ?? undefined}>
+                        {p.gateway}
+                      </Td>
+                      <Td>
+                        <Badge tone={statusTone(p.status)}>{p.status}</Badge>
+                      </Td>
+                      <Td className="text-right tabular-nums">{fmtMoney(p.amount, p.currency)}</Td>
+                      <Td className="text-right tabular-nums">{p.coins_granted}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
+
           <h3 className="mb-2 text-sm font-semibold">Coin ledger</h3>
           <div className="rounded-card border border-line">
             {ledger.error && !ledger.data ? (

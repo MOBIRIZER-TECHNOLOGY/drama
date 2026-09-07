@@ -3707,8 +3707,9 @@
         "tags": [
           "admin"
         ],
-        "summary": "Get User",
-        "operationId": "get_user_v1_admin_users__user_id__get",
+        "summary": "User Detail",
+        "description": "One call for the support drawer: the account, its VIP state and its purchases.\n\nVIP was never shown, so a support agent granting it worked blind and could stack a second month onto an\nalready-active pass; and answering \"I paid and got no coins\" meant leaving for Purchases and searching by\nhand for a user id.",
+        "operationId": "user_detail_v1_admin_users__user_id__get",
         "security": [
           {
             "HTTPBearer": []
@@ -3732,7 +3733,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AdminUserOut"
+                  "$ref": "#/components/schemas/AdminUserDetail"
                 }
               }
             }
@@ -7703,6 +7704,161 @@
         ],
         "title": "AdminUserCreateIn"
       },
+      "AdminUserDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "public_id": {
+            "type": "string",
+            "title": "Public Id"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "locale": {
+            "type": "string",
+            "title": "Locale"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "status": {
+            "$ref": "#/components/schemas/UserStatus"
+          },
+          "coin_balance": {
+            "type": "integer",
+            "title": "Coin Balance"
+          },
+          "referral_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Referral Code"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "last_seen_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen At"
+          },
+          "is_vip": {
+            "type": "boolean",
+            "title": "Is Vip",
+            "default": false
+          },
+          "vip_ends_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vip Ends At"
+          },
+          "purchases": {
+            "items": {
+              "$ref": "#/components/schemas/AdminUserPurchase"
+            },
+            "type": "array",
+            "title": "Purchases",
+            "default": []
+          },
+          "sessions": {
+            "type": "integer",
+            "title": "Sessions",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "public_id",
+          "display_name",
+          "email",
+          "phone",
+          "avatar_url",
+          "locale",
+          "country",
+          "status",
+          "coin_balance",
+          "referral_code",
+          "created_at",
+          "last_seen_at"
+        ],
+        "title": "AdminUserDetail",
+        "description": "Everything the drawer needs in one call.\n\n\"I paid and got no coins\" is the most common support ticket and could not be answered without leaving for\nthe Purchases screen and searching by hand — and VIP could be granted blind, because current membership was\nnever shown, so a second grant could silently stack on an active pass."
+      },
       "AdminUserOut": {
         "properties": {
           "id": {
@@ -7847,6 +8003,88 @@
           "total"
         ],
         "title": "AdminUserPage"
+      },
+      "AdminUserPurchase": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "gateway": {
+            "type": "string",
+            "title": "Gateway"
+          },
+          "status": {
+            "$ref": "#/components/schemas/PurchaseStatus"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "coins_granted": {
+            "type": "integer",
+            "title": "Coins Granted"
+          },
+          "pack_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pack Name"
+          },
+          "gateway_payment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Payment Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "gateway",
+          "status",
+          "currency",
+          "amount",
+          "coins_granted",
+          "pack_name",
+          "gateway_payment_id",
+          "created_at",
+          "paid_at"
+        ],
+        "title": "AdminUserPurchase",
+        "description": "One purchase, as support needs to read it: what was bought, whether it settled, and what it granted."
       },
       "AssetStatus": {
         "type": "string",

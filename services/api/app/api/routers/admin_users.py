@@ -9,13 +9,15 @@ from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import NotFound
 from app.core.security import hash_password
 from app.models.identity import AdminUser, Session, User, UserStatus
-from app.models.wallet import LedgerKind, VipMembership
+from app.models.wallet import CoinPack, LedgerKind, Purchase, VipMembership
 from app.schemas.admin import (
     AdminAccountOut,
     AdminAccountUpdateIn,
     AdminUserCreateIn,
+    AdminUserDetail,
     AdminUserOut,
     AdminUserPage,
+    AdminUserPurchase,
     CoinAdjustIn,
     UserStatusIn,
     VipGrantIn,
@@ -127,6 +129,65 @@ async def grant_vip(user_id: uuid.UUID, body: VipGrantIn, db: DB, admin: Current
     )
     await db.commit()
     return Ok()
+
+
+@router.get("/users/{user_id}", response_model=AdminUserDetail)
+async def user_detail(user_id: uuid.UUID, db: DB) -> AdminUserDetail:
+    """One call for the support drawer: the account, its VIP state and its purchases.
+
+    VIP was never shown, so a support agent granting it worked blind and could stack a second month onto an
+    already-active pass; and answering "I paid and got no coins" meant leaving for Purchases and searching by
+    hand for a user id.
+    """
+    u = await db.get(User, user_id)
+    if u is None:
+        raise NotFound("User")
+
+    now = datetime.now(UTC)
+    vip = await db.scalar(
+        select(VipMembership)
+        .where(VipMembership.user_id == user_id, VipMembership.ends_at > now)
+        .order_by(VipMembership.ends_at.desc())
+        .limit(1)
+    )
+    rows = (
+        await db.execute(
+            select(Purchase, CoinPack.name)
+            .join(CoinPack, CoinPack.id == Purchase.pack_id, isouter=True)
+            .where(Purchase.user_id == user_id)
+            .order_by(Purchase.created_at.desc())
+            .limit(20)
+        )
+    ).all()
+    active_sessions = (
+        await db.scalar(
+            select(func.count()).where(
+                Session.user_id == user_id, Session.revoked_at.is_(None), Session.expires_at > now
+            )
+        )
+        or 0
+    )
+
+    detail = AdminUserDetail.model_validate(u)
+    detail.is_vip = vip is not None
+    detail.vip_ends_at = vip.ends_at if vip else None
+    detail.sessions = active_sessions
+    detail.purchases = [
+        AdminUserPurchase(
+            id=p.id,
+            gateway=p.gateway,
+            status=p.status,
+            currency=p.currency,
+            amount=float(p.amount),
+            coins_granted=p.coins_granted,
+            pack_name=pack_name,
+            gateway_payment_id=p.gateway_payment_id,
+            created_at=p.created_at,
+            paid_at=p.paid_at,
+        )
+        for p, pack_name in rows
+    ]
+    return detail
 
 
 @router.get("/users/{user_id}/ledger", response_model=list[LedgerRow])

@@ -1181,8 +1181,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get User */
-        get: operations["get_user_v1_admin_users__user_id__get"];
+        /**
+         * User Detail
+         * @description One call for the support drawer: the account, its VIP state and its purchases.
+         *
+         *     VIP was never shown, so a support agent granting it worked blind and could stack a second month onto an
+         *     already-active pass; and answering "I paid and got no coins" meant leaving for Purchases and searching by
+         *     hand for a user id.
+         */
+        get: operations["user_detail_v1_admin_users__user_id__get"];
         put?: never;
         post?: never;
         /** Delete User */
@@ -2352,6 +2359,64 @@ export interface components {
             password: string;
             role: components["schemas"]["AdminRole"];
         };
+        /**
+         * AdminUserDetail
+         * @description Everything the drawer needs in one call.
+         *
+         *     "I paid and got no coins" is the most common support ticket and could not be answered without leaving for
+         *     the Purchases screen and searching by hand — and VIP could be granted blind, because current membership was
+         *     never shown, so a second grant could silently stack on an active pass.
+         */
+        AdminUserDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Public Id */
+            public_id: string;
+            /** Display Name */
+            display_name: string | null;
+            /** Email */
+            email: string | null;
+            /** Phone */
+            phone: string | null;
+            /** Avatar Url */
+            avatar_url: string | null;
+            /** Locale */
+            locale: string;
+            /** Country */
+            country: string | null;
+            status: components["schemas"]["UserStatus"];
+            /** Coin Balance */
+            coin_balance: number;
+            /** Referral Code */
+            referral_code: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Seen At */
+            last_seen_at: string | null;
+            /**
+             * Is Vip
+             * @default false
+             */
+            is_vip: boolean;
+            /** Vip Ends At */
+            vip_ends_at?: string | null;
+            /**
+             * Purchases
+             * @default []
+             */
+            purchases: components["schemas"]["AdminUserPurchase"][];
+            /**
+             * Sessions
+             * @default 0
+             */
+            sessions: number;
+        };
         /** AdminUserOut */
         AdminUserOut: {
             /**
@@ -2392,6 +2457,37 @@ export interface components {
             items: components["schemas"]["AdminUserOut"][];
             /** Total */
             total: number;
+        };
+        /**
+         * AdminUserPurchase
+         * @description One purchase, as support needs to read it: what was bought, whether it settled, and what it granted.
+         */
+        AdminUserPurchase: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Gateway */
+            gateway: string;
+            status: components["schemas"]["PurchaseStatus"];
+            /** Currency */
+            currency: string;
+            /** Amount */
+            amount: number;
+            /** Coins Granted */
+            coins_granted: number;
+            /** Pack Name */
+            pack_name: string | null;
+            /** Gateway Payment Id */
+            gateway_payment_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Paid At */
+            paid_at: string | null;
         };
         /**
          * AssetStatus
@@ -6828,7 +6924,7 @@ export interface operations {
             };
         };
     };
-    get_user_v1_admin_users__user_id__get: {
+    user_detail_v1_admin_users__user_id__get: {
         parameters: {
             query?: never;
             header?: never;
@@ -6845,7 +6941,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminUserOut"];
+                    "application/json": components["schemas"]["AdminUserDetail"];
                 };
             };
             /** @description Validation Error */

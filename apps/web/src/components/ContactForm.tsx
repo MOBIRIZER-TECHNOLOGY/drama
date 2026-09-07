@@ -6,6 +6,10 @@ import { useAuth } from "@/lib/auth-context";
 import { clientApi } from "@/lib/client-api";
 import { call } from "@/lib/errors";
 import { PageTitle } from "./RequireAuth";
+
+/** Support categories, in the order they are offered. Payment leads because it is the largest volume. */
+const TOPICS = ["payment", "playback", "account", "content", "other"] as const;
+type Topic = (typeof TOPICS)[number];
 import { Button } from "./ui/Button";
 import { Field, inputClass } from "./ui/states";
 import { IconCheck } from "./ui/icons";
@@ -103,6 +107,16 @@ export function ContactForm() {
   const name = nameInput ?? user?.display_name ?? "";
   const email = emailInput ?? user?.email ?? "";
   const [subject, setSubject] = useState("");
+  const [topic, setTopic] = useState<Topic>(TOPICS[0]);
+
+  // Written out rather than built from a template key, so the extractor sees them and they can be translated.
+  const topicLabel: Record<Topic, string> = {
+    payment: t("contact.topic_payment", "Payment or coins"),
+    playback: t("contact.topic_playback", "Video will not play"),
+    account: t("contact.topic_account", "My account"),
+    content: t("contact.topic_content", "Report or request a drama"),
+    other: t("contact.topic_other", "Something else"),
+  };
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +133,14 @@ export function ContactForm() {
     setError(null);
     const { error } = await call(() =>
       clientApi.POST("/v1/contact", {
-        body: { name: name.trim(), email: email.trim(), subject: subject.trim() || null, message: message.trim(), captcha_token: captcha },
+        body: {
+          name: name.trim(),
+          email: email.trim(),
+          // Prefixed rather than sent as a separate field: the inbox sorts and scans on subject already.
+          subject: `[${topicLabel[topic]}] ${subject.trim()}`.trim(),
+          message: message.trim(),
+          captcha_token: captcha,
+        },
       }),
     );
     setBusy(false);
@@ -170,7 +191,23 @@ export function ContactForm() {
               <input id="c-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} autoComplete="email" />
             </Field>
           </div>
-          <Field label={t("contact.subject", "Subject (optional)")} htmlFor="c-subject">
+          {/* Routing and response quality both depend on knowing what this is about, and payment problems are
+              the largest single source of volume. The chosen topic is prefixed onto the subject, so the API and
+              the admin inbox need no change to benefit from it. */}
+          <Field label={t("contact.topic", "What is this about?")} htmlFor="c-topic">
+            <select id="c-topic" value={topic} onChange={(e) => setTopic(e.target.value as Topic)} className={inputClass}>
+              {TOPICS.map((key) => (
+                <option key={key} value={key}>
+                  {topicLabel[key]}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field
+            label={t("contact.subject", "Subject (optional)")}
+            htmlFor="c-subject"
+            hint={topic === "payment" ? t("contact.payment_hint", "If this is about a payment, include the order id from your wallet history.") : undefined}
+          >
             <input id="c-subject" value={subject} onChange={(e) => setSubject(e.target.value)} className={inputClass} maxLength={120} />
           </Field>
           <Field label={t("contact.message", "Message")} htmlFor="c-message">

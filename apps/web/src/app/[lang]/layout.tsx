@@ -72,10 +72,20 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     <html lang={lang} dir={dir} className={`${fontClasses(lang)} h-full`}>
       <body className="flex min-h-full flex-col">
         <Providers value={{ lang, dir, languages, messages, config }}>
+          {/* First tab stop on every page. Without it a keyboard or screen-reader user walks the whole header —
+              logo, five nav links, search, language, account — before reaching the content, on every navigation. */}
+          <a
+            href="#main"
+            className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-accent focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-accent-ink"
+          >
+            {t("common.skip_to_content", "Skip to content")}
+          </a>
           <Header />
           <OfflineBanner />
           {/* pb-14 clears the fixed bottom tab bar below md; it is `hidden` from md up, where the header nav takes over. */}
-          <main className="flex-1 pb-14 md:pb-0">{children}</main>
+          <main id="main" tabIndex={-1} className="flex-1 pb-14 md:pb-0">
+            {children}
+          </main>
           <Footer
             lang={lang}
             pages={pages}

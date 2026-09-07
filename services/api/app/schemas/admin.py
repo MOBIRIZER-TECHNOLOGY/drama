@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.models.catalog import AssetStatus, PublishStatus
 from app.models.identity import AdminRole, Platform, UserStatus
-from app.models.wallet import PackKind, RewardFrequency, RewardTaskKind
+from app.models.wallet import PackKind, PurchaseStatus, RewardFrequency, RewardTaskKind
 from app.schemas.common import ORMModel
 
 # ---- catalogue ----
@@ -396,3 +396,32 @@ class DashboardPrevious(BaseModel):
     active_users: int
     unlocks: int
     coins_spent: int
+
+
+class AdminUserPurchase(BaseModel):
+    """One purchase, as support needs to read it: what was bought, whether it settled, and what it granted."""
+
+    id: uuid.UUID
+    gateway: str
+    status: PurchaseStatus
+    currency: str
+    amount: float
+    coins_granted: int
+    pack_name: str | None
+    gateway_payment_id: str | None
+    created_at: datetime
+    paid_at: datetime | None
+
+
+class AdminUserDetail(AdminUserOut):
+    """Everything the drawer needs in one call.
+
+    "I paid and got no coins" is the most common support ticket and could not be answered without leaving for
+    the Purchases screen and searching by hand — and VIP could be granted blind, because current membership was
+    never shown, so a second grant could silently stack on an active pass.
+    """
+
+    is_vip: bool = False
+    vip_ends_at: datetime | None = None
+    purchases: list[AdminUserPurchase] = []
+    sessions: int = 0
