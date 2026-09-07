@@ -14,7 +14,10 @@
     "api:dev": "pnpm --dir services/api run dev",
     "api:client": "pnpm --filter @katha/api-client generate",
     "infra:up": "docker compose -f infra/docker/compose.yaml up -d",
-    "infra:down": "docker compose -f infra/docker/compose.yaml down"
+    "infra:down": "docker compose -f infra/docker/compose.yaml down",
+    "db:bootstrap": "bash scripts/local-db.sh",
+    "db:test": "bash scripts/local-db.sh --test",
+    "infra:logs": "docker compose -f infra/docker/compose.yaml logs -f"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
