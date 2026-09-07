@@ -123,7 +123,21 @@ export default function RewardsScreen() {
         <Card style={styles.checkinCard}>
           <View style={styles.cardHead}>
             <Text variant="heading">{t("rewards.checkin")}</Text>
-            {checkin.data ? <Text variant="caption">Day {checkin.data.streak_day} streak</Text> : null}
+            {checkin.data ? (
+              // Loss framing is the whole mechanic: "keep your 5-day streak" outperforms "claim your coins".
+              <Text
+                variant="caption"
+                color={
+                  checkin.data.checked_in_today || checkin.data.streak_day === 0 ? colors.muted : colors.warning
+                }
+              >
+                {checkin.data.checked_in_today
+                  ? t("rewards.checked_in_short", { d: checkin.data.streak_day })
+                  : checkin.data.streak_day > 0
+                    ? t("rewards.streak_at_risk", { d: checkin.data.streak_day })
+                    : t("rewards.streak_start", { total: checkin.data.rewards.length })}
+              </Text>
+            ) : null}
           </View>
           {checkin.loading ? (
             <Skeleton height={64} />
@@ -136,13 +150,23 @@ export default function RewardsScreen() {
                   const day = i + 1;
                   const claimed = day <= checkin.data!.streak_day;
                   const isNext = !checkin.data!.checked_in_today && day === checkin.data!.next_streak_day;
+                  // The last day is the payoff, and it was rendered at exactly the same size as day one.
+                  const isJackpot = day === checkin.data!.rewards.length;
                   return (
-                    <View key={day} style={[styles.day, claimed && styles.dayClaimed, isNext && styles.dayNext]}>
+                    <View
+                      key={day}
+                      style={[
+                        styles.day,
+                        isJackpot && styles.dayJackpot,
+                        claimed && styles.dayClaimed,
+                        isNext && styles.dayNext,
+                      ]}
+                    >
                       <Text variant="caption" color={claimed ? colors.accentInk : colors.muted}>
                         D{day}
                       </Text>
-                      <Icon name="coin" size={12} />
-                      <Text variant="caption" color={claimed ? colors.accentInk : colors.ink}>
+                      <Icon name="coin" size={isJackpot ? 14 : 12} />
+                      <Text variant={isJackpot ? "label" : "caption"} color={claimed ? colors.accentInk : colors.ink}>
                         {coins}
                       </Text>
                       {claimed ? <Icon name="check" size={10} color={colors.accentInk} /> : null}
@@ -285,6 +309,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
+  dayJackpot: { flexGrow: 1.6, borderColor: colors.gold },
   dayClaimed: { backgroundColor: colors.gold },
   dayNext: { borderColor: colors.accent },
   sectionTitle: { marginTop: spacing.sm },

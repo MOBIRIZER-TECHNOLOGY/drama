@@ -58,6 +58,11 @@ function RewardsInner() {
 
   if (error) return <ErrorState error={error} onRetry={load} />;
 
+  const ladder = checkin?.rewards ?? Array.from({ length: 7 }, () => 0);
+  const cycle = ladder.length;
+  const jackpot = ladder[cycle - 1] ?? 0;
+  const daysToJackpot = checkin ? Math.max(0, cycle - checkin.next_streak_day) : 0;
+
   return (
     <div>
       <PageTitle sub={t("rewards.subtitle", "Free coins every day for showing up.")}>{t("rewards.title", "Rewards")}</PageTitle>
@@ -70,10 +75,20 @@ function RewardsInner() {
               {t("rewards.checkin", "Daily check-in")}
             </h2>
             {checkin && (
-              <p className="text-sm text-muted">
+              <p className={`text-sm ${checkin.checked_in_today || checkin.streak_day === 0 ? "text-muted" : "text-warning"}`}>
                 {checkin.checked_in_today
-                  ? t("rewards.checked_in", "Checked in today. Come back tomorrow for day {d}.", { d: Math.min(checkin.streak_day + 1, 7) })
-                  : t("rewards.streak", "Day {d} of 7", { d: checkin.next_streak_day })}
+                  ? t("rewards.checked_in", "Checked in today. Come back tomorrow for day {d}.", {
+                      d: Math.min(checkin.streak_day + 1, cycle),
+                    })
+                  : checkin.streak_day > 0
+                    ? t("rewards.streak_at_risk", "Check in today or your {d}-day streak resets.", { d: checkin.streak_day })
+                    : t("rewards.streak_start", "Check in to start a streak. Day {total} pays the most.", { total: cycle })}
+              </p>
+            )}
+            {/* Something to walk toward: the ladder is worth protecting only if its payoff is visible. */}
+            {checkin && !checkin.checked_in_today && daysToJackpot > 0 && (
+              <p className="mt-0.5 text-sm text-muted">
+                {t("rewards.to_jackpot", "{n} more days to {coins} coins.", { n: daysToJackpot, coins: jackpot })}
               </p>
             )}
           </div>
@@ -95,9 +110,14 @@ function RewardsInner() {
             <Skeleton className="h-10 w-24 rounded-pill" />
           )}
         </div>
-        <ol className="mt-5 grid grid-cols-7 gap-1.5 sm:gap-3" aria-label={t("rewards.week", "Streak")}>
-          {(checkin?.rewards ?? Array.from({ length: 7 }).map(() => 0)).slice(0, 7).map((coins, i) => {
+        <ol
+          className="mt-5 grid gap-1.5 sm:gap-3"
+          style={{ gridTemplateColumns: `repeat(${cycle - 1}, minmax(0, 1fr)) minmax(0, 1.6fr)` }}
+          aria-label={t("rewards.week", "Streak")}
+        >
+          {ladder.map((coins, i) => {
             const day = i + 1;
+            const isJackpot = day === cycle;
             const done = checkin ? day <= checkin.streak_day && (checkin.checked_in_today || day < checkin.next_streak_day) : false;
             const isNext = checkin ? !checkin.checked_in_today && day === checkin.next_streak_day : false;
             return (
@@ -105,16 +125,30 @@ function RewardsInner() {
                 key={day}
                 aria-current={isNext ? "step" : undefined}
                 className={`flex flex-col items-center gap-1 rounded-md border py-2 text-center text-xs sm:py-3 ${
-                  isNext ? "border-gold bg-gold/10 text-ink" : done ? "border-success/40 bg-success/10 text-ink2" : "border-line bg-ground text-muted"
+                  isNext
+                    ? "border-gold bg-gold/10 text-ink"
+                    : done
+                      ? "border-success/40 bg-success/10 text-ink2"
+                      : isJackpot
+                        ? "border-gold/50 bg-gold/5 text-ink2"
+                        : "border-line bg-ground text-muted"
                 }`}
               >
-                <span className="uppercase tracking-wide">{t("rewards.day", "Day")} {day}</span>
+                <span className="uppercase tracking-wide">
+                  {/* "Day 1" does not fit a 44px tile at 360px; the number alone does. */}
+                  <span className="hidden sm:inline">{t("rewards.day", "Day")} </span>
+                  {day}
+                </span>
                 {checkin ? (
                   done ? (
                     <IconCheck size={18} className="text-success" />
                   ) : (
-                    <span className={`inline-flex items-center gap-0.5 font-display text-base font-semibold ${isNext ? "text-gold" : ""}`}>
-                      <IconCoin size={14} className="text-gold" />
+                    <span
+                      className={`inline-flex items-center gap-0.5 font-display font-semibold ${
+                        isJackpot ? "text-lg text-gold sm:text-xl" : "text-base"
+                      } ${isNext ? "text-gold" : ""}`}
+                    >
+                      <IconCoin size={isJackpot ? 16 : 14} className="text-gold" />
                       {coins}
                     </span>
                   )

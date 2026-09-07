@@ -13,6 +13,7 @@ import type { MyListOut } from "@/lib/types";
 import { PageTitle, RequireAuth } from "./RequireAuth";
 import { SeriesCard } from "./SeriesCard";
 import { Button, buttonClass } from "./ui/Button";
+import { Dialog } from "./ui/Dialog";
 import { EmptyState, ErrorState, Skeleton } from "./ui/states";
 import { IconPlay, IconStar, IconTrash } from "./ui/icons";
 
@@ -32,6 +33,9 @@ function MyListInner() {
   const [data, setData] = useState<MyListOut | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Clearing everything was a one-tap ghost button with no confirmation and no undo, while removing a *single*
+  // row was equally easy — the destructive weighting was inverted.
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const load = useCallback(async () => {
     const res = await call(() => clientApi.GET("/v1/me/list", { params: { query: { lang } } }));
@@ -54,8 +58,39 @@ function MyListInner() {
 
   if (error) return <ErrorState error={error} onRetry={load} />;
 
+  const historyCount = data?.history.length ?? 0;
+
   return (
     <div>
+      <Dialog
+        open={confirmClear}
+        onClose={() => setConfirmClear(false)}
+        title={t("my_list.clear_confirm_title", "Clear your watch history?")}
+        size="sm"
+        closeLabel={t("common.close", "Close")}
+      >
+        <p className="text-sm text-ink2">
+          {t("my_list.clear_confirm_body", "This removes all {n} titles from Continue watching. Episodes you unlocked stay unlocked.", {
+            n: historyCount,
+          })}
+        </p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmClear(false)}>
+            {t("common.cancel", "Cancel")}
+          </Button>
+          <Button
+            variant="danger"
+            loading={busy === "all"}
+            onClick={async () => {
+              await remove(null);
+              setConfirmClear(false);
+            }}
+          >
+            {t("my_list.clear_history", "Clear history")}
+          </Button>
+        </div>
+      </Dialog>
+
       <PageTitle>{t("my_list.title", "My List")}</PageTitle>
 
       <section aria-labelledby="cw-heading">
@@ -64,7 +99,7 @@ function MyListInner() {
             {t("my_list.continue", "Continue watching")}
           </h2>
           {data && data.history.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => remove(null)} loading={busy === "all"}>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} loading={busy === "all"}>
               <IconTrash size={14} />
               {t("my_list.clear_history", "Clear history")}
             </Button>
