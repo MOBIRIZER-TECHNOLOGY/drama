@@ -3,7 +3,7 @@ import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { Alert, Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { SeriesCard } from "@/components/series-card";
 import { Button, EmptyState, ErrorState, Loading, Screen, Text } from "@/components/ui";
@@ -18,8 +18,13 @@ import { useConfig } from "@/providers/config";
 
 type Tab = "favorites" | "history";
 
+/** Three across on a phone; the width is derived so cells fit their gutters at 320dp and fill at 430dp. */
+const COLUMNS = 3;
+
 export default function MyListScreen() {
   const t = useT();
+  const { width: viewport } = useWindowDimensions();
+  const cardWidth = Math.floor((viewport - spacing.lg * 2 - spacing.md * (COLUMNS - 1)) / COLUMNS);
   const router = useRouter();
   const { lang } = useConfig();
   const { status, requireAuth } = useAuth();
@@ -67,6 +72,24 @@ export default function MyListScreen() {
     [list],
   );
 
+  /**
+   * Clearing everything was a single unconfirmed tap, while removing one row took the same effort — the
+   * destructive weighting was inverted. Alert is the platform's own confirmation and is what a viewer expects
+   * for a wipe.
+   */
+  const confirmClearHistory = useCallback(() => {
+    const count = list.data?.history.length ?? 0;
+    Alert.alert(
+      t("list.clear_confirm_title"),
+      t("list.clear_confirm_body", { n: count }),
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        { text: t("list.clear"), style: "destructive", onPress: () => void removeHistory() },
+      ],
+      { cancelable: true },
+    );
+  }, [list.data?.history.length, removeHistory, t]);
+
   if (!signedIn) {
     return (
       <Screen>
@@ -87,7 +110,7 @@ export default function MyListScreen() {
         onTab={setTab}
         right={
           tab === "history" && (list.data?.history.length ?? 0) > 0 ? (
-            <Pressable onPress={() => removeHistory()} accessibilityRole="button" hitSlop={8}>
+            <Pressable onPress={confirmClearHistory} accessibilityRole="button" hitSlop={8}>
               <Text variant="caption" color={colors.accent}>
                 {t("list.clear")}
               </Text>
@@ -110,11 +133,11 @@ export default function MyListScreen() {
         ) : (
           <FlashList
             data={list.data?.favorites ?? []}
-            numColumns={3}
+            numColumns={COLUMNS}
             keyExtractor={(s) => s.id}
             renderItem={({ item }) => (
               <View style={styles.cell}>
-                <SeriesCard series={item} width={104} />
+                <SeriesCard series={item} width={cardWidth} />
                 <Pressable onPress={() => removeFavorite(item)} accessibilityRole="button" accessibilityLabel={`Remove ${item.title}`} style={styles.remove} hitSlop={6}>
                   <Icon name="close" size={14} />
                 </Pressable>

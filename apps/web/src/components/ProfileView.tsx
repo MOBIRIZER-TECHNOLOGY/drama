@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
-import { useApp, useT } from "@/lib/app-context";
+import { useApp, useHref, useT } from "@/lib/app-context";
 import { useAuth } from "@/lib/auth-context";
 import { clientApi } from "@/lib/client-api";
 import { call, type ApiError } from "@/lib/errors";
@@ -13,8 +14,9 @@ import { useLoader } from "@/lib/use-loader";
 import { ReferralCard } from "./ReferralCard";
 import { PageTitle, RequireAuth } from "./RequireAuth";
 import { Button } from "./ui/Button";
+import { Dialog } from "./ui/Dialog";
 import { EmptyState, ErrorState, Field, Skeleton, inputClass } from "./ui/states";
-import { IconCoin, IconLogout, IconUpload } from "./ui/icons";
+import { IconCoin, IconLogout, IconTrash, IconUpload } from "./ui/icons";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 const AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
@@ -42,7 +44,13 @@ function ProfileInner() {
   const [sessions, setSessions] = useState<SessionOut[] | null>(null);
   const [sessionsError, setSessionsError] = useState<ApiError | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
+  const router = useRouter();
+  const href = useHref();
   const [signingOut, setSigningOut] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  // Irreversible, so it asks the viewer to type the word rather than accepting a reflexive second click.
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
 
   const loadSessions = useCallback(async () => {
@@ -173,18 +181,6 @@ function ProfileInner() {
             <Field label={t("profile.display_name", "Display name")} htmlFor="p-name">
               <input id="p-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} className={inputClass} autoComplete="nickname" />
             </Field>
-            <Field label={t("profile.avatar_url", "Avatar URL")} htmlFor="p-avatar" hint={t("profile.avatar_hint", "Upload a photo above, or paste a link to an image.")}>
-              <input
-                id="p-avatar"
-                type="url"
-                value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
-                className={inputClass}
-                placeholder="https://"
-                pattern="https://.*"
-                dir="ltr"
-              />
-            </Field>
             <Field label={t("profile.locale", "Preferred language")} htmlFor="p-locale">
               <select id="p-locale" value={locale} onChange={(e) => setLocale(e.target.value)} className={inputClass}>
                 {languages.map((l) => (
@@ -265,9 +261,73 @@ function ProfileInner() {
               <IconLogout size={16} />
               {t("auth.sign_out", "Sign out")}
             </Button>
+
+            <div className="mt-5 border-t border-line pt-4">
+              <h3 className="text-sm font-medium text-ink">{t("profile.delete_title", "Delete your account")}</h3>
+              <p className="mt-1 text-sm text-muted">
+                {t(
+                  "profile.delete_hint",
+                  "This removes your profile and signs you out everywhere. Coins and unlocked episodes are lost and cannot be restored.",
+                )}
+              </p>
+              <Button variant="danger" className="mt-3" onClick={() => setConfirmDelete(true)}>
+                <IconTrash size={16} />
+                {t("profile.delete_account", "Delete account")}
+              </Button>
+            </div>
           </div>
         </section>
       </div>
+
+      <Dialog
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        title={t("profile.delete_title", "Delete your account")}
+        size="sm"
+        closeLabel={t("common.close", "Close")}
+      >
+        <p className="text-sm text-ink2">
+          {t(
+            "profile.delete_confirm",
+            "Your profile, watch history and remaining coins are deleted and cannot be recovered. Purchases stay on record for accounting under an anonymous id.",
+          )}
+        </p>
+        <label className="mt-4 block text-sm text-muted" htmlFor="p-delete-confirm">
+          {t("profile.delete_type", "Type DELETE to confirm")}
+        </label>
+        <input
+          id="p-delete-confirm"
+          value={deleteConfirmText}
+          onChange={(e) => setDeleteConfirmText(e.target.value)}
+          className={`${inputClass} mt-1`}
+          autoComplete="off"
+          dir="ltr"
+        />
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="secondary" onClick={() => setConfirmDelete(false)}>
+            {t("common.cancel", "Cancel")}
+          </Button>
+          <Button
+            variant="danger"
+            loading={deleting}
+            disabled={deleteConfirmText.trim().toUpperCase() !== "DELETE"}
+            onClick={async () => {
+              setDeleting(true);
+              const { error } = await call(() => clientApi.DELETE("/v1/auth/me"));
+              setDeleting(false);
+              if (error) {
+                toast(error.message, "error");
+                return;
+              }
+              // The account is gone; sign out locally so nothing keeps using a token for a deleted user.
+              await signOut();
+              router.replace(href("/"));
+            }}
+          >
+            {t("profile.delete_account", "Delete account")}
+          </Button>
+        </div>
+      </Dialog>
     </div>
   );
 }

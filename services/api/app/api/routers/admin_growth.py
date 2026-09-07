@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import cast, func, select
+from sqlalchemy import String, cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import Date, Float
 
@@ -423,25 +423,52 @@ async def qoe(db: DB, days: int = Query(14, ge=1, le=90)) -> list[QoeRow]:
 
 class FunnelOut(BaseModel):
     range_days: int
-    steps: list[dict]  # [{name, users}]
+    steps: list[dict]  # [{name, users}] — sequenced: each step counts only people who reached the one before it
+
+
+# The journey, in order. Each step is counted only within the set that reached the previous one, so the
+# percentages are a real funnel rather than six unrelated populations.
+FUNNEL_STEPS = ("app_open", "series_view", "play_start", "paywall_view", "unlock")
 
 
 @router.get("/analytics/funnel", response_model=FunnelOut)
 async def funnel(db: DB, days: int = Query(30, ge=1, le=365)) -> FunnelOut:
+    """Sequenced acquisition funnel.
+
+    This used to count each step independently, which meant a viewer could appear at `unlock` without ever
+    appearing at `app_open`, and every "% of previous" was arithmetic across unrelated populations. The screen
+    said so in a caveat, which is not a fix: numbers that read as a funnel get presented as one.
+
+    Identity is the user id where there is one and the session id otherwise, so a guest's journey survives up to
+    the point they sign in. `paid` is drawn from purchases rather than events, because money is recorded by the
+    payment webhook and is true regardless of whether a client analytics beacon ever arrived.
+    """
     since = datetime.now(UTC) - timedelta(days=days)
-    steps = []
-    for name in ("app_open", "series_view", "play_start", "paywall_view", "unlock", "checkout_start"):
-        n = await db.scalar(
-            select(func.count(func.distinct(func.coalesce(AnalyticsEvent.user_id, AnalyticsEvent.session_id)))).where(
-                AnalyticsEvent.name == name, AnalyticsEvent.ts >= since
+    actor = func.coalesce(cast(AnalyticsEvent.user_id, String), AnalyticsEvent.session_id)
+
+    async def actors(name: str, within: set[str] | None) -> set[str]:
+        rows = await db.scalars(
+            select(func.distinct(actor)).where(
+                AnalyticsEvent.name == name, AnalyticsEvent.ts >= since, actor.is_not(None)
             )
         )
-        steps.append({"name": name, "users": n or 0})
-    paid = await db.scalar(
-        select(func.count(func.distinct(Purchase.user_id))).where(
+        found = {str(a) for a in rows.all() if a is not None}
+        return found if within is None else found & within
+
+    steps: list[dict] = []
+    reached: set[str] | None = None
+    for name in FUNNEL_STEPS:
+        reached = await actors(name, reached)
+        steps.append({"name": name, "users": len(reached)})
+
+    # Anyone who actually paid, restricted to those who reached the last event step so the sequence holds.
+    paid_rows = await db.scalars(
+        select(func.distinct(cast(Purchase.user_id, String))).where(
             Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= since
         )
     )
-    steps.append({"name": "paid", "users": paid or 0})
+    paid = {str(u) for u in paid_rows.all()}
+    steps.append({"name": "paid", "users": len(paid & reached) if reached is not None else len(paid)})
+
     _ = (User, JSONB)  # keep imports for future breakdowns
     return FunnelOut(range_days=days, steps=steps)

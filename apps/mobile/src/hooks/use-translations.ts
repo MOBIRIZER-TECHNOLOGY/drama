@@ -48,6 +48,8 @@ export const en: Record<string, string> = {
   "list.empty_favorites": "Series you save show up here.",
   "list.empty_history": "Episodes you watch show up here.",
   "list.clear": "Clear history",
+  "list.clear_confirm_title": "Clear your watch history?",
+  "list.clear_confirm_body": "This removes all {n} titles from Continue watching. Episodes you unlocked stay unlocked.",
   "me.guest_title": "Sign in to sync your list, coins and rewards",
   "me.coins": "Coins",
   "me.vip": "VIP",

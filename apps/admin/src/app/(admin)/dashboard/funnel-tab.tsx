@@ -46,7 +46,7 @@ export function FunnelTab() {
           label: STEP_LABELS[s.name] ?? s.name.replace(/_/g, " "),
           ofTop: top > 0 ? s.users / top : 0,
           ofPrev: prev == null ? null : prev > 0 ? s.users / prev : 0,
-          dropped: prev == null ? null : Math.max(0, prev - s.users),
+          dropped: prev == null ? null : prev - s.users,
         };
       }),
     [steps, top],
@@ -56,7 +56,8 @@ export function FunnelTab() {
     <div className="flex flex-col gap-6 pt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-muted">
-          Unique users (or sessions, when signed out) reaching each step. Steps are counted independently, so a user can appear in a later step without the earlier one.
+          Unique users, or sessions when signed out, reaching each step. Each step counts only people who
+          reached the one before it, so the percentages are a real funnel.
         </p>
         <label className="flex items-center gap-2 text-sm text-muted">
           Range
