@@ -38,8 +38,11 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
   const googleEnabled = config?.auth?.google !== false;
   const phoneEnabled = config?.auth?.phone !== false;
 
-  const [tab, setTab] = useState<Tab>(emailEnabled || !phoneEnabled ? "email" : "phone");
+  // Phone/OTP is the default where it is available: for this audience email/password is the least-used method,
+  // and leading with a form rather than the one-tap path costs conversions on the highest-intent screen.
+  const [tab, setTab] = useState<Tab>(phoneEnabled ? "phone" : "email");
   const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [resetSent, setResetSent] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
@@ -82,7 +85,7 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
     }
   };
 
-  const notConfigured = () => new Error(t("auth.not_configured", "Sign-in is not configured yet."));
+  const notConfigured = () => new Error(t("auth.unavailable", "Sign-in is not available right now."));
 
   const withEmail = () =>
     run("email", async () => {
@@ -94,6 +97,18 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
           ? await signInWithEmailAndPassword(fb, email.trim(), password)
           : await createUserWithEmailAndPassword(fb, email.trim(), password);
       await finish(() => cred.user.getIdToken(), "email");
+    });
+
+  const resetPassword = () =>
+    run("reset", async () => {
+      const fb = await getFirebaseAuth(config?.firebase);
+      if (!fb) throw notConfigured();
+      const address = email.trim();
+      if (!address) throw new Error(t("auth.reset_needs_email", "Enter your email address first."));
+      const { sendPasswordResetEmail } = await import("firebase/auth");
+      await sendPasswordResetEmail(fb, address);
+      // Deliberately not reporting whether the address exists: that would confirm accounts to anyone asking.
+      setResetSent(true);
     });
 
   const withGoogle = () =>
@@ -141,8 +156,16 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
     recaptchaRef.current = null;
   };
 
+  const signupBonus = config?.rewards?.signup_bonus ?? 0;
+
   return (
     <div className="flex flex-col gap-4">
+      {/* The dialog was a form with no offer in it: no bonus, no reason, no reassurance. */}
+      {signupBonus > 0 && (
+        <p className="rounded-md border border-gold/40 bg-gold/5 px-3 py-2 text-sm text-ink2">
+          {t("auth.bonus_pitch", "Create an account and we will add {n} coins to get you started.", { n: signupBonus })}
+        </p>
+      )}
       {googleEnabled && (
         <Button variant="secondary" size="lg" onClick={withGoogle} loading={busy === "google"} disabled={!!busy} className="w-full">
           <IconGoogle />
@@ -201,6 +224,23 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
               className={inputClass}
             />
           </Field>
+          {mode === "signin" && (
+            <div className="-mt-1 text-end">
+              <button
+                type="button"
+                onClick={() => void resetPassword()}
+                disabled={!!busy}
+                className="text-sm text-muted underline-offset-4 hover:text-ink hover:underline"
+              >
+                {t("auth.forgot_password", "Forgot your password?")}
+              </button>
+            </div>
+          )}
+          {resetSent && (
+            <p role="status" className="rounded-md border border-line bg-surface2 px-3 py-2 text-sm text-ink2">
+              {t("auth.reset_sent", "If that address has an account, a reset link is on its way. Check your spam folder too.")}
+            </p>
+          )}
           <Button type="submit" size="lg" loading={busy === "email"} disabled={!!busy} className="mt-1 w-full">
             {mode === "signin" ? t("auth.sign_in", "Sign in") : t("auth.sign_up", "Sign up free")}
           </Button>
@@ -262,6 +302,10 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
         </form>
       )}
 
+      <p className="text-center text-xs text-muted">
+        {t("auth.consent", "By continuing you agree to our Terms and Privacy Policy.")}
+      </p>
+
       {error && (
         <p role="alert" className="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
           {error}
@@ -273,14 +317,16 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
 
 export function FirebaseMissing() {
   const t = useT();
+  // The environment-variable names are a message to whoever is running the app, not to a viewer. Naming
+  // NEXT_PUBLIC_FIREBASE_* to an actual visitor is a string that must never reach production.
+  const isDev = process.env.NODE_ENV === "development";
   return (
     <div className="rounded-md border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-ink2">
-      <p className="font-medium text-warning">{t("auth.not_configured", "Sign-in is not configured yet.")}</p>
+      <p className="font-medium text-warning">{t("auth.unavailable", "Sign-in is not available right now.")}</p>
       <p className="mt-1 text-muted">
-        {t(
-          "auth.not_configured_hint",
-          "Add the Firebase web config to the API settings or the NEXT_PUBLIC_FIREBASE_* environment variables to enable email, Google and phone sign-in. You can keep browsing in the meantime.",
-        )}
+        {isDev
+          ? "Add the Firebase web config to the API settings or the NEXT_PUBLIC_FIREBASE_* environment variables to enable email, Google and phone sign-in."
+          : t("auth.not_configured_hint", "Please try again shortly. You can keep browsing in the meantime.")}
       </p>
     </div>
   );

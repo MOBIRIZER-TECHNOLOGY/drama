@@ -1,5 +1,6 @@
 import { colors, radii, spacing } from "@katha/tokens";
 import * as Haptics from "expo-haptics";
+import { ReferralCard } from "@/components/referral-card";
 import { track } from "@/lib/analytics";
 import { ensureRegistered, hasAskedForPush } from "@/lib/push";
 import * as Linking from "expo-linking";
@@ -115,6 +116,9 @@ export default function RewardsScreen() {
             {message.text}
           </Text>
         ) : null}
+
+        {/* The cheapest growth loop in this market, on the screen people already open to earn. */}
+        <ReferralCard />
 
         <Card style={styles.checkinCard}>
           <View style={styles.cardHead}>

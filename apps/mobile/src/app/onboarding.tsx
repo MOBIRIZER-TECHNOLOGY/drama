@@ -5,6 +5,8 @@ import { FlatList, Pressable, StyleSheet, useWindowDimensions, View } from "reac
 import { Icon } from "@/components/icons";
 import { Button, Screen, Text } from "@/components/ui";
 import { useT } from "@/hooks/use-translations";
+import { track } from "@/lib/analytics";
+import { takeRoute } from "@/lib/pending-route";
 import { useConfig } from "@/providers/config";
 
 type Page = { key: string };
@@ -25,11 +27,25 @@ export default function OnboardingScreen() {
     setPage(i);
   }, []);
 
+  /**
+   * Land where the viewer was actually headed. A deep link that arrived before onboarding was parked rather
+   * than discarded, so someone who tapped a friend's link finally sees the series they were sent.
+   */
+  const resume = useCallback(async () => {
+    const pending = await takeRoute();
+    if (pending) {
+      track("deep_link_open", { resumed: true, pathname: pending.pathname });
+      router.replace({ pathname: pending.pathname as never, params: pending.params as never });
+      return;
+    }
+    router.replace("/(tabs)");
+  }, [router]);
+
   const skip = useCallback(async () => {
     await setLang(selected);
     await completeOnboarding();
-    router.replace("/(tabs)");
-  }, [selected, setLang, completeOnboarding, router]);
+    await resume();
+  }, [selected, setLang, completeOnboarding, resume]);
 
   const next = useCallback(async () => {
     if (page === 0) await setLang(selected);
@@ -38,8 +54,8 @@ export default function OnboardingScreen() {
       return;
     }
     await completeOnboarding();
-    router.replace("/(tabs)");
-  }, [page, selected, setLang, goTo, completeOnboarding, router]);
+    await resume();
+  }, [page, selected, setLang, goTo, completeOnboarding, resume]);
 
   return (
     <Screen edges={["top", "bottom", "left", "right"]}>

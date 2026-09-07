@@ -31,6 +31,11 @@ export function formatMoney(amount: number, currency: string, symbol?: string): 
  * without it drops the recipient at episode 1 and loses the cliffhanger that made someone share in the first
  * place. `utm_source=share` lets the funnel tell organic shares from everything else.
  */
+/** Invite link. The web captures `ref` on arrival and attaches it to whichever sign-up eventually happens. */
+export function referralUrl(code: string): string {
+  return `https://katha.app/?ref=${encodeURIComponent(code)}&utm_source=referral`;
+}
+
 export function seriesShareUrl(slug: string, opts?: { episode?: number; ref?: string | null }): string {
   const params = new URLSearchParams({ utm_source: "share" });
   if (opts?.episode && opts.episode > 1) params.set("ep", String(opts.episode));

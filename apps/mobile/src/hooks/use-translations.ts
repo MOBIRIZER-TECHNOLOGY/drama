@@ -100,6 +100,11 @@ export const en: Record<string, string> = {
   "common.close": "Close",
   // Referral and notifications.
   "referral.title": "Invite a friend — you both get {n} coins",
+  "referral.title_plain": "Invite a friend",
+  "referral.hint": "They get {referee} coins the moment they join. You get {referrer} coins the first time they top up.",
+  "referral.message": "I'm watching short dramas on Katha. Use my link and we both get free coins: {link}",
+  "referral.copy": "Copy link",
+  "referral.copied_short": "Copied",
   "referral.share": "Share invite",
   "referral.copied": "Invite link copied",
   "notifications.title": "Notifications",
