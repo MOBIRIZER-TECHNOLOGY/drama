@@ -13,10 +13,12 @@ import { nextTrackLang, selectTrack, useSubtitlePreference } from "@/components/
 import { UnlockSheet, unlockEpisode, useAutoUnlock } from "@/components/unlock-sheet";
 import { ErrorState, Loading, Screen, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
+import { useSeriesActions } from "@/hooks/use-series-actions";
 import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
 import { api } from "@/lib/api";
 import { unwrap } from "@/lib/errors";
+import { formatCount } from "@/lib/format";
 import { grantIsFresh, requestPlay, type Grant } from "@/lib/play";
 import type { Episode, SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/providers/auth";
@@ -251,8 +253,18 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
     [requireAuth, series.id, current?.number, initialNumber],
   );
 
+  // Like / save / share / episodes, seeded from the server. Shorts had a rail and the full player — where all
+  // the watch time actually happens — had nothing to do but watch, which is a straight regression on the app
+  // this replaces.
+  const actions = useSeriesActions(series.id, {
+    favorite: series.is_favorite,
+    liked: series.is_liked,
+    likeCount: series.like_count,
+  });
+
   const overlay = useMemo(
     () => (
+      <>
       <View style={[styles.top, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
         <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))} accessibilityRole="button" accessibilityLabel="Back" style={styles.roundBtn}>
           <Icon name="back" size={28} />
@@ -271,8 +283,29 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
           <Icon name="episodes" size={20} />
         </Pressable>
       </View>
+
+      <View style={[styles.rail, { bottom: insets.bottom + 132 }]} pointerEvents="box-none">
+        <RailButton
+          icon={actions.liked ? "heart-filled" : "heart"}
+          label={formatCount(actions.likeCount)}
+          tint={actions.liked ? colors.accent : colors.ink}
+          onPress={actions.toggleLike}
+        />
+        <RailButton
+          icon={actions.favorite ? "bookmark-filled" : "bookmark"}
+          label={actions.favorite ? t("shorts.saved") : t("shorts.save")}
+          tint={actions.favorite ? colors.gold : colors.ink}
+          onPress={actions.toggleFavorite}
+        />
+        <RailButton
+          icon="share"
+          label={t("shorts.share")}
+          onPress={() => actions.share(series.title, series.slug, current?.number)}
+        />
+      </View>
+      </>
     ),
-    [insets.top, router, series.title, current?.number, total, t],
+    [insets.top, insets.bottom, router, series.title, series.slug, current?.number, total, t, actions],
   );
 
   if (total === 0) {
@@ -400,6 +433,29 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
   );
 }
 
+function RailButton({
+  icon,
+  label,
+  onPress,
+  tint = colors.ink,
+}: {
+  icon: Parameters<typeof Icon>[0]["name"];
+  label: string;
+  onPress: () => void;
+  tint?: string;
+}) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={label} style={styles.railBtn}>
+      <View style={styles.roundBtn}>
+        <Icon name={icon} size={20} color={tint} />
+      </View>
+      <Text variant="caption" color={colors.ink}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: "#000" },
   pager: { flex: 1 },
@@ -409,6 +465,8 @@ const styles = StyleSheet.create({
   top: { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.md },
   topCenter: { flex: 1, alignItems: "center", gap: 4 },
   badge: { paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radii.pill, backgroundColor: "rgba(0,0,0,0.5)" },
+  rail: { position: "absolute", right: spacing.md, alignItems: "center", gap: spacing.lg },
+  railBtn: { alignItems: "center", gap: 4 },
   roundBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
   sheetWrap: { position: "absolute", left: 0, right: 0, bottom: 0, top: 0, justifyContent: "flex-end", backgroundColor: "transparent" },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.5)" } as const,

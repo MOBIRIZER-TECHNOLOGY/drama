@@ -3,6 +3,7 @@ import { Baloo_2, Bricolage_Grotesque, IBM_Plex_Sans, IBM_Plex_Sans_Devanagari }
 import { notFound } from "next/navigation";
 import { BottomNav } from "@/components/BottomNav";
 import { Footer } from "@/components/Footer";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import { Header } from "@/components/Header";
 import { Providers } from "@/components/Providers";
 import { SITE_URL } from "@/lib/api";
@@ -71,6 +72,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
       <body className="flex min-h-full flex-col">
         <Providers value={{ lang, dir, languages, messages, config }}>
           <Header />
+          <OfflineBanner />
           {/* pb-14 clears the fixed bottom tab bar below md; it is `hidden` from md up, where the header nav takes over. */}
           <main className="flex-1 pb-14 md:pb-0">{children}</main>
           <Footer

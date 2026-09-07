@@ -399,6 +399,8 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
     fullscreen: t("player.fullscreen", "Fullscreen"),
     exitFullscreen: t("player.exit_fullscreen", "Exit fullscreen"),
     next: t("player.next", "Next episode"),
+    back10: t("player.back10", "Back 10 seconds"),
+    forward10: t("player.forward10", "Forward 10 seconds"),
     seek: t("player.seek", "Seek"),
     volume: t("player.volume", "Volume"),
     retry: t("common.retry", "Try again"),

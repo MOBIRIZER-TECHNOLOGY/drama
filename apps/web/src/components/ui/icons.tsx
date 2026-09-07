@@ -250,3 +250,21 @@ export const IconGrid = (p: P & { filled?: boolean }) => {
     </svg>
   );
 };
+
+// Skip controls. ±10s is the expected gesture in short-form video, and the player had only keyboard ±5s.
+export const IconBack10 = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M11 5V2L6.5 5.5 11 9V6a6 6 0 1 1-6 6" />
+    <text x="12.5" y="16.5" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">
+      10
+    </text>
+  </svg>
+);
+export const IconForward10 = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M13 5V2l4.5 3.5L13 9V6a6 6 0 1 0 6 6" />
+    <text x="11.5" y="16.5" fontSize="7.5" fontWeight="700" fill="currentColor" stroke="none" textAnchor="middle">
+      10
+    </text>
+  </svg>
+);

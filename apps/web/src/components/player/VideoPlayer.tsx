@@ -11,6 +11,8 @@ import {
   IconExitFullscreen,
   IconFullscreen,
   IconMute,
+  IconBack10,
+  IconForward10,
   IconNext,
   IconPause,
   IconPlay,
@@ -27,6 +29,8 @@ export type PlayerLabels = {
   fullscreen: string;
   exitFullscreen: string;
   next: string;
+  back10: string;
+  forward10: string;
   seek: string;
   volume: string;
   retry: string;
@@ -336,10 +340,10 @@ export function VideoPlayer(props: VideoPlayerProps) {
         togglePlay();
         break;
       case "ArrowRight":
-        seekBy(5);
+        seekBy(10);
         break;
       case "ArrowLeft":
-        seekBy(-5);
+        seekBy(-10);
         break;
       case "m":
         toggleMute();
@@ -536,8 +540,14 @@ export function VideoPlayer(props: VideoPlayerProps) {
           />
         </div>
         <div className="flex items-center gap-1">
+          <ControlButton label={labels.back10} onClick={() => seekBy(-10)}>
+            <IconBack10 size={20} />
+          </ControlButton>
           <ControlButton label={playing ? labels.pause : labels.play} onClick={togglePlay}>
             {playing ? <IconPause size={20} /> : <IconPlay size={20} />}
+          </ControlButton>
+          <ControlButton label={labels.forward10} onClick={() => seekBy(10)}>
+            <IconForward10 size={20} />
           </ControlButton>
           {hasNext && (
             <ControlButton label={labels.next} onClick={onNext}>
