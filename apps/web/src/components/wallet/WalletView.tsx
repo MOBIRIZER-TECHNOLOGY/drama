@@ -395,22 +395,31 @@ function WalletInner() {
                 <span className="absolute -top-2.5 start-4 rounded-pill bg-gold px-2 py-0.5 text-[11px] font-semibold uppercase text-accent-ink">{p.badge}</span>
               )}
               <p className="font-display text-lg font-semibold text-ink">{p.name}</p>
-              {p.kind === "vip" || p.duration_days ? (
-                <p className="mt-1 text-sm text-muted">
-                  {t("wallet.vip_days", "{n} days of VIP", { n: p.duration_days ?? 0 })}
-                </p>
-              ) : null}
-              <p className="mt-3 flex items-baseline gap-2">
-                <span className="inline-flex items-center gap-1 font-display text-3xl font-bold text-gold">
-                  <IconCoin size={24} />
-                  {formatCoins(p.coins + p.bonus_coins, lang)}
-                </span>
-                {p.bonus_coins > 0 && (
-                  <span className="rounded-pill bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">
-                    {t("wallet.bonus_pct", "+{pct}% extra", { pct: Math.round((p.bonus_coins / Math.max(1, p.coins)) * 100) })}
+              {/*
+                A subscription's headline is its duration, not its coin count. VIP packs are seeded with
+                coins = 0, so rendering `p.coins` for every pack made the subscription advertise "0" in 30px
+                gold as the reason to buy it.
+              */}
+              {p.kind === "vip" ? (
+                <>
+                  <p className="mt-3 font-display text-3xl font-bold text-gold">
+                    {t("wallet.vip_days", "{n} days", { n: p.duration_days ?? 30 })}
+                  </p>
+                  <p className="mt-1 text-sm text-ink2">{t("wallet.vip_benefit", "Every episode, no coins needed")}</p>
+                </>
+              ) : (
+                <p className="mt-3 flex items-baseline gap-2">
+                  <span className="inline-flex items-center gap-1 font-display text-3xl font-bold text-gold">
+                    <IconCoin size={24} />
+                    {formatCoins(p.coins + p.bonus_coins, lang)}
                   </span>
-                )}
-              </p>
+                  {p.bonus_coins > 0 && (
+                    <span className="rounded-pill bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">
+                      {t("wallet.bonus_pct", "+{pct}% extra", { pct: Math.round((p.bonus_coins / Math.max(1, p.coins)) * 100) })}
+                    </span>
+                  )}
+                </p>
+              )}
               {/* An abstract currency is unpriceable until it is tied to the thing it buys. */}
               {p.kind !== "vip" && episodePrice > 0 && (
                 <p className="mt-1 text-sm text-ink2">
@@ -433,7 +442,9 @@ function WalletInner() {
               <div className="mt-auto pt-4">
                 {p.price ? (
                   <Button size="lg" className="w-full" loading={busy} disabled={gateways.length === 0} onClick={() => void checkout(p)}>
-                    {t("wallet.buy_cta", "Get coins · {price}", { price: formatMoney(p.price.amount, p.price.currency, lang) })}
+                    {p.kind === "vip"
+                      ? t("wallet.buy_vip_cta", "Go VIP · {price}", { price: formatMoney(p.price.amount, p.price.currency, lang) })
+                      : t("wallet.buy_cta", "Get coins · {price}", { price: formatMoney(p.price.amount, p.price.currency, lang) })}
                   </Button>
                 ) : (
                   <Button size="lg" className="w-full" disabled>

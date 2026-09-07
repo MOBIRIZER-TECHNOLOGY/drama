@@ -315,6 +315,7 @@
   "wallet.balance": "Coin balance",
   "wallet.bonus_pct": "+{pct}% extra",
   "wallet.buy_cta": "Get coins · {price}",
+  "wallet.buy_vip_cta": "Go VIP · {price}",
   "wallet.came_from_episode": "Top up and go straight back to your episode.",
   "wallet.cancelled": "Payment cancelled.",
   "wallet.check_again": "Check again",
@@ -361,6 +362,7 @@
   "wallet.until": "until",
   "wallet.vip": "VIP",
   "wallet.vip_active": "Active",
-  "wallet.vip_days": "{n} days of VIP",
+  "wallet.vip_benefit": "Every episode, no coins needed",
+  "wallet.vip_days": "{n} days",
   "wallet.vip_inactive": "Not active — VIP unlocks every episode."
 }

@@ -306,6 +306,7 @@ export default function WalletScreen() {
                 busy={buying === pack.id}
                 disabled={buying !== null || pending !== null || !stripeEnabled}
                 discountPct={selectedOffer && (!selectedOffer.pack_id || selectedOffer.pack_id === pack.id) ? selectedOffer.discount_pct : null}
+                episodePrice={config.economy.episode_price}
                 onBuy={() => buy(pack)}
               />
             ))}
@@ -414,6 +415,7 @@ function PackCard({
   busy,
   disabled,
   discountPct,
+  episodePrice,
   onBuy,
 }: {
   pack: Pack;
@@ -422,8 +424,11 @@ function PackCard({
   busy: boolean;
   disabled: boolean;
   discountPct?: number | null;
+  /** What one episode costs, so a coin count can be stated as episodes rather than as an abstract number. */
+  episodePrice: number;
   onBuy: () => void;
 }) {
+  const t = useT();
   const price = pack.price ? formatMoney(pack.price.amount, pack.price.currency, pack.price.currency === currency ? symbol : undefined) : null;
   return (
     <Card style={[styles.pack, pack.kind === "vip" && styles.packVip, Boolean(discountPct) && styles.packOffer]}>
@@ -440,11 +445,12 @@ function PackCard({
           <>
             <View style={styles.packCoins}>
               <Icon name="coin" size={16} />
-              <Text variant="title">{pack.coins}</Text>
+              {/* Bonus coins are part of what the viewer receives, so they belong in the headline number. */}
+              <Text variant="title">{pack.coins + pack.bonus_coins}</Text>
             </View>
             {pack.bonus_coins > 0 ? (
               <Text variant="caption" color={colors.success}>
-                +{pack.bonus_coins} bonus
+                +{Math.round((pack.bonus_coins / Math.max(1, pack.coins)) * 100)}% extra
               </Text>
             ) : null}
           </>
@@ -453,6 +459,12 @@ function PackCard({
       <Text variant="caption" numberOfLines={1}>
         {pack.name}
       </Text>
+      {/* An abstract currency is unpriceable until it is tied to the thing it buys. */}
+      {pack.kind !== "vip" && episodePrice > 0 ? (
+        <Text variant="caption" color={colors.ink2}>
+          {t("wallet.equivalent", { n: Math.floor((pack.coins + pack.bonus_coins) / episodePrice) })}
+        </Text>
+      ) : null}
       {discountPct ? (
         <Text variant="caption" color={colors.success}>
           {discountPct}% off applied
