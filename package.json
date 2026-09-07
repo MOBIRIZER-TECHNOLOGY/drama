@@ -1,0 +1,22 @@
+{
+  "name": "katha",
+  "private": true,
+  "packageManager": "pnpm@12.3.4",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "api:dev": "pnpm --dir services/api run dev",
+    "api:client": "pnpm --filter @katha/api-client generate",
+    "infra:up": "docker compose -f infra/docker/compose.yaml up -d",
+    "infra:down": "docker compose -f infra/docker/compose.yaml down"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0"
+  }
+}

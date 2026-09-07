@@ -1,0 +1,609 @@
+<title>SnapReels Source Analysis</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FBF8F8; --surface: #FFFFFF; --surface-2: #F3EDEE;
+    --ink: #1F1A1C; --ink-2: #463D40; --muted: #6B5F63;
+    --line: #E6DEE0; --line-2: #D5CACD;
+    --accent: #B3213B; --accent-ink: #FFFFFF; --accent-soft: #F7E4E8;
+    --gold: #B8891F; --gold-soft: #F6EED9;
+    --crit: #8F1D2C; --crit-soft: #F7DFE2;
+    --high: #9A4A0C; --high-soft: #F8E7D6;
+    --med: #6B5A12; --med-soft: #F4EDCF;
+    --low: #2E5F6B; --low-soft: #DFEDF0;
+    --display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+      --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+      --line: #332A2E; --line-2: #463A3F;
+      --accent: #F05A72; --accent-ink: #1A0D11; --accent-soft: #3A1F26;
+      --gold: #E0B44A; --gold-soft: #3A3120;
+      --crit: #F09AA6; --crit-soft: #3B1F24;
+      --high: #E9A968; --high-soft: #3A2A1A;
+      --med: #DEC96A; --med-soft: #363019;
+      --low: #8EC5D1; --low-soft: #1C3239;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+    --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+    --line: #332A2E; --line-2: #463A3F;
+    --accent: #F05A72; --accent-ink: #1A0D11; --accent-soft: #3A1F26;
+    --gold: #E0B44A; --gold-soft: #3A3120;
+    --crit: #F09AA6; --crit-soft: #3B1F24;
+    --high: #E9A968; --high-soft: #3A2A1A;
+    --med: #DEC96A; --med-soft: #363019;
+    --low: #8EC5D1; --low-soft: #1C3239;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; } a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .page { display: grid; grid-template-columns: 1fr; max-width: 1220px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1040px) { .page { grid-template-columns: 230px minmax(0, 1fr); gap: 52px; } .toc { display: block; position: sticky; top: 24px; align-self: start; padding-top: 72px; max-height: calc(100vh - 40px); overflow-y: auto; } }
+  .toc { display: none; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 4px 0 4px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); font-size: 12.5px; line-height: 1.35; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--line-2); text-decoration: none; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  main { min-width: 0; }
+  header.masthead { padding: 64px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; max-width: 24ch; }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+  section { margin: 0 0 52px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 25px; letter-spacing: -.015em; line-height: 1.2; margin: 0 0 6px; scroll-margin-top: 24px; text-wrap: balance; }
+  h2 + .sub { color: var(--muted); margin: 0 0 18px; max-width: 66ch; }
+  h3 { font-family: var(--display); font-weight: 700; font-size: 17.5px; margin: 28px 0 10px; letter-spacing: -.01em; }
+  h4 { font-family: var(--display); font-weight: 700; font-size: 15px; margin: 18px 0 6px; }
+  p { max-width: 70ch; margin: 0 0 12px; }
+  ul, ol { max-width: 70ch; padding-left: 22px; margin: 0 0 12px; }
+  li { margin-bottom: 5px; } li::marker { color: var(--muted); }
+  strong { font-weight: 600; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; word-break: break-word; }
+  pre { font-family: var(--mono); font-size: 12.5px; line-height: 1.5; background: var(--surface-2); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 16px 0 20px; }
+  .facts div { background: var(--surface); padding: 12px 14px; }
+  .facts b { display: block; font-family: var(--display); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .facts span { font-size: 12px; color: var(--muted); }
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 680px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 600; white-space: nowrap; }
+  td.mono, .mono { font-family: var(--mono); font-size: 12.5px; }
+  .group td { background: var(--surface-2); font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 6px 11px; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.crit { color: var(--crit); background: var(--crit-soft); }
+  .tag.high { color: var(--high); background: var(--high-soft); }
+  .tag.med { color: var(--med); background: var(--med-soft); }
+  .tag.low { color: var(--low); background: var(--low-soft); }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 14px 18px; margin: 16px 0 20px; max-width: 76ch; }
+  .callout.gold { border-left-color: var(--gold); }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  .path { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <div class="eyebrow">Sections</div>
+    <ol>
+      <li><a href="#package">1. Package contents</a></li>
+      <li><a href="#web-arch">2. Web architecture</a></li>
+      <li><a href="#data">3. MongoDB data model</a></li>
+      <li><a href="#economy">4. Coin economy</a></li>
+      <li><a href="#payments">5. Payments</a></li>
+      <li><a href="#video">6. Video delivery</a></li>
+      <li><a href="#auth">7. Authentication</a></li>
+      <li><a href="#public">8. Public web journey</a></li>
+      <li><a href="#player">9. Web player</a></li>
+      <li><a href="#api">10. Mobile REST API</a></li>
+      <li><a href="#android">11. Android app</a></li>
+      <li><a href="#admin">12. Admin panel</a></li>
+      <li><a href="#settings">13. Settings and integrations</a></li>
+      <li><a href="#ai">14. AI features</a></li>
+      <li><a href="#i18n">15. Localisation</a></li>
+      <li><a href="#seo">16. SEO, PWA, install, licence</a></li>
+      <li><a href="#security">17. Security findings</a></li>
+      <li><a href="#bugs">18. Bugs and dead code</a></li>
+      <li><a href="#history">19. Release history</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">Reference for the Katha rebuild</div>
+      <h1>SnapReels 1.1.7 source analysis</h1>
+      <p class="lede">A complete read of the purchased CodeCanyon package: what every part does, where it lives, and where it breaks. Paths are relative to the extracted <code>code/</code> and <code>android/</code> archives.</p>
+      <div class="meta">
+        <span>code.zip: Next.js 15.5.9 web + API</span>
+        <span>Android App.zip: Kotlin, Compose, v1.1.6</span>
+        <span>Read on 2026-09-07</span>
+      </div>
+    </header>
+
+    <section id="package">
+      <h2>1. Package contents</h2>
+      <p class="sub">Two zip archives, a VPS installer script, a changelog and HTML documentation.</p>
+      <div class="facts">
+        <div><b>29,209</b><span>lines of .ts/.tsx under src/</span></div>
+        <div><b>212</b><span>source files in the web app</span></div>
+        <div><b>67</b><span>dependencies in package.json</span></div>
+        <div><b>27</b><span>Kotlin files in the Android app</span></div>
+        <div><b>86</b><span>Android values-* locale folders</span></div>
+        <div><b>3</b><span>Android tests, all template</span></div>
+      </div>
+      <h3>Web dependencies that matter</h3>
+      <ul>
+        <li><strong>Framework:</strong> next 15.5.9, react 19.2, tailwindcss 3.4, Radix UI primitives via shadcn, react-hook-form, zod, recharts, embla-carousel.</li>
+        <li><strong>Data:</strong> mongodb 6.7 (sole store), firebase 11 (client auth), firebase-admin 14 (present, barely used).</li>
+        <li><strong>Payments:</strong> stripe 14, razorpay 2.9. PayPal and Flutterwave are called through fetch with no SDK.</li>
+        <li><strong>Storage:</strong> @aws-sdk/client-s3 for S3-compatible providers; Bunny via REST.</li>
+        <li><strong>AI:</strong> groq-sdk, openai, @google/generative-ai, plus genkit and @genkit-ai/google-genai for dead flows.</li>
+        <li><strong>Video:</strong> react-player 2.16 with hls.js loaded from CDN on demand.</li>
+        <li><strong>Other:</strong> nodemailer, sharp, ua-parser-js, react-google-recaptcha, patch-package.</li>
+      </ul>
+      <h3>Android dependencies that matter</h3>
+      <ul>
+        <li>Kotlin 2.2, AGP 9.1.1, Compose BOM with Material 3, Navigation Compose, Room 2.7 with KSP, Coil.</li>
+        <li>Media3 ExoPlayer and UI 1.5.1. No HLS module.</li>
+        <li>Firebase BOM: auth and analytics only. Play Services Auth for Google Sign-In.</li>
+        <li>play-services-ads 24.9.0, applovin-sdk 13.0.1, audience-network-sdk 6.18.0, billing-ktx 9.1.0.</li>
+        <li>OkHttp, Retrofit and Moshi are declared, but only the unused Gemini service uses Retrofit and Moshi. Everything else parses JSON by hand with org.json.</li>
+      </ul>
+      <h3>Deployment</h3>
+      <p><code>install.txt</code> is a bash installer for Ubuntu 22.04 or 24.04 that installs Node, MongoDB with a default password of <code>snapreels123456</code>, nginx, PM2 and Let's Encrypt, expecting the app at <code>/var/www/snapreels</code> on port 3000. The docs steer buyers to a shared host called GadoHost. <code>apphosting.yaml</code> and <code>studio.json</code> are leftovers from Firebase App Hosting and Firebase Studio.</p>
+    </section>
+
+    <section id="web-arch">
+      <h2>2. Web architecture</h2>
+      <p class="sub">One Next.js App Router project serves the public site, the admin panel and the REST routes the Android app consumes.</p>
+      <h3>Request flow</h3>
+      <ul>
+        <li><strong>Middleware</strong> <span class="path">src/middleware.ts</span>: fetches the admin-configured default locale from <code>/api/default-locale</code> with a 10-second in-memory cache, rewrites <code>/foo</code> to <code>/{default}/foo</code> internally, redirects <code>/{default}/foo</code> back to <code>/foo</code>, and honours a <code>userLocale</code> cookie. Returns 403 for direct hits to <code>/uploads/videos/*</code>. Rewrites any <code>/{20+ chars}.txt</code> to the IndexNow key route. Regex-checks the admin cookie shape on <code>/admin</code>.</li>
+        <li><strong>Locale layout</strong> <span class="path">src/app/[lang]/layout.tsx</span>: validates the locale, redirects to <code>/install</code> when the <code>settings.admin</code> document is missing, then mounts the provider tree, the OneSignal initialiser and a GA4 tracker.</li>
+        <li><strong>Provider tree</strong> <span class="path">src/components/app-providers.tsx</span>: FirebaseClientProvider, TranslationProvider, SettingsProvider, FavoritesProvider, WatchHistoryProvider. The wrapper renders nothing until Firebase auth resolves, so every public page is blank for the first paint. A <code>dir</code> attribute on a div is the only RTL handling. Disabled users see a blocked screen except on <code>/contact</code> and <code>/p/*</code>.</li>
+        <li><strong>Data access</strong>: client components call server actions in <span class="path">src/lib/actions/*.ts</span> and readers in <span class="path">src/lib/data.actions.ts</span> directly. There is no REST layer for the web. The routes under <span class="path">src/app/api/</span> exist for the Android app, the profile fetch, uploads, video streaming and a few utilities.</li>
+        <li><strong>Mongo client</strong> <span class="path">src/lib/mongodb.ts</span>: lazy cached connection through <code>getDb()</code>. The default export also instantiates a second unconnected client at import time. The admin dashboard page opens its own client per request instead of using the shared one.</li>
+        <li><strong>Demo mode</strong> <span class="path">src/lib/demo-mode.ts</span>: <code>DEMO_MODE=true</code> blocks admin mutations and uploads with a fixed message. User-facing actions such as unlock, check-in and purchase are not blocked.</li>
+      </ul>
+      <h3>Route map</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Area</th><th>Routes</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Public</td><td class="mono">/[lang], /[lang]/series, /[lang]/series/[id], /[lang]/category/[slug], /[lang]/p/[slug], /[lang]/contact, /[lang]/my-list, /[lang]/profile, /[lang]/rewards, /[lang]/wallet, /[lang]/wallet/history, /[lang]/installation-setup, /[lang]/mobile-preview (disabled)</td></tr>
+          <tr><td class="k">Setup</td><td class="mono">/install, /activate</td></tr>
+          <tr><td class="k">Admin</td><td class="mono">/admin, /admin/login, /admin/forgot-password, /admin/reset-password, /admin/profile, /admin/series (+ add, edit/[id], [id]/episodes), /admin/categories, /admin/trending, /admin/users, /admin/coin-packs, /admin/rewards, /admin/ads, /admin/notifications, /admin/mailbox, /admin/pages (+ add, edit/[id]), /admin/languages, /admin/translations/[langCode], /admin/reports, /admin/settings/{general, auth, security, seo, performance, plugins, payment-gateway, storage, mobile, backup, license, api}</td></tr>
+          <tr><td class="k">API</td><td class="mono">/api/mobile/v1/{settings, series, episodes, categories, checkout, verify-purchase}, /api/user/create, /api/user/[uid] (+ checkin, claim, library, transactions, unlock), /api/auth/forgot-password, /api/video, /api/upload, /api/serve-uploads/[...path], /api/track, /api/locales, /api/default-locale, /api/indexnow-key, /api/install/activate, /api/admin/test-mail, /api/mailbox/send</td></tr>
+          <tr><td class="k">Generated files</td><td class="mono">/sitemap.xml, /robots.txt, /ads.txt, /manifest.webmanifest</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="data">
+      <h2>3. MongoDB data model</h2>
+      <p class="sub">Flat collections. The Firestore rules and <code>docs/backend.json</code> describe an older sub-collection design the code no longer uses.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Collection</th><th>Fields</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Identity and wallet</td></tr>
+          <tr><td class="mono">users</td><td class="mono">_id (Firebase uid), displayName, email, phoneNumber, photoURL, coins, isVip, vipExpiry, disabled, createdAt, publicId (8 digits), lastCheckInDate (YYYY-MM-DD), consecutiveCheckInDays (1..7), passwordHash, passwordSalt, resetToken, resetTokenExpiry</td><td>Created by <span class="path">api/user/create/route.ts:58-71</span>. The create route honours a client-supplied <code>coins</code> value.</td></tr>
+          <tr><td class="mono">coin-transactions</td><td class="mono">userId, type ('purchase' | 'spend'), amount (signed), description, createdAt</td><td>Rewards and check-ins are logged as type <code>purchase</code>.</td></tr>
+          <tr><td class="mono">purchases</td><td class="mono">userId, userEmail, userName, packId, packName, amount (coins), price, gateway, sessionId, createdAt</td><td><code>sessionId</code> is the only idempotency key and it is global, not per user.</td></tr>
+          <tr><td class="mono">unlocked-episodes</td><td class="mono">userId, episodeId, seriesId, method, cost, seriesTitle, episodeNumber, unlockedAt</td><td>Web path spreads the whole client payload into the document (<span class="path">content.ts:551</span>).</td></tr>
+          <tr><td class="mono">ad-watches</td><td class="mono">userId, date, count</td><td>Daily ad-unlock counter.</td></tr>
+          <tr><td class="mono">reward-tasks</td><td class="mono">title, description, type ('link' | 'ad'), platform ('website' | 'android' | 'ios'), coins, url, adScript, timerSeconds, frequency ('daily' | 'once'), isActive</td><td></td></tr>
+          <tr><td class="mono">reward-claims</td><td class="mono">userId, taskId, platform, claimedAt</td><td></td></tr>
+          <tr class="group"><td colspan="3">Catalogue</td></tr>
+          <tr><td class="mono">series</td><td class="mono">title, description, coverUrl, featuredCoverUrl, genres[], tags[], cast[] (always empty), slug, hashId, seoTitle, metaDescription, metaKeywords[], freeEpisodesCount, isFeatured, isPremium, views, likes, language, targetLanguages[], tmdbId, createdAt, updatedAt</td><td><code>_id</code> is sometimes an ObjectId and sometimes a string, so every lookup uses an <code>$or</code> helper (<span class="path">actions/utils.ts:3</span>).</td></tr>
+          <tr><td class="mono">episodes</td><td class="mono">seriesId, episodeInSeason, videoSources[{quality, url}], videoUrl (legacy)</td><td>No title, duration, thumbnail, price or subtitles.</td></tr>
+          <tr><td class="mono">categories</td><td class="mono">name, slug, showOnHomepage</td><td>Auto-upserted from series genres on save.</td></tr>
+          <tr><td class="mono">coin-packs</td><td class="mono">name, description, amount, price, type ('coins' | 'membership'), durationDays, appleProductId, googleProductId</td><td></td></tr>
+          <tr class="group"><td colspan="3">Engagement</td></tr>
+          <tr><td class="mono">favorites</td><td class="mono">userId, seriesId, favoritedAt</td><td></td></tr>
+          <tr><td class="mono">history</td><td class="mono">userId, seriesId, episodeId, episodeInSeason, progress (%), watchedAt</td><td>One row per user and series via upsert. Progress is stored but never used to resume.</td></tr>
+          <tr><td class="mono">series_likes, likes</td><td class="mono">userId, seriesId</td><td>Two different collections for the same feature: web writes the first, mobile writes the second. Both increment <code>series.likes</code>.</td></tr>
+          <tr><td class="mono">reports</td><td class="mono">reporterUid, reporterEmail, reportedContentRef, reportedContentTitle, seriesId, reason, status ('open' | 'resolved' | 'dismissed'), createdAt</td><td></td></tr>
+          <tr class="group"><td colspan="3">Content and ops</td></tr>
+          <tr><td class="mono">pages</td><td class="mono">title, slug, content (HTML), showInFooter</td><td></td></tr>
+          <tr><td class="mono">contacts</td><td class="mono">name, email, subject, message, isRead, createdAt</td><td></td></tr>
+          <tr><td class="mono">notifications</td><td class="mono">title, body, target, targetUserId, sentAt, status</td><td>Log of OneSignal sends.</td></tr>
+          <tr><td class="mono">languages</td><td class="mono">name, languageCode, countryCode, isActive</td><td><code>isActive</code> means "active in Android app".</td></tr>
+          <tr><td class="mono">translations</td><td class="mono">_id (lang code), then one key per UI string, plus page_title_{slug} and page_content_{slug}</td><td></td></tr>
+          <tr><td class="mono">ads</td><td class="mono">_id in {adsense_header, ads_txt, video_player_ad}; title, type, scriptContent, isActive, skipTimerSeconds, dailyWatchLimit</td><td></td></tr>
+          <tr><td class="mono">rate_limits</td><td class="mono">_id = "login_{date}_{ip}" or "reset_{date}_{ip}", count</td><td></td></tr>
+          <tr><td class="mono">settings</td><td class="mono">_id in {general, admin, monetization, rewards, payment, plugins, storage, mobile, video-security}</td><td>Full shapes in section 13. Includes every third-party secret.</td></tr>
+        </tbody>
+      </table></div>
+      <p>No analytics collection is ever written. <code>POST /api/track</code> returns <code>{success:true, message:'Tracking disabled'}</code>. The geo-IP helper in <span class="path">src/lib/geoip.ts</span> has no callers.</p>
+    </section>
+
+    <section id="economy">
+      <h2>4. Coin economy</h2>
+      <p class="sub">The exact rules, with the file that enforces each one.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Rule</th><th>Value</th><th>Enforced where</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Signup bonus</td><td><code>settings.general.signupBonus</code>, default 100</td><td><span class="path">api/user/create/route.ts:41</span>, but a client-sent <code>coins</code> field overrides it at line 64</td></tr>
+          <tr><td class="k">Episode price</td><td><code>settings.monetization.episodeCost</code>. Installer seeds 50. Web dialog falls back to 50, mobile route falls back to <code>body.cost ?? 10</code></td><td><span class="path">content.ts:765</span>, <span class="path">unlock-episode-dialog.tsx:49</span>, <span class="path">api/user/[uid]/unlock/route.ts:74</span></td></tr>
+          <tr><td class="k">Free episodes</td><td>Episode is free when <code>episodeInSeason &lt;= series.freeEpisodesCount</code>. Web defaults the count to 0, mobile to 3, the admin form to 5</td><td><span class="path">series-detail-view.tsx:558</span>, <span class="path">unlock/route.ts:36</span></td></tr>
+          <tr><td class="k">Sequential unlock</td><td>Only <code>highestUnlockedOrFree + 1</code> can be unlocked</td><td>Web: client only (<span class="path">series-detail-view.tsx:578</span>). Mobile: server (<span class="path">unlock/route.ts:53-67</span>) returning 409 with <code>requiredEpisodeNumber</code></td></tr>
+          <tr><td class="k">VIP bypass</td><td>All locks skipped when <code>isVip</code> and <code>vipExpiry</code> is unset or in the future</td><td><span class="path">unlock-episode-dialog.tsx:42-46</span>, <span class="path">unlock/route.ts:34</span></td></tr>
+          <tr><td class="k">Unlock with coins</td><td>Atomic <code>updateOne({_id, coins: {$gte: cost}}, {$inc: {coins: -cost}})</code>, then a spend transaction and an unlock row. <strong>Web takes <code>cost</code> from the client payload.</strong></td><td><span class="path">content.ts:538-554</span></td></tr>
+          <tr><td class="k">Unlock with ad</td><td>Increments the daily counter and unlocks. Limit is <code>ads.video_player_ad.dailyWatchLimit</code> (installer 5, client fallback 10). Web never checks the limit server-side; mobile does</td><td><span class="path">content.ts:548-550</span>, <span class="path">unlock/route.ts:92-98</span></td></tr>
+          <tr><td class="k">Daily check-in</td><td>Once per UTC day. If yesterday was a check-in, <code>day = (consecutive % 7) + 1</code>, otherwise day 1. Reward from <code>settings.rewards.dailyRewards[day-1]</code>, default 10, 20, 30, 40, 50, 60, 70</td><td><span class="path">user.ts:199-250</span></td></tr>
+          <tr><td class="k">Reward tasks</td><td>Per-task coins. <code>once</code> blocks after any claim, <code>daily</code> blocks after a claim since local midnight. Platform must match. Link timers and ad completion are client-attested</td><td><span class="path">user.ts:146-194</span></td></tr>
+          <tr><td class="k">Membership packs</td><td>Set <code>isVip</code> and extend <code>vipExpiry</code> from max(now, current) by <code>durationDays</code>. Transaction amount 0</td><td><span class="path">payment.ts:410-417</span></td></tr>
+          <tr><td class="k">Admin adjustments</td><td>Admin edits <code>coins</code> and <code>isVip</code> directly with no transaction row</td><td><span class="path">user.ts:47-48</span></td></tr>
+        </tbody>
+      </table></div>
+      <p>There is no referral programme, no web rewarded video, and no cap on link-task earnings beyond frequency.</p>
+    </section>
+
+    <section id="payments">
+      <h2>5. Payments</h2>
+      <p class="sub">Five channels, no webhooks anywhere. Verification is triggered by the client after redirect.</p>
+      <h3>Checkout</h3>
+      <p><code>createCheckoutSessionAction(userId, packId, gateway)</code> in <span class="path">payment.ts:181-216</span> builds a hosted checkout URL:</p>
+      <ul>
+        <li><strong>Stripe:</strong> Checkout Session, <code>mode: 'payment'</code>, card only, amount <code>price × 100</code> in <code>settings.monetization.currency</code> lower-cased (default <code>usd</code>).</li>
+        <li><strong>PayPal:</strong> Orders v2; sandbox if the client id starts with <code>sb-</code> or contains <code>sandbox</code>.</li>
+        <li><strong>Razorpay:</strong> a Payment Link, not Orders plus Checkout.js.</li>
+        <li><strong>Flutterwave:</strong> v3 payments endpoint.</li>
+        <li><strong>Google Play:</strong> handled on device, gateway id <code>gplay</code> at verification time.</li>
+      </ul>
+      <p>Success URL is <code>{siteUrl}/wallet?status=success&amp;pack_id=…&amp;gateway=…</code>. The wallet page reads <code>session_id</code>, <code>razorpay_payment_id</code>, <code>transaction_id</code> or <code>tx_ref</code>, or <code>token</code> from the URL and calls <code>verifyAndExecutePurchaseAction</code> (<span class="path">wallet/page.tsx:158-173</span>).</p>
+      <h3>Verification</h3>
+      <p><span class="path">payment.ts:376-454</span> dedupes on <code>purchases.sessionId</code>, then per gateway: Stripe <code>sessions.retrieve</code> requires <code>payment_status === 'paid'</code> and <code>amount_total / 100 ≈ price</code>; PayPal fetches the order and captures if <code>APPROVED</code> with no amount check; Razorpay <code>payments.fetch</code> requires <code>captured</code> and matching amount; Flutterwave accepts any amount at or above 95 percent of the price; Google Play calls <code>purchases.products.get</code> with a hand-rolled RS256 service-account JWT (<span class="path">payment.ts:318-343</span>) and requires <code>purchaseState === 0</code>. On success it increments coins or sets VIP and inserts transaction and purchase rows.</p>
+      <div class="callout">
+        <p>Nothing binds the session to the user or the pack. Two packs at the same price are interchangeable, and any account can redeem another account's paid session id once. Google Play purchases are never acknowledged or consumed, subscriptions are verified against the products endpoint, and the Android app sends <code>orderId</code> where the server expects the purchase token.</p>
+      </div>
+      <p>The mobile <code>/checkout</code> and <code>/verify-purchase</code> routes wrap the same actions behind the shared API key and take <code>userId</code> from the body.</p>
+    </section>
+
+    <section id="video">
+      <h2>6. Video delivery</h2>
+      <p class="sub">Uploads, an encrypted URL token, and a Node proxy that streams both local and remote files.</p>
+      <h3>Storage</h3>
+      <p><code>settings.storage.activeProvider</code> is one of local, s3, digitalocean, gcs (via HMAC S3 compatibility), backblaze, bunny. The upload route (<span class="path">api/upload/route.ts</span>) requires the admin cookie session, sniffs magic bytes for png, jpg, gif, webp, mp4, webm, m3u8 and ts, caps images at 10 MB and videos at 2 GB, and writes to <code>public/uploads/{images|videos}</code>, an S3 PutObject with public-read ACL (falls back without ACL), or the Bunny Storage API. Cloud objects are public URLs. Episodes can also carry any arbitrary https URL or an iframe embed string typed into the admin.</p>
+      <h3>Signed URL</h3>
+      <p><code>getSecureVideoUrl(path)</code> (<span class="path">content.ts:559-585</span>) encrypts <code>"{path}|{timeKey}"</code> with AES-256-CBC (<span class="path">crypto.ts</span>) using a secret auto-generated into <code>settings.video-security</code> (<span class="path">video-secret.ts:19</span>) and returns <code>/api/video?v={iv:hex}</code>. The time key rotates per <code>plugins.videoRotationPeriod</code> (1h, 12h, 24h, 1w, 1mo; default 24h). Tokens are not per user or per IP and carry no MAC. Any URL containing <code>.m3u8</code> is returned unchanged and never proxied.</p>
+      <h3>Proxy</h3>
+      <p><span class="path">api/video/route.ts</span> decrypts, accepts the current or previous time window unless <code>videoProtectionEnabled</code> is false, then either streams the local file by basename from <code>public/uploads/videos/</code> with full Range support (206, 416, suffix ranges, 1 MB chunks) or fetches the remote URL server-side, forwarding Range and ETag with a spoofed Chrome user agent and referer, setting <code>Access-Control-Allow-Origin: *</code> and <code>Cache-Control: public, max-age=86400</code>. Cloud video therefore transits the Node process twice.</p>
+      <h3>Exposure</h3>
+      <ul>
+        <li>The series page precomputes signed URLs for every episode and quality at render (<span class="path">data.ts:71-79</span>), so a logged-out visitor receives playable links for locked episodes in the server payload.</li>
+        <li>The mobile episodes endpoint returns <code>videoUrl</code> for every episode regardless of unlock state (<span class="path">episodes/route.ts:52-68</span>).</li>
+        <li>The series page passes the raw first-episode URL as <code>initialVideoUrl</code>, so remote sources for episode 1 bypass the proxy entirely.</li>
+        <li>Local files are addressable by basename once any token for the rotation window is known. Remote cloud URLs remain publicly fetchable.</li>
+        <li>No transcoding, no ABR ladder, no DRM, no referer check, no per-user binding.</li>
+      </ul>
+    </section>
+
+    <section id="auth">
+      <h2>7. Authentication</h2>
+      <p class="sub">Firebase for end users, a single encrypted-cookie account for the admin, a static key for the app.</p>
+      <h3>End users</h3>
+      <ul>
+        <li>Providers in <span class="path">components/auth-dialog.tsx:165-239</span>: email and password, Google, Facebook, Apple (<code>OAuthProvider('apple.com')</code>), phone with an invisible RecaptchaVerifier. Each is toggled by a <code>settings.general.*LoginEnabled</code> flag.</li>
+        <li>Firebase web config comes from settings with a hard-coded fallback to the vendor's <code>tiksnap-pro</code> project in <span class="path">src/firebase/config.ts:1-8</span>.</li>
+        <li>On auth state change, <span class="path">src/firebase/provider.tsx:64-101</span> GETs <code>/api/user/{uid}</code> with a Bearer ID token and POSTs <code>/api/user/create</code> on 404. The Mongo <code>_id</code> is the Firebase uid.</li>
+        <li>Server-side token verification calls Google Identity Toolkit <code>accounts:lookup</code> with the web API key (<span class="path">api/user/[uid]/route.ts:42-58</span>) instead of verifying the signature with firebase-admin.</li>
+        <li>Password reset uses firebase-admin <code>generatePasswordResetLink</code> plus nodemailer, rate-limited per IP per day. Phone-only users get a generated <code>{8 digits}@snapreels.com</code> email.</li>
+        <li>Blocked users are enforced only client-side in <span class="path">app-providers.tsx:40</span>. No device or session tracking exists.</li>
+      </ul>
+      <h3>Admin</h3>
+      <ul>
+        <li>One record in <code>settings.admin</code> with PBKDF2-SHA512 and an automatic upgrade from legacy SHA-256 (<span class="path">crypto.ts:42</span>).</li>
+        <li>Login (<span class="path">auth.ts:60-70</span>) sets an <code>auth</code> cookie containing AES-encrypted JSON <code>{auth: true, user, createdAt}</code> using the <strong>same secret as the video URLs</strong>, valid 7 days. Rotating the video secret logs the admin out.</li>
+        <li>Per-IP daily rate limits: failed logins (default 5) and password resets (default 3) in <code>rate_limits</code>.</li>
+        <li><code>verifyAdminSession</code> is called by the upload route, the test-mail route and the admin layout. <strong>Admin server actions do not call it</strong>; they rely on the middleware cookie-shape check that protects only page navigation.</li>
+        <li>No roles, no second admin, no 2FA, no username re-check on session verification.</li>
+      </ul>
+      <h3>Mobile</h3>
+      <p>Admin generates <code>snap_apk_{48 hex}</code> (<span class="path">content.ts:908</span>) into <code>settings.mobile.apiKey</code>. The app hard-codes it in <span class="path">data/AppConfig.kt:9-10</span> and sends it as <code>X-API-Key</code>. Routes accept the key from the header or a <code>?apiKey=</code> query string. Only some user routes additionally require a Firebase ID token. See section 10.</p>
+    </section>
+
+    <section id="public">
+      <h2>8. Public web journey</h2>
+      <p class="sub">What a visitor actually gets, page by page.</p>
+      <ul>
+        <li><strong>Home</strong> <span class="path">app/[lang]/page.tsx</span>: Embla autoplay hero of featured series with a blurred backdrop and Watch Now; Continue Watching (client-side, fetches all series and joins with history); Top Picks (12); one carousel per homepage category filtered client-side from the full list; a grid of everything; PWA install card if enabled.</li>
+        <li><strong>Browse</strong>: <code>/series</code> groups everything by category; <code>/category/[slug]</code> is a grid. Neither page loads translations, so they are English only. Search (Ctrl/Cmd+K) downloads the catalogue and filters with <code>title.includes()</code>.</li>
+        <li><strong>Series detail</strong> <span class="path">components/series-detail-view.tsx</span> (about 1,100 lines): portrait player on the left, info and episode grid on the right, similar series below, likes, bookmark, native share, report dialog, episode pagination by <code>settings.episodesPerPage</code> (default 15). Lock state is free, VIP or in the unlocked set; only the next sequential episode can be unlocked.</li>
+        <li><strong>Unlock dialog</strong>: coins, or an admin-pasted ad script rendered in a <code>srcDoc</code> iframe with <code>allow-same-origin allow-scripts</code> and a countdown, then Skip and Unlock. Daily ad limit checked in the dialog only.</li>
+        <li><strong>Wallet</strong>: packs and memberships, a redesigned vertical list of gateways with logos, Continue Payment, then redirect. History page is a paginated transaction table.</li>
+        <li><strong>Rewards</strong>: 7-day streak strip with Claim Today's Bonus; task list with Go (opens link, timer, Claim) or Watch (iframe ad, timer, Claim).</li>
+        <li><strong>Profile</strong>: display name, avatar resized client-side to 256 px and uploaded, PATCH with ID token, password change with re-auth.</li>
+        <li><strong>My List</strong>: favourites tab and history tab with remove and clear. <strong>Contact</strong>: form with optional reCAPTCHA into the admin mailbox. <strong>CMS</strong> <code>/p/[slug]</code>: HTML from Mongo via <code>dangerouslySetInnerHTML</code>, translated per language key.</li>
+        <li><strong>Theme</strong>: hard-coded dark. <code>&lt;html lang="en" class="dark"&gt;</code> on every locale, no toggle. RTL list <code>ar, fa, he, ur</code> is duplicated in two files and only sets <code>dir</code>; Tailwind <code>ml-*</code> and <code>left-*</code> classes are not mirrored.</li>
+        <li><strong>Push</strong>: legacy OneSignal v15 web SDK with a slide-down prompt after a configurable delay.</li>
+      </ul>
+    </section>
+
+    <section id="player">
+      <h2>9. Web player</h2>
+      <p class="sub">react-player wrapped in a custom control layer.</p>
+      <ul>
+        <li><code>react-player/lazy</code> with <code>config.file.forceVideo: true</code> and <code>controlsList: nodownload</code>. Custom overlay: Radix slider with buffered value, volume, hold right half for 2x, hold left half to rewind with <code>seekTo</code> every 250 ms, fullscreen, quality dropdown when more than one source.</li>
+        <li><strong>Source detection order</strong>: raw <code>&lt;iframe&gt;</code> string renders as an embed (controls, progress and autoplay-next disabled); Dailymotion page URLs are converted to iframes; <code>.m3u8</code> loads hls.js from CDN and bypasses the proxy; local and https files go through the signed proxy. Because the file player is forced, bare YouTube or Vimeo page URLs do not work and must be entered as iframe embeds.</li>
+        <li>After 3 seconds of playback it fetches the first 5 MB of the next episode with a Range request as a warm-up.</li>
+        <li><code>onEnded</code> navigates to the next episode; an end overlay shows two similar series when there is none. Unmuted autoplay failure falls back to muted.</li>
+        <li>Watch history is written every 30 seconds as a percentage, but resume only restores the episode via <code>?ep=N</code>, never the timestamp.</li>
+        <li><span class="path">src/app/layout.tsx</span> monkey-patches <code>Node.prototype.removeChild</code> and <code>insertBefore</code> globally to swallow "child of a different parent" errors caused by embeds and translation extensions.</li>
+      </ul>
+    </section>
+
+    <section id="api">
+      <h2>10. Mobile REST API</h2>
+      <p class="sub">The contract the Android app consumes. "Key" means the shared static API key; "Token" means a Firebase ID token verified through Identity Toolkit.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Endpoint</th><th>Auth</th><th>Request</th><th>Response and behaviour</th></tr></thead>
+        <tbody>
+          <tr><td class="mono">GET /api/mobile/v1/settings</td><td>Key</td><td></td><td>Remote config: login toggles, gateway toggles, currency and symbol, coin and VIP packs with store product ids, rewardsEnabled, dailyRewards, rewardTasks, legal and rate-us URLs, updateUrl, versionCode, forceUpdateEnabled, languages, full ads config, admobRewardedLimit. Doubles as the connection test.</td></tr>
+          <tr><td class="mono">GET /api/mobile/v1/series</td><td>Key</td><td>?lang=</td><td>Array of {id, title, description, coverUrl, featuredCoverUrl, category, genres, rating (hard-coded 4.8), totalEpisodes, releaseYear, isTrending (= isFeatured), tags, slug, views, likes, createdAtMillis}. One countDocuments per series.</td></tr>
+          <tr><td class="mono">GET /api/mobile/v1/episodes</td><td>Key</td><td>?seriesId=</td><td>Array of {id, dramaId, title, episodeNumber, videoUrl, isPremium, coinCost, durationSec}. isPremium = number &gt; freeEpisodesCount (default 3). coinCost is the global price. videoUrl is a signed proxy URL for every episode, locked or not.</td></tr>
+          <tr><td class="mono">GET /api/mobile/v1/categories</td><td>Key</td><td></td><td>Array of homepage category names.</td></tr>
+          <tr><td class="mono">POST /api/mobile/v1/checkout</td><td>Key only</td><td>{userId, packId, gateway}</td><td>{success, url} hosted checkout for stripe, paypal, razorpay, flutterwave. Any key holder can create sessions for any user.</td></tr>
+          <tr><td class="mono">POST /api/mobile/v1/verify-purchase</td><td>Key only</td><td>{userId, packId, gateway, sessionId}</td><td>{success, message}. Idempotent on sessionId. gateway 'gplay' calls the Google Play Developer API.</td></tr>
+          <tr><td class="mono">POST /api/user/create</td><td>None, 10 per IP per hour in process memory</td><td>{uid, email, displayName, photoURL, phoneNumber, coins}</td><td>Creates the Mongo user. Client-supplied coins are honoured. No proof that uid belongs to the caller.</td></tr>
+          <tr><td class="mono">GET /api/user/[uid]</td><td>Token (Key optional)</td><td></td><td>User document plus unlockedEpisodeIds, todayAdCount, claimedTaskIds.</td></tr>
+          <tr><td class="mono">PATCH /api/user/[uid]</td><td>Token</td><td>{displayName, photoURL, publicId}</td><td>Only those three fields are applied. The app also sends coins and isVip, which are ignored.</td></tr>
+          <tr><td class="mono">DELETE /api/user/[uid]</td><td>Key + Token</td><td></td><td>Deletes the Firebase account through accounts:delete, then purges nine collections.</td></tr>
+          <tr><td class="mono">POST /api/user/[uid]/checkin</td><td>Key + Token</td><td>{}</td><td>{success, reward, dayNum, coins}.</td></tr>
+          <tr><td class="mono">POST /api/user/[uid]/claim</td><td>Key only</td><td>{taskId}</td><td>{success}. Once or daily enforced. uid spoofable.</td></tr>
+          <tr><td class="mono">POST /api/user/[uid]/unlock</td><td>Key only</td><td>{seriesId, episodeId, method: 'coins' | 'ad', cost}</td><td>{success, coins, todayAdCount} or 409 {requiredEpisodeNumber}. Sequential rule and daily ad cap enforced. Coins deducted atomically. No ad-network verification.</td></tr>
+          <tr><td class="mono">GET/POST /api/user/[uid]/library</td><td>Key only</td><td>{action: toggleFavorite | toggleLike | updateHistory | removeHistory | clearHistory, seriesId, episodeId, episodeInSeason, progress}</td><td>Favourites, likes and history.</td></tr>
+          <tr><td class="mono">GET /api/user/[uid]/transactions</td><td>Key only</td><td>?limit=</td><td>Coin transactions.</td></tr>
+          <tr><td class="mono">POST /api/auth/forgot-password</td><td>None</td><td>{email}</td><td>Sends the Firebase reset link by SMTP.</td></tr>
+          <tr><td class="mono">GET /api/video?v=</td><td>Signed token</td><td>Range</td><td>Proxied stream, see section 6.</td></tr>
+        </tbody>
+      </table></div>
+      <p>The Android repository derives the user API base by string-replacing <code>/api/mobile/v1</code> with <code>/api/user</code> (<span class="path">SnapReelsRepository.kt:78</span>). <code>/api/locales</code> and <code>/api/default-locale</code> are web-only.</p>
+    </section>
+
+    <section id="android">
+      <h2>11. Android app</h2>
+      <p class="sub">Native Kotlin, single activity, one view model, Compose screens.</p>
+      <h3>Structure</h3>
+      <ul>
+        <li>Package <code>com.example</code>, applicationId <code>com.snapreels.devsnaplix</code>, versionCode 6, minSdk 24, targetSdk 36, release build not minified, debug keystore committed, release signing from environment variables.</li>
+        <li><span class="path">MainActivity.kt</span> gates on a connection check (branded splash with Retry), then a force-update check, then a NavHost with routes onboarding, login, home, detail, player, rewards, topup. No route arguments; selection is passed through view-model state. <span class="path">SplashScreen.kt</span> is not in the graph.</li>
+        <li><span class="path">viewmodel/SnapReelsViewModel.kt</span> is a 754-line god object. <span class="path">data/SnapReelsRepository.kt</span> does OkHttp calls with hand-written org.json parsing and shows Toasts from the repository layer.</li>
+        <li>Room database v4 with destructive migration: <code>user_profiles</code> keyed by email (coins, VIP, streak, todayAdCount), <code>favorite_dramas</code>, <code>unlocked_episodes</code> keyed by <code>dramaId_episodeNumber</code>. A user-state cache only; series and episodes are always fetched live.</li>
+        <li>Locale is applied in <code>attachBaseContext</code> from a <code>language_code</code> preference with the deprecated <code>updateConfiguration</code>. The onboarding language picker is fed by the server languages list.</li>
+      </ul>
+      <h3>Screens</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Screen</th><th>File</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Onboarding</td><td class="mono">OnboardingScreen.kt</td><td>Three-page pager. Page 0 is the language picker, then welcome slides. Sets is_onboarding_completed.</td></tr>
+          <tr><td class="k">Login</td><td class="mono">LoginScreen.kt</td><td>Firebase email login, signup, forgot; Google Sign-In via the legacy GoogleSignIn API with the web client id from google-services.json; phone OTP. Facebook and Apple buttons only toast "Firebase integration required".</td></tr>
+          <tr><td class="k">Home</td><td class="mono">HomeScreen.kt (about 1,500 lines)</td><td>Four-tab bar (Home, Shorts, My List, My), banner ad, pull to refresh, 16:9 featured slider with title and Watch, Continue Watching, Newest, category rows, search dialog.</td></tr>
+          <tr><td class="k">Shorts</td><td class="mono">ShortsScreen.kt</td><td>VerticalPager of episode 1 of every series, shuffled after fetching all episodes for all series on each refresh. Tap to open the player.</td></tr>
+          <tr><td class="k">Detail</td><td class="mono">DramaDetailScreen.kt</td><td>Episode list with lock icons, sequential gating, favourite toggle, unlock dialog.</td></tr>
+          <tr><td class="k">Player</td><td class="mono">VideoPlayerScreen.kt (about 1,600 lines)</td><td>See below.</td></tr>
+          <tr><td class="k">Rewards</td><td class="mono">RewardsScreen.kt</td><td>Balance, streak day, 7-day strip, Claim Today, task list.</td></tr>
+          <tr><td class="k">Top Up</td><td class="mono">TopUpScreen.kt (about 1,200 lines)</td><td>Coin packs and VIP, gateway list from settings, Google Play Billing or WebView checkout.</td></tr>
+          <tr><td class="k">My</td><td class="mono">MyScreen.kt</td><td>Profile with public id, coins and Top Up, VIP status and Join VIP, Earn Rewards, history, settings (language, privacy, terms, delete account, rate us, clear cache).</td></tr>
+          <tr><td class="k">Checkout</td><td class="mono">CheckoutWebViewDialog.kt</td><td>WebView with JavaScript that intercepts status=success or status=cancel in the redirect URL.</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Player</h3>
+      <ul>
+        <li>One ExoPlayer per pager page, remembered by episode id and released on dispose. PlayerView with controller off, zoom resize by default, toggleable fit.</li>
+        <li><span class="path">util/VideoCacheManager.kt</span>: 500 MB LRU SimpleCache with CacheDataSource; <code>preCacheVideo</code> fully downloads episode N+1 with CacheWriter. Constant-bitrate seeking enabled. No HLS module, so m3u8 sources fail; only progressive MP4 and WebM play. No adaptive quality.</li>
+        <li>Pages beyond the first locked episode snap back. Locked page shows Unlock with N coins, Watch ad to unlock with today's count, and an auto-unlock toggle. On <code>STATE_ENDED</code>, next episode plays if unlocked, otherwise auto-unlock with coins if enabled and affordable, otherwise the dialog.</li>
+        <li>If the URL contains <code>&lt;iframe</code> or dailymotion, a WebView with injected JavaScript handles play and pause.</li>
+        <li>Gestures: tap to toggle, hold right for 2x, hold left to rewind, speed cycle button, seek bar, fullscreen that only hides overlays (no orientation change, manifest configChanges prevents recreation). System bars hidden. No picture-in-picture. Interstitial preloaded on entry and shown on back.</li>
+      </ul>
+      <h3>Monetisation on device</h3>
+      <ul>
+        <li><strong>Google Play Billing 9.1.0</strong> (<span class="path">TopUpScreen.kt:405-495</span>): new BillingClient per tap, product type SUBS for vip or membership packs and INAPP otherwise, then <code>orderId ?: purchaseToken</code> is sent to verify-purchase as gateway gplay. Purchases are never acknowledged or consumed.</li>
+        <li><strong>WebView checkout</strong>: extracts pack_id, session_id (defaulting to the string <code>WEB_DIRECT</code>) and gateway (defaulting to stripe) from the redirect, calls verify, and shows Success regardless of the result (<span class="path">TopUpScreen.kt:900-903</span>). Razorpay, Flutterwave and PayPal return URLs do not carry session_id in the same shape.</li>
+        <li><strong>Ads</strong> (<span class="path">data/AdsManager.kt</span>): AdMob, AppLovin MAX and FAN all initialised. Provider admob, applovin or facebook, or multi which round-robins per ad type across enabled providers with no fallback on load failure. Banner on Home, interstitial on player exit, rewarded for unlock and tasks, reward attested by the client. The manifest APPLICATION_ID is Google's test app id and the admobAppId setting is never applied.</li>
+        <li><strong>Coin sync</strong>: balance is whatever GET /api/user returns, cached in Room. Local award paths (<code>awardCoins</code>, <code>awardVip</code>, <code>purchaseCoins</code>, <code>purchaseVip</code>) PATCH fields the server ignores and are effectively dead.</li>
+      </ul>
+      <h3>Other</h3>
+      <ul>
+        <li><span class="path">data/GeminiService.kt</span> calls <code>generativelanguage.googleapis.com</code> directly with a query-string key that is set to an empty string, so it always returns canned fallback metadata. No screen calls it. <span class="path">metadata.json</span> and <span class="path">README.md</span> are AI Studio boilerplate.</li>
+        <li>Rewards: check-in through the API; ad tasks through a rewarded ad then claim; link tasks open the URL and run a wall-clock countdown (default 5 s) that is trivially bypassable.</li>
+        <li>Share is a plain ACTION_SEND with <code>{siteUrl}/series/{slug}?ep=N</code> and a fallback host of snapreels.app. No deep-link intent filters, no referral.</li>
+        <li>Remote config supports force update (block screen with the update URL when versionCode is behind) but no maintenance flag, no global ads kill switch, no announcements.</li>
+        <li>Strings: default 222 keys, translations 205 to 213 keys each, uniform structure that indicates machine generation. No server-driven strings.</li>
+        <li><code>usesCleartextTraffic="true"</code>, <code>allowBackup="true"</code>, and google-services.json for the vendor's project ships in the bundle.</li>
+        <li>Tests: 2+2, app name, one Roborazzi screenshot. The instrumented test asserts package com.example, which does not match the application id.</li>
+      </ul>
+    </section>
+
+    <section id="admin">
+      <h2>12. Admin panel</h2>
+      <p class="sub">Every page, what it manages, and the action it calls.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Page</th><th>Manages</th><th>Calls</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Dashboard</td><td>Date range presets (today, yesterday, 7d, 1m, 3m, 1y, all). Cards: revenue (sum of purchases.price), new users, total users, series count, episode count. Area chart of daily registrations vs revenue. Top 10 series by views. Static "System Health" card. engagementRate and avgRevenuePerEpisode are hard-coded 0.</td><td class="mono">app/admin/page.tsx (own MongoClient)</td></tr>
+          <tr><td class="k">Dramas</td><td>Table with featured and premium markers, language badges, client-side search, language filter, client-side paging. Edit, Episodes, Delete.</td><td class="mono">getAllSeriesForAdmin, deleteSeriesAction</td></tr>
+          <tr><td class="k">Series add/edit</td><td>title, slug (auto), description, genres (comma list, auto-creates categories), tags, cover (canvas-resized to WebP), featured cover, target languages, freeEpisodesCount (default 5), isFeatured, isPremium, views, likes, seoTitle, metaDescription, metaKeywords. AI seed textarea fills the form. cast, plotSummary, language and tmdbId exist on the type but are not exposed. Saving pings IndexNow.</td><td class="mono">saveSeriesAction, generateFullSeriesMetadataAction</td></tr>
+          <tr><td class="k">Episodes</td><td>Episode number plus rows of quality (1080p, 720p, 480p) and source: Upload (XHR with progress), Direct Link, or Embed Code. Add several at once with auto numbering. Replaced files are deleted from storage. An improved unrouted copy of this page exists under components/.</td><td class="mono">saveEpisodeAction, POST /api/upload</td></tr>
+          <tr><td class="k">Categories</td><td>name, slug, showOnHomepage.</td><td class="mono">saveCategoryAction, deleteCategoryAction</td></tr>
+          <tr><td class="k">Trending</td><td>"Under construction" card, not in the sidebar.</td><td></td></tr>
+          <tr><td class="k">Users</td><td>Loads every user; search by name, email, id; ban and unban; edit avatar, name, email, phone, coins, password; view coin history with pagination; delete with cascade. No VIP toggle in the UI although the action allows it.</td><td class="mono">getAllUsersForAdmin, updateUserStatusAction, adminUpdateUserAction, getUserTransactions, deleteUserAction</td></tr>
+          <tr><td class="k">Coin Packs</td><td>Global episodeCost, isCoinsActive, currency; pack CRUD with type, amount, price, durationDays, Apple and Google product ids; read-only purchase history.</td><td class="mono">saveMonetizationSettingsAction, saveCoinPackAction, deleteCoinPackAction, getAllPurchases</td></tr>
+          <tr><td class="k">Rewards System</td><td>isEnabled, dailyRewards[7]; task CRUD per platform tab (iOS tab empty).</td><td class="mono">saveRewardSettingsAction, saveRewardTaskAction, deleteRewardTaskAction</td></tr>
+          <tr><td class="k">Ads</td><td>AdSense header script, ads.txt body, video-player ad HTML with skip timer, daily limit and active flag.</td><td class="mono">saveAdSettingsAction</td></tr>
+          <tr><td class="k">Notification</td><td>Title, body, all users or one user. Sends through OneSignal REST with included_segments or include_external_user_ids and logs the result. No history view.</td><td class="mono">sendNotificationAction</td></tr>
+          <tr><td class="k">Mailbox</td><td>Accordion inbox, mark read on expand, delete. No reply.</td><td class="mono">getContactMessages, markContactAsReadAction, deleteContactAction</td></tr>
+          <tr><td class="k">Pages</td><td>title, slug, HTML content, showInFooter. Creates translatable keys page_title_{slug} and page_content_{slug}.</td><td class="mono">savePageAction, deletePageAction</td></tr>
+          <tr><td class="k">Languages</td><td>name, ISO 639-1 code, ISO 3166-1 country code (flag), isActive; Set as Default; AI Bulk Translation dialog; link to the translations editor.</td><td class="mono">saveLanguageAction, deleteLanguageAction, translateLanguageAction</td></tr>
+          <tr><td class="k">Translations</td><td>Three tabs: 177 UI strings, SEO strings, custom page title and HTML per page. Per-language AI translate button.</td><td class="mono">saveLanguageTranslationsAction</td></tr>
+          <tr><td class="k">Reports</td><td>Reporter, content title, reason, status; Resolve and Delete. No Dismiss and no link to the content.</td><td class="mono">updateReportStatusAction</td></tr>
+          <tr><td class="k">Profile</td><td>Display name, email, username, new password with current password.</td><td class="mono">updateAdminProfile</td></tr>
+          <tr><td class="k">Login, forgot, reset</td><td>Single account, emailed reset token, per-IP daily limits.</td><td class="mono">login, adminForgotPassword, adminResetPassword</td></tr>
+          <tr><td class="k">Settings pages</td><td>See section 13.</td><td class="mono">saveGeneralSettingsAction and per-area actions</td></tr>
+          <tr><td class="k">Backup and Restore</td><td>Test connection, Export (every collection to one JSON file), Restore (deleteMany on every collection in the file, then insert). No dry run.</td><td class="mono">exportMongoDataAction, importDataToMongoAction</td></tr>
+          <tr><td class="k">License</td><td>Not linked from the sidebar. Still uses the Firestore client SDK to write settings/general. "Test and Activate" marks any string over 10 characters active.</td><td class="mono">testLicenseAction</td></tr>
+          <tr><td class="k">API settings</td><td>Tombstone page: "removed, now uses keyless GeoIP".</td><td></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="settings">
+      <h2>13. Settings and integrations</h2>
+      <p class="sub">The full settings object, grouped by the page that edits it.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Document and page</th><th>Keys</th></tr></thead>
+        <tbody>
+          <tr><td class="k">general / General</td><td class="mono">siteName, siteUrl, logoUrl, faviconUrl, copyrightText, appVersion, showCopyright, showVersion, seriesUrlFormat (hash | slug), showSocialsInFooter, showSiteNameNextToLogo, episodesPerPage, socials{facebook, instagram, tiktok, youtube, twitter}, appStoreUrl, playStoreUrl, defaultLanguageCode, apiKey (unused duplicate)</td></tr>
+          <tr><td class="k">general / Authentication</td><td class="mono">emailLoginEnabled, googleLoginEnabled, facebookLoginEnabled, appleLoginEnabled, phoneLoginEnabled, signupBonus, firebaseConfigRaw parsed into firebaseApiKey, firebaseAuthDomain, firebaseProjectId, firebaseStorageBucket, firebaseMessagingSenderId, firebaseAppId, firebaseMeasurementId; firebaseServiceAccount (JSON); a duplicate SMTP block</td></tr>
+          <tr><td class="k">general / Security</td><td class="mono">mailType (smtp | sendmail), supportEmail, smtpHost, smtpPort, smtpUser, smtpPassword, smtpEncryption, maxFailedLoginsPerIp (default 5), maxPasswordResetsPerDay (default 3). Test email button. Sendmail path is hard-coded /usr/sbin/sendmail; SMTP sets rejectUnauthorized false.</td></tr>
+          <tr><td class="k">general / SEO</td><td class="mono">seoTitle, seoDescription, seoKeywords, robotsTxt</td></tr>
+          <tr><td class="k">general / Performance and PWA</td><td class="mono">gzipEnabled, pwaEnabled, pwaInstallDelay, webpConversionEnabled. None of these keys is in the save action's allowlist (content.ts:118-130), so the page silently does nothing. gzipEnabled is never read.</td></tr>
+          <tr><td class="k">general / License</td><td class="mono">licenseKey, codecanyonUsername, isLicenseActive, purchaseCode, lastLicenseCheckAt, activatedAt</td></tr>
+          <tr><td class="k">plugins / Plugins</td><td class="mono">gaId; captchaProvider (google | cloudflare | hcaptcha | none), recaptchaVersion, recaptchaSiteKey, recaptchaSecretKey, cloudflareSiteKey, cloudflareSecretKey, hcaptchaSiteKey, hcaptchaSecretKey; videoProtectionEnabled, videoRotationPeriod; aiProvider (groq | openai | gemini), groqApiKey, openaiApiKey, geminiApiKey with test actions; oneSignalAppId, oneSignalApiKey, oneSignalPromptDelay; indexNowEnabled, indexNowKey</td></tr>
+          <tr><td class="k">payment / Payment Gateway</td><td class="mono">stripeEnabled, stripePublishableKey, stripeSecretKey, stripeLogoUrl; paypalEnabled, paypalClientId, paypalSecret, paypalLogoUrl; razorpayEnabled, razorpayKeyId, razorpayKeySecret, razorpayLogoUrl; flutterwaveEnabled, flutterwavePublicKey, flutterwaveSecretKey, flutterwaveLogoUrl; googlePayEnabled, googlePlayPackageName, serviceAccountEmail, serviceAccountPrivateKey</td></tr>
+          <tr><td class="k">storage / Storage</td><td class="mono">activeProvider, videoUploadMaxSizeMb; digitalocean{accessKeyId, secretAccessKey, endpoint, bucket, region}; s3{accessKeyId, secretAccessKey, bucket, region}; gcs{accessKeyId, secretAccessKey, bucket}; backblaze{applicationKeyId, applicationKey, bucket, endpoint}; bunny{storageZoneName, apiKey, region, pullZoneUrl}. Test connection action.</td></tr>
+          <tr><td class="k">mobile / Mobile App</td><td class="mono">apiKey, privacyPolicyUrl, termsOfServiceUrl, rateUsUrl, updateUrl, versionCode, forceUpdateEnabled, adsProvider (admob | applovin | facebook | multi); admobBannerId, admobBannerEnabled, admobInterstitialId, admobInterstitialEnabled, admobRewardedId, admobRewardedEnabled, admobRewardedLimit (also rewrites the web ad daily limit); applovinSdkKey and banner, interstitial, rewarded ids and flags; facebook banner, interstitial, rewarded ids and flags. iOS tab says "future update".</td></tr>
+          <tr><td class="k">monetization / Coin Packs</td><td class="mono">episodeCost, isCoinsActive, currency, currencySymbol</td></tr>
+          <tr><td class="k">rewards / Rewards System</td><td class="mono">isEnabled, dailyRewards[7]</td></tr>
+          <tr><td class="k">admin</td><td class="mono">username, email, displayName, passwordHash, passwordSalt, passwordAlgorithm, resetToken, resetTokenExpiry</td></tr>
+          <tr><td class="k">video-security</td><td class="mono">secret (32-byte hex, auto-generated)</td></tr>
+        </tbody>
+      </table></div>
+      <h3>Every third-party integration the admin can configure</h3>
+      <p>Firebase Auth (web config and service account), Google, Facebook, Apple and phone sign-in toggles, SMTP or sendmail, Google reCAPTCHA v2 and v3, Cloudflare Turnstile, hCaptcha, Google Analytics 4, OneSignal, IndexNow, Groq, OpenAI, Gemini, AWS S3, DigitalOcean Spaces, Google Cloud Storage, Backblaze B2, Bunny Storage and CDN, Stripe, PayPal, Razorpay, Flutterwave, Google Play Billing, AdSense and ads.txt, AdMob, AppLovin MAX, Facebook Audience Network, Apple and Google product ids on packs, and the vendor's licence server. Only Google reCAPTCHA is verified server-side on the contact form; Turnstile and hCaptcha secrets are stored but unused.</p>
+    </section>
+
+    <section id="ai">
+      <h2>14. AI features</h2>
+      <p class="sub">Two systems exist in the tree. One is used.</p>
+      <h3>Used: callAi in src/lib/actions/ai.ts</h3>
+      <ul>
+        <li>Provider from <code>settings.plugins.aiProvider</code>: Groq <code>llama-3.3-70b-versatile</code> at temperature 0.1 in JSON mode (default), OpenAI <code>gpt-4o-mini</code>, Gemini through @google/generative-ai with model id <code>gemini-3.5-flash</code>, which the test-key action also uses.</li>
+        <li><code>generateFullSeriesMetadataAction(prompt)</code>: one JSON response with title, description, genres, tags, seoTitle, metaDescription, metaKeywords and slug, poured into the series form.</li>
+        <li><code>translateLanguageAction</code> (<span class="path">content.ts:264</span>): builds one prompt containing all 177 English UI keys plus every CMS page title and HTML, asks for one JSON blob, parses, upserts <code>translations/{code}</code>, revalidates. Single shot; the error text suggests switching to Gemini when output is truncated.</li>
+      </ul>
+      <h3>Unused: Genkit flows in src/ai</h3>
+      <p><span class="path">genkit.ts</span> configures @genkit-ai/google-genai with <code>googleai/gemini-1.5-flash</code>. Three flows exist: generate-series-categories (title and description to up to 5 categories and 5 to 10 tags), generate-series-seo (title and description to seoTitle under 60 chars, metaDescription under 160, 5 to 7 keywords), translate-ui (language name to a key map, embedding the whole English dictionary in the prompt). Nothing imports them except <span class="path">src/ai/dev.ts</span>.</p>
+      <p>The Android GeminiService described in section 11 is a third, also unused, path.</p>
+    </section>
+
+    <section id="i18n">
+      <h2>15. Localisation</h2>
+      <ul>
+        <li><span class="path">src/lib/language-list.ts</span> lists 103 entries (en, en-GB, ar, fr, fr-CA, and so on to zu). <code>i18n.locales</code> is all of them; the effective default comes from <code>settings.defaultLanguageCode</code> through middleware and a client-side <code>window.location.replace</code>.</li>
+        <li>The switcher shows only languages the admin has added; flags come from flagcdn.com.</li>
+        <li>177 keys in <span class="path">src/lib/translation-keys.ts</span> with placeholders such as <code>{episodeNumber}</code>. Stored as one document per language. Loaded server-side for metadata and the home page, then again client-side on every locale change, so client text flashes English first.</li>
+        <li>Translated: home, locale layout, CMS pages, client components. Not translated: <code>/series</code>, <code>/category</code>, wallet history, the 404 page, and strings inside the series detail view such as Synopsis, Share, Saved.</li>
+        <li>Content visibility per language uses <code>series.targetLanguages</code> and the <code>?lang=</code> filter; there are no translated titles or synopses.</li>
+        <li>Android ships its own static string files (section 11) and ignores the server translations.</li>
+      </ul>
+    </section>
+
+    <section id="seo">
+      <h2>16. SEO, PWA, install and licence</h2>
+      <h3>SEO</h3>
+      <ul>
+        <li>Root metadata from general settings; locale layout and home override with translated <code>seo_*</code> keys; series pages use their own SEO fields; CMS pages use the translated title.</li>
+        <li>No OpenGraph, Twitter cards, canonical, hreflang or JSON-LD anywhere in the public app.</li>
+        <li>Sitemap (force-dynamic): home, contact, wallet and profile (both auth-only), every series by slug or id, every CMS page, default locale only, <code>lastmod</code> always now, base URL falls back to example.com.</li>
+        <li>robots.txt is admin text or a permissive default; ads.txt is the ads document; IndexNow key is written to <code>public/{key}.txt</code> and also served dynamically; series save pings Bing.</li>
+        <li><code>next.config.ts</code> ignores TypeScript and ESLint errors at build, allows images from any https host, and sets the server-action body limit to 2 GB.</li>
+      </ul>
+      <h3>PWA</h3>
+      <p><span class="path">public/sw.js</span> is skipWaiting, clients.claim and an empty fetch handler with a comment to add caching later. No offline support, no push handling. The dynamic manifest points every icon at the favicon with declared 192 and 512 sizes; a stale <code>public/manifest.json</code> still references picsum.photos icons. The install card is a custom <code>beforeinstallprompt</code> handler with dismissal remembered in sessionStorage.</p>
+      <h3>Install wizard</h3>
+      <p>Five steps: Envato purchase code and domain; Mongo connection test (the URI must already be in <code>.env</code>); seed with a fake four-second progress bar; site name and URL; admin username, email and password. Installed means the <code>settings.admin</code> document exists. Firebase configuration is entered later in the admin.</p>
+      <h3>Licence</h3>
+      <ul>
+        <li>Activation POSTs <code>{purchaseCode, domain}</code> to <code>DEVSNAPLIX_API_URL</code>, default <code>https://devsnaplix-api.gadohost.com/api/verify</code>, and stores the result in general settings.</li>
+        <li><code>verifyLicensePeriodically</code> (<span class="path">data.actions.ts:399-497</span>) runs from the admin layout every 24 hours. Invalid means <code>isLicenseActive=false</code> and a redirect to <code>/activate</code>; a network failure retries in 4 hours and lets the admin through; a missing purchase code blocks.</li>
+        <li>Only <code>/admin</code> is gated. The public site, API and video streams never check. <code>LicenseActivationPrompt</code> exists but is not mounted.</li>
+      </ul>
+    </section>
+
+    <section id="security">
+      <h2>17. Security findings</h2>
+      <p class="sub">Consolidated from every part of the package, ranked by what an attacker gets.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Severity</th><th>Finding</th><th>Where</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag crit">Critical</span></td><td>Server actions that move coins take <code>userId</code> from the client and check no session: unlock, claim reward, daily check-in, favourites, history, report, like, checkout, verify purchase. Free coins and unlocks for any account.</td><td class="mono">lib/actions/user.ts, content.ts, payment.ts</td></tr>
+          <tr><td><span class="tag crit">Critical</span></td><td>Web unlock deducts a client-supplied <code>cost</code> and spreads the raw payload into the database.</td><td class="mono">content.ts:538-554</td></tr>
+          <tr><td><span class="tag crit">Critical</span></td><td>Admin mutations (save series, update user, export whole database including secrets, import) never verify the admin session.</td><td class="mono">content.ts, user.ts, data.actions.ts</td></tr>
+          <tr><td><span class="tag crit">Critical</span></td><td>Purchase verification binds neither user nor pack; global dedupe on session id means first claimant wins; PayPal path checks no amount.</td><td class="mono">payment.ts:376-454</td></tr>
+          <tr><td><span class="tag crit">Critical</span></td><td>User creation honours a client-supplied coin balance and does not prove uid ownership. Rate limit is in-process memory.</td><td class="mono">api/user/create/route.ts:64</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>One static API key, extractable from an unminified APK and accepted in a query string, is the only guard on unlock, claim, library, transactions, checkout and verify-purchase.</td><td class="mono">api/mobile/v1/*, api/user/[uid]/*</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Locked episodes' playable URLs are sent to every web visitor and every app install.</td><td class="mono">data.ts:71-79, episodes/route.ts:52-68</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>All gateway, storage, SMTP, AI and Firebase service-account secrets live in Mongo and are returned whole by settings readers that client components import.</td><td class="mono">data.actions.ts getPaymentSettings, getPluginsSettings</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Ad HTML from settings is rendered in iframes with <code>allow-same-origin allow-scripts</code>, which neuters the sandbox.</td><td class="mono">unlock-episode-dialog.tsx, rewards/page.tsx</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Rewarded ad completion and link-task timers are attested by the client; no network verification.</td><td class="mono">AdsManager.kt, RewardsScreen.kt, user.ts:146</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Firebase ID tokens are verified by calling Identity Toolkit with the web API key rather than checking the signature.</td><td class="mono">api/user/[uid]/route.ts:42-58</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Video token is AES-CBC without a MAC, not bound to user or IP, valid for two rotation windows; local files addressable by basename.</td><td class="mono">content.ts:559, api/video/route.ts</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Admin session cookie shares the video secret; middleware only checks the cookie's shape; session never re-checks the account.</td><td class="mono">auth.ts:60, middleware.ts:68</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Blocked users are enforced only in the React tree.</td><td class="mono">app-providers.tsx:40</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Android: cleartext traffic allowed, backup allowed, debug keystore committed, vendor google-services.json shipped, test AdMob app id in manifest.</td><td class="mono">AndroidManifest.xml, build.gradle.kts</td></tr>
+          <tr><td><span class="tag low">Low</span></td><td>Vendor Firebase project keys hard-coded as fallback; installer default Mongo password; type and lint errors ignored at build.</td><td class="mono">firebase/config.ts, install.txt, next.config.ts</td></tr>
+          <tr><td><span class="tag low">Low</span></td><td>Restore wipes every collection before insert with no dry run.</td><td class="mono">importDataToMongoAction</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="bugs">
+      <h2>18. Bugs and dead code</h2>
+      <h3>Functional bugs</h3>
+      <ul>
+        <li>Performance and PWA settings page cannot save; its keys are missing from the allowlist.</li>
+        <li>Google Play: wrong token field sent, no acknowledge or consume, subscriptions verified as products. Real purchases would refund.</li>
+        <li>WebView checkout shows Success regardless of verification; session id defaults to <code>WEB_DIRECT</code>; non-Stripe return URLs are not parsed correctly.</li>
+        <li>Android cannot play HLS; the backend has passed m3u8 through unproxied since 1.1.5.</li>
+        <li>Gemini model id <code>gemini-3.5-flash</code> is used for both generation and the key test.</li>
+        <li>Two like collections disagree between web and mobile.</li>
+        <li>Default free episode count differs across web (0), mobile (3) and the admin form (5); default price differs across web (50) and mobile (10).</li>
+        <li>Facebook and Apple login are stubs on Android; the Android app has no push SDK despite the documentation.</li>
+        <li><code>/series</code> and <code>/category</code> pages are never translated; <code>&lt;html lang&gt;</code> is always en.</li>
+        <li>Every listing, search, favourites and history view downloads the entire catalogue; the admin user list downloads every user.</li>
+        <li>Mobile series endpoint runs one count query per series; Shorts fetches every series' episodes on each refresh.</li>
+        <li>Dashboard opens its own Mongo client per request; health card and two metrics are decorative.</li>
+      </ul>
+      <h3>Dead code and leftovers</h3>
+      <ul>
+        <li>Firestore client init, <code>useDoc</code> and <code>useCollection</code> hooks (used only by the profile rewards flag, which reads a document nothing writes, and the unlinked licence page), <code>firestore.rules</code>, <code>docs/backend.json</code>, <code>server-init.ts</code>, <code>non-blocking-updates.tsx</code>, <code>FirebaseErrorListener</code>.</li>
+        <li>Genkit flows and <code>src/ai/dev.ts</code>; <code>apphosting.yaml</code>; <code>studio.json</code>; <code>public/manifest.json</code>; <code>middleware.ts.unused</code>.</li>
+        <li><code>LicenseActivationPrompt</code>, <code>mobile-preview</code> page, Trending page, API settings tombstone, iOS tabs, the unrouted improved episodes page, <code>geoip.ts</code>, the tracking stub.</li>
+        <li>Android: <code>SplashScreen.kt</code>, <code>GeminiService.kt</code> and its view-model state, <code>awardCoins</code> and friends, DummyData, <code>Test.java</code>, GlobalScope import, Retrofit and Moshi dependencies.</li>
+        <li>Documentation is honest about its GadoHost affiliation and includes a WhatsApp support link; the admin guide file is mistitled "Android App Setup".</li>
+      </ul>
+    </section>
+
+    <section id="history">
+      <h2>19. Release history</h2>
+      <p class="sub">From changelog.txt. Dates are as printed; 1.1.2 is dated 2024, which looks like a typo for 2026.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Version</th><th>Date</th><th>Highlights</th></tr></thead>
+        <tbody>
+          <tr><td class="k">1.0.0</td><td>2026-06-19</td><td>Initial release.</td></tr>
+          <tr><td class="k">1.1.1</td><td>2026-06-26</td><td>Bunny storage and CDN, Gemini as third AI provider, home and Android redesign, FAN and AppLovin controls, multi-ad rotation, AES video tokens and 403 on direct access, file cleanup on delete, Web Share API, mobile settings section with API key, force update, Google Play Billing, Android rewards and check-in config, AI metadata generator, OpenAI provider.</td></tr>
+          <tr><td class="k">1.1.2</td><td>2026-07-07</td><td>Install redirect loop and post-install 500 fixes, lazy Mongo connection, GA4 fix, user history modal, welcome bonus setting, featured 16:9 image, Google client id from google-services.json, cinematic hero, Dailymotion iframe bypass, embed WebView fallback on Android, Range streaming for local MP4.</td></tr>
+          <tr><td class="k">1.1.3</td><td>2026-07-27</td><td>Media3 ExoPlayer on Android, seek fixes, duplicate Range header fix, 500 MB chunk cap, next-reel pre-caching, licence check limited to /admin, custom player controls, 404 page, pre-computed secure URLs, all major store currencies, Flutterwave on web and Android, redesigned checkout dialog, Groq model update, currency symbol in the app.</td></tr>
+          <tr><td class="k">1.1.4</td><td>2026-07-31</td><td>Phone OTP login on web and Android, forgot and reset password for admin and users, login and reset rate limits, security settings page, demo credentials, SMTP self-signed fix, service-account JSON newline repair.</td></tr>
+          <tr><td class="k">1.1.5</td><td>2026-08-02</td><td>HLS m3u8 passthrough, m3u8 and ts upload validation, ExoPlayer in the Shorts feed with VideoCacheManager, orientation persistence for embeds, 8-digit generated ids for phone users.</td></tr>
+          <tr><td class="k">1.1.6</td><td>2026-08-10</td><td>IndexNow integration, Groq fix, user management fixes, malformed account fix, documentation restructure, demo credentials removed from docs.</td></tr>
+          <tr><td class="k">1.1.7</td><td>2026-08-21</td><td>Store badges in footer, IndexNow ping on publish, user search in admin, IP rate limit on registration, custom pages in footer fix, sendmail fix, Play Billing 9.1.0, Android onboarding with language selection, RTL fixes, password reset crash fix.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <footer>
+      Companion to the Katha Rebuild Plan. Every line reference was taken from the extracted 1.1.7 source on 2026-09-07 and can drift in later vendor releases.
+    </footer>
+  </main>
+</div>

@@ -1,0 +1,221 @@
+<title>Katha World-Class Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FBF8F8; --surface: #FFFFFF; --surface-2: #F3EDEE;
+    --ink: #1F1A1C; --ink-2: #463D40; --muted: #6B5F63;
+    --line: #E6DEE0; --line-2: #D5CACD;
+    --accent: #B3213B; --accent-soft: #F7E4E8;
+    --gold: #B8891F; --gold-soft: #F6EED9;
+    --now: #2E6B4F; --now-soft: #E1EFE7;
+    --acct: #1F5C8A; --acct-soft: #E0ECF6;
+    --data: #8A4A12; --data-soft: #F6E8DA;
+    --display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+      --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+      --line: #332A2E; --line-2: #463A3F;
+      --accent: #F05A72; --accent-soft: #3A1F26;
+      --gold: #E0B44A; --gold-soft: #3A3120;
+      --now: #8ED1AE; --now-soft: #1E3328;
+      --acct: #8EC0EA; --acct-soft: #1B2D3D;
+      --data: #E9A968; --data-soft: #3A2A1A;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+    --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+    --line: #332A2E; --line-2: #463A3F;
+    --accent: #F05A72; --accent-soft: #3A1F26;
+    --gold: #E0B44A; --gold-soft: #3A3120;
+    --now: #8ED1AE; --now-soft: #1E3328;
+    --acct: #8EC0EA; --acct-soft: #1B2D3D;
+    --data: #E9A968; --data-soft: #3A2A1A;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; } a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .page { display: grid; grid-template-columns: 1fr; max-width: 1200px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1040px) { .page { grid-template-columns: 220px minmax(0, 1fr); gap: 52px; } .toc { display: block; position: sticky; top: 24px; align-self: start; padding-top: 72px; } }
+  .toc { display: none; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 4px 0 4px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); font-size: 12.5px; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--line-2); text-decoration: none; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  main { min-width: 0; }
+  header.masthead { padding: 64px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; max-width: 24ch; }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+  section { margin: 0 0 52px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 25px; letter-spacing: -.015em; margin: 0 0 6px; scroll-margin-top: 24px; text-wrap: balance; }
+  h2 + .sub { color: var(--muted); margin: 0 0 18px; max-width: 66ch; }
+  h3 { font-family: var(--display); font-weight: 700; font-size: 17.5px; margin: 26px 0 8px; }
+  p { max-width: 70ch; margin: 0 0 12px; }
+  ul, ol { max-width: 70ch; padding-left: 22px; margin: 0 0 12px; } li { margin-bottom: 5px; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  .legend .tag { margin-right: 6px; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.now { color: var(--now); background: var(--now-soft); } .tag.acct { color: var(--acct); background: var(--acct-soft); } .tag.data { color: var(--data); background: var(--data-soft); }
+  .pillar { background: var(--surface); border: 1px solid var(--line); padding: 18px 20px; margin: 0 0 16px; }
+  .pillar h3 { margin-top: 0; }
+  .pillar .bar { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 720px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 600; white-space: nowrap; }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 14px 18px; margin: 16px 0 20px; max-width: 76ch; }
+  .callout.gold { border-left-color: var(--gold); }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <div class="eyebrow">Sections</div>
+    <ol>
+      <li><a href="#bar">The bar</a></li>
+      <li><a href="#p1">1. Playback quality</a></li>
+      <li><a href="#p2">2. Monetisation depth</a></li>
+      <li><a href="#p3">3. Retention engineering</a></li>
+      <li><a href="#p4">4. Content factory</a></li>
+      <li><a href="#p5">5. Trust and safety</a></li>
+      <li><a href="#p6">6. Operational maturity</a></li>
+      <li><a href="#p7">7. Product surface</a></li>
+      <li><a href="#tranches">Tranches and what starts now</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">From correct to world class</div>
+      <h1>How Katha gets to the level of the category leaders</h1>
+      <p class="lede">Seven pillars, each with the mechanism, where it plugs into the current code, and whether it can be built today or waits on an account or on user data.</p>
+      <div class="meta"><span>Planned 2026-09-07</span><span>Builds on the reviewed Phase 1 tree</span></div>
+    </header>
+
+    <section id="bar">
+      <h2>The bar</h2>
+      <p class="sub">What the leading short-drama apps do that a correct product does not.</p>
+      <p>They start playback in under a second on a cheap phone on 4G. They test paywall timing and prices per cohort instead of guessing. They know which episode of which series brought each rupee. They translate and dub a hundred series a month with a small team. They never show a locked episode's bytes to anyone. They notice a regression in play start within an hour, not after a one-star review. And they ship to both stores every two weeks without fear.</p>
+      <div class="legend">
+        <span><span class="tag now">Now</span>buildable today, no external dependency</span>
+        <span><span class="tag acct">Account</span>needs a credential or vendor you provide</span>
+        <span><span class="tag data">Data</span>needs real users or content first</span>
+      </div>
+    </section>
+
+    <section id="p1">
+      <h2>1. Playback quality</h2>
+      <p class="sub">Sub-second start, no rebuffering, no leaks.</p>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>QoE beacons</strong> <span class="tag now">Now</span>. Players send batched events (play_start, first_frame with time to first frame, rebuffer with duration, bitrate switch, error with code, complete) to <code>POST /v1/events</code>, keyed by platform, device class, network type and variant map. The admin gets p50 and p95 start time, rebuffer ratio and error rate by platform and day.</li>
+          <li><strong>Edge-enforced signed media</strong> <span class="tag now">Now</span>. An nginx verifier in front of the bucket checks the HMAC grant on every playlist and segment request through <code>auth_request</code>; the bucket itself goes private. Production boots only with this or CloudFront or Bunny token auth.</li>
+          <li><strong>Ladder and prefetch tuned on data</strong> <span class="tag data">Data</span>. The 480p rung becomes the default first fetch on slow networks; first-segment size is capped; the next episode's first segment is prefetched when the current one passes seventy percent.</li>
+          <li><strong>Release gate</strong> <span class="tag now">Now</span>. A synthetic start-time test on a 2 GB Android in CI using the generated test clips.</li>
+          <li><strong>DRM</strong> <span class="tag acct">Account</span>. Widevine and FairPlay through a packager when studio content or offline downloads require it; the grant flow already returns per-user URLs, so the change is confined to the worker and the players.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p2">
+      <h2>2. Monetisation depth</h2>
+      <p class="sub">Right price, right moment, every store.</p>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Offers and coupons</strong> <span class="tag now">Now</span>. First-purchase discount, timed bundles and win-back offers from the existing <code>offers</code> and <code>coupon_codes</code> tables; eligibility evaluated server-side; coupon applied at checkout; shown in both wallets.</li>
+          <li><strong>Regional pricing</strong> <span class="tag now">Now</span>. Country from the edge header drives pack prices; the tables already exist.</li>
+          <li><strong>Store billing</strong> <span class="tag acct">Account</span>. RevenueCat for Google Play and the App Store with its webhook settling purchases through the same terminal state machine.</li>
+          <li><strong>Rewarded ads with server verification</strong> <span class="tag acct">Account</span>. AdMob SSV callback writes the ad event the unlock path already demands.</li>
+          <li><strong>Paywall experiments</strong> <span class="tag now">Now</span>, measured <span class="tag data">Data</span>. Free-episode count, price, and offer timing become experiment variants; results are read straight off ledger and purchase rows that already carry the variant map.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p3">
+      <h2>3. Retention engineering</h2>
+      <p class="sub">The feed learns; the product experiments.</p>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Experiments and flags admin</strong> <span class="tag now">Now</span>. Create, start and stop experiments and flags; see users, unlocks, purchases and revenue per variant.</li>
+          <li><strong>For You rail, version one</strong> <span class="tag now">Now</span>. Average the embeddings of the viewer's recent series, take nearest neighbours excluding watched, blend with popularity. Anonymous users get top picks. Anonymous home is cached sixty seconds.</li>
+          <li><strong>Ranking model, version two</strong> <span class="tag data">Data</span>. Trained on completion, rewatch, unlock and skip events once there are a few weeks of them.</li>
+          <li><strong>Re-engagement push</strong> <span class="tag acct">Account</span>. Unfinished-series reminders and streak recovery through FCM and APNs.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p4">
+      <h2>4. Content factory</h2>
+      <p class="sub">Hundreds of series, dozens of languages, a small team.</p>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Ingest pipeline</strong> <span class="tag now">Now</span>. On publish: embeddings, translations, subtitles for every episode, and metadata drafted from the first episodes' transcript when the editor asks.</li>
+          <li><strong>Per-language visibility and territory windows</strong> <span class="tag now">Now</span>. Enforced in the catalogue queries from the columns that already exist.</li>
+          <li><strong>Review states and drip release</strong> <span class="tag now">Now</span>. Draft, review, published, archived with a scheduled publish time per episode.</li>
+          <li><strong>Dubbing</strong> <span class="tag acct">Account</span>. Voice synthesis per language behind a QA queue; the subtitle graph already produces timed, translated text.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p5">
+      <h2>5. Trust and safety</h2>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Age gating by content rating</strong> <span class="tag now">Now</span>. Series rated A or UA16 require a signed-in viewer who has confirmed age; the flag lives on the user and the gate is enforced in play and unlock.</li>
+          <li><strong>Moderation queue</strong> <span class="tag now">Now</span>. One admin screen for open reports plus series the metadata graph flagged, with resolve, dismiss and unpublish.</li>
+          <li><strong>Account protection</strong> <span class="tag now">Now</span>. Refresh reuse detection and session revocation exist; add sign-in alerts and a device limit on concurrent streams.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p6">
+      <h2>6. Operational maturity</h2>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Tracing and error reporting</strong> <span class="tag now">Now</span> to wire, <span class="tag acct">Account</span> to receive. OpenTelemetry on API and worker with request ids as span attributes; Sentry in every service and app, enabled by a DSN.</li>
+          <li><strong>SLOs</strong> <span class="tag data">Data</span>. Play start p95 and purchase completion rate, alerting from the QoE and purchase tables.</li>
+          <li><strong>Release engineering</strong> <span class="tag now">Now</span>. EAS profiles, Playwright on the money paths, a synthetic-clip fixture so tests never need licensed content.</li>
+          <li><strong>Server-held sessions for web and admin</strong> <span class="tag now">Now</span>. The BFF pattern from the review, removing tokens from browser storage.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="p7">
+      <h2>7. Product surface</h2>
+      <div class="pillar"><div class="bar">Mechanism</div>
+        <ul>
+          <li><strong>Small gaps from the parity matrix</strong> <span class="tag now">Now</span>: browse and category pages, sitemap and robots and IndexNow, force-update screen, clear cache, admin password reset by email, structured data.</li>
+          <li><strong>Web Shorts feed</strong> <span class="tag now">Now</span>.</li>
+          <li><strong>Phone OTP on mobile</strong> <span class="tag acct">Account</span> through native Firebase.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="tranches">
+      <h2>Tranches and what starts now</h2>
+      <p class="sub">Everything marked Now is one tranche and starts immediately. The rest waits on the item named in its tag.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Tranche</th><th>Contents</th><th>Depends on</th></tr></thead>
+        <tbody>
+          <tr><td class="k">1, starting now</td><td>QoE and product events; media edge verifier; experiments, flags and offers with admin screens; For You rail; visibility and windows; age gate and moderation queue; ingest on publish with drip scheduling; OpenTelemetry and Sentry hooks; admin password reset by email; browse, sitemap, robots, IndexNow, structured data; web Shorts; force-update and clear cache on mobile; QoE beacons in all players; Playwright smoke tests</td><td>Nothing external</td></tr>
+          <tr><td class="k">2</td><td>RevenueCat billing; AdMob with server verification; FCM and APNs push with re-engagement; phone OTP on mobile; Sentry and OTLP destinations; Google, Apple and universal-link credentials; real icons</td><td>Your accounts and assets</td></tr>
+          <tr><td class="k">3</td><td>Ladder and prefetch tuning; ranking model; SLO alerts; paywall experiment readouts</td><td>A few weeks of real traffic</td></tr>
+          <tr><td class="k">4</td><td>DRM packager; dubbing; BFF sessions; ClickHouse for events</td><td>Content deals, scale</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout gold"><p>Tranche 1 is being implemented now: the backend contract first, then the three apps in parallel against the regenerated client, then verification. Progress lands in the same repository and the parity matrix is updated when it is done.</p></div>
+    </section>
+
+    <footer>Companion to the Rebuild Plan, the Code Review and the Parity Matrix. Everything here maps to columns and tables that already exist in the schema; no rewrite is implied.</footer>
+  </main>
+</div>

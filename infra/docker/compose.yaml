@@ -1,0 +1,63 @@
+name: katha
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: katha
+      POSTGRES_PASSWORD: katha
+      POSTGRES_DB: katha
+    ports: ["5432:5432"]
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U katha"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: katha
+      MINIO_ROOT_PASSWORD: katha-secret
+      # Presigned PUTs come straight from the admin and web origins.
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:3001"
+    ports: ["9000:9000", "9001:9001"]
+    volumes: ["minio:/data"]
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on: [minio]
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 katha katha-secret; do sleep 1; done;
+      mc mb --ignore-existing local/katha-media;
+      mc anonymous set download local/katha-media/images;
+      mc anonymous set download local/katha-media/avatars;
+      mc anonymous set download local/katha-media/subtitles;
+      mc anonymous set download local/katha-media/hls;
+      exit 0"
+
+  media-edge:
+    image: nginx:1.27-alpine
+    depends_on: [minio]
+    ports: ["8080:8080"]
+    volumes:
+      - ../nginx/media.conf:/etc/nginx/conf.d/default.conf:ro
+      - mediacache:/var/cache/nginx/media
+    extra_hosts: ["api:host-gateway"]
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ["8025:8025", "1025:1025"]
+
+volumes:
+  pgdata:
+  minio:
+  mediacache:

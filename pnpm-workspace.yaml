@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  unrs-resolver: true
+  esbuild: true
+  sharp: true
+  "@tailwindcss/oxide": true
+  "@firebase/util": true
+  protobufjs: true

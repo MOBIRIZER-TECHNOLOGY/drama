@@ -1,0 +1,11 @@
+{
+  "name": "@katha/api-service",
+  "private": true,
+  "scripts": {
+    "dev": "python -m uv run uvicorn app.main:app --reload --port 8000",
+    "test": "python -m uv run pytest -q",
+    "lint": "python -m uv run ruff check .",
+    "migrate": "python -m uv run alembic upgrade head",
+    "openapi": "python -m uv run python scripts/export_openapi.py ../../packages/api-client/openapi.json"
+  }
+}

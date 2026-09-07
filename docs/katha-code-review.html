@@ -1,0 +1,232 @@
+<title>Katha Code Review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FBF8F8; --surface: #FFFFFF; --surface-2: #F3EDEE;
+    --ink: #1F1A1C; --ink-2: #463D40; --muted: #6B5F63;
+    --line: #E6DEE0; --line-2: #D5CACD;
+    --accent: #B3213B; --accent-soft: #F7E4E8;
+    --gold: #B8891F; --gold-soft: #F6EED9;
+    --crit: #8F1D2C; --crit-soft: #F7DFE2;
+    --high: #9A4A0C; --high-soft: #F8E7D6;
+    --med: #6B5A12; --med-soft: #F4EDCF;
+    --low: #2E5F6B; --low-soft: #DFEDF0;
+    --done: #2E6B4F; --done-soft: #E1EFE7;
+    --later: #4A4358; --later-soft: #ECE9F2;
+    --display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+      --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+      --line: #332A2E; --line-2: #463A3F;
+      --accent: #F05A72; --accent-soft: #3A1F26;
+      --gold: #E0B44A; --gold-soft: #3A3120;
+      --crit: #F09AA6; --crit-soft: #3B1F24;
+      --high: #E9A968; --high-soft: #3A2A1A;
+      --med: #DEC96A; --med-soft: #363019;
+      --low: #8EC5D1; --low-soft: #1C3239;
+      --done: #8ED1AE; --done-soft: #1E3328;
+      --later: #BDB3D1; --later-soft: #2A2533;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+    --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+    --line: #332A2E; --line-2: #463A3F;
+    --accent: #F05A72; --accent-soft: #3A1F26;
+    --gold: #E0B44A; --gold-soft: #3A3120;
+    --crit: #F09AA6; --crit-soft: #3B1F24;
+    --high: #E9A968; --high-soft: #3A2A1A;
+    --med: #DEC96A; --med-soft: #363019;
+    --low: #8EC5D1; --low-soft: #1C3239;
+    --done: #8ED1AE; --done-soft: #1E3328;
+    --later: #BDB3D1; --later-soft: #2A2533;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; } a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .page { display: grid; grid-template-columns: 1fr; max-width: 1200px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1040px) { .page { grid-template-columns: 220px minmax(0, 1fr); gap: 52px; } .toc { display: block; position: sticky; top: 24px; align-self: start; padding-top: 72px; } }
+  .toc { display: none; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 4px 0 4px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); font-size: 12.5px; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--line-2); text-decoration: none; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  main { min-width: 0; }
+  header.masthead { padding: 64px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; max-width: 24ch; }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+  section { margin: 0 0 52px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 25px; letter-spacing: -.015em; margin: 0 0 6px; scroll-margin-top: 24px; text-wrap: balance; }
+  h2 + .sub { color: var(--muted); margin: 0 0 18px; max-width: 66ch; }
+  h3 { font-family: var(--display); font-weight: 700; font-size: 17.5px; margin: 28px 0 10px; }
+  p { max-width: 70ch; margin: 0 0 12px; }
+  ul, ol { max-width: 70ch; padding-left: 22px; margin: 0 0 12px; } li { margin-bottom: 5px; } li::marker { color: var(--muted); }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 16px 0 20px; }
+  .facts div { background: var(--surface); padding: 12px 14px; }
+  .facts b { display: block; font-family: var(--display); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .facts span { font-size: 12px; color: var(--muted); }
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 680px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.crit { color: var(--crit); background: var(--crit-soft); } .tag.high { color: var(--high); background: var(--high-soft); }
+  .tag.med { color: var(--med); background: var(--med-soft); } .tag.low { color: var(--low); background: var(--low-soft); }
+  .tag.done { color: var(--done); background: var(--done-soft); } .tag.later { color: var(--later); background: var(--later-soft); }
+  .tag.gold { color: var(--gold); background: var(--gold-soft); }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 14px 18px; margin: 16px 0 20px; max-width: 76ch; }
+  .callout.gold { border-left-color: var(--gold); }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 16px 0 22px; }
+  .grid article { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; }
+  .grid h4 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 8px; }
+  .grid ul { font-size: 14px; margin: 0; padding-left: 18px; }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <div class="eyebrow">Sections</div>
+    <ol>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#ai">AI features status</a></li>
+      <li><a href="#api">API, worker, AI</a></li>
+      <li><a href="#admin">Admin panel</a></li>
+      <li><a href="#web">Web app</a></li>
+      <li><a href="#mobile">Mobile app</a></li>
+      <li><a href="#modern">Modernisation roadmap</a></li>
+      <li><a href="#release">Before the first release</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">Katha, first full review</div>
+      <h1>Code review and modernisation plan</h1>
+      <p class="lede">Four independent reviews of the Phase 1 codebase, what was fixed the same day, what was handed to each app build, and what is deliberately left for the next phases.</p>
+      <div class="meta"><span>Reviewed 2026-09-07</span><span>4 reviewers, 113 findings</span><span>Nothing committed yet</span></div>
+    </header>
+
+    <section id="summary">
+      <h2>Summary</h2>
+      <p class="sub">Solid core, sharp edges. No exploitable path from the public internet remained after the same-day fixes.</p>
+      <div class="facts">
+        <div><b>113</b><span>findings across four areas</span></div>
+        <div><b>5</b><span>critical, all fixed</span></div>
+        <div><b>21</b><span>high</span></div>
+        <div><b>3 of 4</b><span>areas with zero criticals</span></div>
+        <div><b>76</b><span>versioned API paths</span></div>
+        <div><b>0</b><span>known open security holes in the API</span></div>
+      </div>
+      <p><strong>What the reviewers agreed on.</strong> The ledger, unlock and webhook-only purchase design is right and consistently applied. The clients are typed end to end, have loading, empty and error states everywhere, and hold to the "no media URL except from play" rule. The weaknesses were at the edges: an unverifiable ad-unlock path, a non-terminal purchase state, sync SDK calls on the async loop, tokens stored where scripts can read them, native dialog and player lifecycle details, and release configuration still carrying template assets.</p>
+      <p><strong>How the fixes were done.</strong> All 30 API and worker findings were applied directly, with regression tests. The admin panel's 25, the web app's 28 and the mobile app's 30 findings were fixed in their respective builds and verified with typecheck, lint and, for the Next.js apps, a build. The deferred items are architectural and listed in the roadmap with effort. Mobile items that need your Google, Apple and domain credentials are listed under release.</p>
+    </section>
+
+    <section id="ai">
+      <h2>AI features status</h2>
+      <p class="sub">Honest answer to "have you implemented AI": at the start of the review, only translation existed. The rest was built during it.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>Where</th><th>Status</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr><td>UI and content translation graph</td><td><code>services/ai/graphs/translation.py</code>, worker <code>run_translation</code>, <code>run_series_translation</code></td><td><span class="tag done">Built</span></td><td>Chunked, placeholder-validated, retried per chunk, four chunks in parallel, namespace-specific prompts for UI, series and subtitles. Never overwrites human translations.</td></tr>
+          <tr><td>Series metadata generation</td><td><code>graphs/metadata.py</code>, <code>POST /admin/ai/series-metadata</code>, admin "Generate with AI" panel</td><td><span class="tag done">Built</span></td><td>Draft then editorial review pass; title, synopsis, genres, tags, SEO, slug, content rating, moderation flags, confidence. Human approves in the form. 90 s timeout, rate limited.</td></tr>
+          <tr><td>Embeddings, similar series, semantic search</td><td><code>embeddings.py</code>, worker <code>refresh_embeddings</code>, pgvector in <code>/series/{id}</code> and <code>/series?q=</code></td><td><span class="tag done">Built</span></td><td>1024-d vectors, OpenAI default with Voyage and Gemini selectable. Query vectors cached in Redis for an hour with a 2 s timeout and text fallback.</td></tr>
+          <tr><td>Subtitles: transcription and translation</td><td><code>graphs/subtitles.py</code>, worker <code>transcribe_episode</code>, <code>PlayOut.subtitles</code>, CC controls in web and mobile players</td><td><span class="tag done">Built</span></td><td>Whisper segments to WebVTT, translated per active language with timings preserved. Mobile renders cues itself because expo-video cannot sideload VTT.</td></tr>
+          <tr><td>Job status for admin</td><td><code>GET /admin/ai/jobs/{id}</code></td><td><span class="tag done">Built</span></td><td>Admin polls and toasts outcomes; results kept an hour.</td></tr>
+          <tr><td>Content ingestion from video (transcript to metadata)</td><td><code>run_ingestion</code></td><td><span class="tag gold">Partial</span></td><td>Runs embeddings and translations after publish. Feeding the transcript into the metadata graph is one call away once an episode has subtitles.</td></tr>
+          <tr><td>Personalised ranking, support assistant, dubbing</td><td>Plan phases 4 and 5</td><td><span class="tag later">Later</span></td><td>Need user data and content volume first.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout"><p>Provider policy: Claude Opus 5 through LangChain is the default for metadata, translation and moderation. OpenAI, Gemini and Groq are selectable per task by environment. No provider key ever leaves the server. Model ids are aliases today; pin dated snapshots before launch and add a re-embed-all job for model changes.</p></div>
+    </section>
+
+    <section id="api">
+      <h2>API, worker and AI package</h2>
+      <p class="sub">30 findings. All applied the same day with tests; migration 0002 adds the webhook inbox and refresh reuse detection.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Sev</th><th>Finding</th><th>Fix applied</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag crit">Critical</span></td><td>Unlock with method "ad" accepted any string; no ad events existed to verify against.</td><td>Ad unlocks now consume a network-verified AdEvent row for that user and purpose, once. With no SSV wired yet, every ad unlock is rejected by construction.</td></tr>
+          <tr><td><span class="tag crit">Critical</span></td><td>Default JWT secret accepted in production.</td><td>Settings validator refuses staging and production without a real secret, a CDN signing mode, a media signing key and webhook secrets for enabled gateways.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Purchase state not terminal; replayed capture after refund re-marked paid; Stripe refunds never matched; refund bypassed the ledger.</td><td>Terminal state machine, webhook inbox table keyed by gateway and event id, gateway payment id stored for refunds, refunds through the ledger with negative balances allowed, VIP ended on refund, amount and currency verified.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Signed playback URLs not enforced at the edge.</td><td>Separate media signing key and a production guard that requires an edge signing mode. The edge verifier itself is the one item that still blocks charging money.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Anonymous search called a paid embedding API per request.</td><td>Redis cache per normalised query, 2 s timeout, per-IP rate limit, text fallback.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Stripe, Firebase, boto3 and argon2 called synchronously on the event loop.</td><td>All moved to threads; AI package pre-imported at startup.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Random public ids collide at scale; duplicate email from a second provider crashed sign-up.</td><td>Savepoint retry on id collision; same verified email or phone links to the existing account.</td></tr>
+          <tr><td><span class="tag high">High</span></td><td>Refresh token rotation had no reuse detection.</td><td>Presenting an already-rotated token revokes the whole session.</td></tr>
+          <tr><td><span class="tag med">Medium</span></td><td>Ledger race recovery rolled back the caller; timezone of streaks was UTC; short reward arrays crashed; no variant maps on rewards; home loaded every episode; dashboard active users always zero; hard delete destroyed unlock evidence; unauthenticated writes without limits; bad input surfaced as 500s; inline LLM call leaked provider errors; MinIO policy did not match key prefixes; Docker images unreproducible and root.</td><td>Savepoint in the ledger; Asia/Kolkata product timezone; cycle length from the configured rewards; variant maps everywhere; grouped first-episode query; last-seen touched on refresh; archive instead of delete when unlocks exist; slowapi limits, Turnstile verification and per-day view dedupe; integrity and value errors mapped to 409 and 400 with request ids; 90 s timeout and generic error; policy on real prefixes; locked, non-root, health-checked images with a dockerignore.</td></tr>
+          <tr><td><span class="tag low">Low</span></td><td>Referral code discarded; regional price pick order; free-override episodes blocked sequential unlock; arq pool never closed and jobs duplicated; one prompt reused for UI and subtitles; unpinned model aliases; proxy headers trusted.</td><td>Referral linked at sign-up and rewarded on first purchase; price selection fixed; highest accessible computed from real free flags; pool closed on shutdown and jobs deduplicated by id; namespace prompts; proxy headers only from uvicorn's trusted list. Model pinning remains a launch task.</td></tr>
+        </tbody>
+      </table></div>
+      <p>Added tests: production settings guard, request id propagation, HTML sanitising and embed allowlist, ad unlock rejection and consumption, paid-then-refund terminality, amount mismatch failing a purchase, webhook inbox dedupe, referral reward. Database-backed tests run in CI.</p>
+    </section>
+
+    <section id="admin">
+      <h2>Admin panel</h2>
+      <p class="sub">25 findings, no criticals. All fixed by the admin build and verified with typecheck, lint and build.</p>
+      <ul>
+        <li><strong>Fixed:</strong> label click deleting chips, pagination dead ends, open redirect on login, client-side role gating made deny-by-default with JWT expiry checked in the proxy, security headers and CSP, dialog focus and Escape handling, table semantics, confirmations with projected balances for coin and VIP actions, memoised and windowed translation editor with RTL, visibility-aware polling with backoff, error and loading routes, abortable uploads with size caps, AI undo and job polling, precise optimistic rollbacks, field-level validation, accessible tabs, embed allowlist mirrored from the API.</li>
+        <li><strong>Deferred to the roadmap:</strong> admin JWT in localStorage (needs the BFF pattern), TanStack Query, React 19 form model, server components for read-mostly screens, tests.</li>
+      </ul>
+    </section>
+
+    <section id="web">
+      <h2>Web app</h2>
+      <p class="sub">28 findings, no criticals. Every high, medium and low was fixed and verified with typecheck, lint, build and a runtime check of the headers, redirects and fonts.</p>
+      <ul>
+        <li><strong>Highs:</strong> series page seeded from the anonymous render and never refreshed after sign-in; no security headers or CSP; native dialog could desync and become impossible to reopen.</li>
+        <li><strong>Mediums:</strong> multi-tab refresh race signing out every tab, stale closure downgrading a signed-in user on a transient error, image optimiser open to any host, user-typed avatar URLs crashing the page, CMS HTML injected unsanitised (now sanitised by the API on save and at render), progress not flushed on tab close, duplicate fetches per request, everything force-dynamic, hero carousel loading eight full images, a grant fetch that could strand an episode, invisible controls in the tab order, Latin-only font subsets for a Hindi-first product.</li>
+        <li><strong>Shared client:</strong> retried POSTs after a 401 reused a consumed body; fixed by cloning non-GET requests and never refreshing on the exchange and refresh endpoints.</li>
+        <li><strong>Deferred:</strong> BFF with httpOnly cookies, "use cache" with tag revalidation, query layer, Server Actions, player hook extraction with Media Session, Playwright coverage for the money paths.</li>
+      </ul>
+    </section>
+
+    <section id="mobile">
+      <h2>Mobile app</h2>
+      <p class="sub">30 findings including three criticals, plus the release checklist. Everything except the deferred items is fixed and typechecks and lints; native behaviour still needs a device run, since no simulator was available.</p>
+      <ul>
+        <li><strong>Criticals:</strong> guests trapped in an auth-modal loop from Wallet and Rewards; session restore on a bad network either signed the user out or left the app on a permanent skeleton; the release fallback API URL pointed at the Android emulator over cleartext.</li>
+        <li><strong>Highs:</strong> in-flight play requests evicting the current player, two player pools alive across Shorts and the full player, four-times-a-second time updates on all three players, deprecated Google sign-in provider, share links claimed by the manifest with no route, Expo template icons, no Sign in with Apple beside Google.</li>
+        <li><strong>Mediums:</strong> wrong episode after sign-in from the player, purchase return handled twice on Android, unused background audio mode, Firebase session persisted in plaintext, permissive embed WebView, pool release ordering, all pager pages rendered, unnecessary photo permission, cold start blocked on config, brand fonts never loaded, emoji icons, seek bar fighting the pager, chrome under the home indicator, progress writes stalling after a seek.</li>
+        <li><strong>Deferred:</strong> TanStack Query with persistence, Sentry, React Activity for the Shorts tab, UI-thread player chrome beyond the seek bar.</li>
+      </ul>
+    </section>
+
+    <section id="modern">
+      <h2>Modernisation roadmap</h2>
+      <p class="sub">The architectural recommendations all four reviewers converged on, ordered by what they unlock. Effort is for one engineer.</p>
+      <div class="grid">
+        <article><h4>1. Server-held sessions (BFF) for web and admin <span class="tag high">L</span></h4><ul><li>Route handlers hold Katha tokens in httpOnly cookies; server components fetch personalised data; no token in localStorage.</li><li>Removes a whole class of findings: anonymous SSR seeding, multi-tab refresh races, XSS blast radius, client-only role gating.</li></ul></article>
+        <article><h4>2. Edge-enforced media signing <span class="tag high">M</span></h4><ul><li>CloudFront signed cookies, Bunny token auth, or an nginx verifier in front of MinIO using the media signing key.</li><li>Private prefixes for uploads and HLS; public prefix for covers and avatars. The single item that blocks charging money.</li></ul></article>
+        <article><h4>3. Query layer in all three apps <span class="tag med">M</span></h4><ul><li>TanStack Query v5 with an AsyncStorage persister on mobile: caching, dedupe, focus refetch, invalidation after mutations, offline home and series.</li><li>Replaces three hand-rolled loaders and about a dozen polling and optimistic patterns.</li></ul></article>
+        <article><h4>4. Next 16 caching and React 19 forms <span class="tag med">M</span></h4><ul><li>"use cache" with cacheTag on catalogue fetchers and a revalidate hook the API calls on publish.</li><li>useActionState and useOptimistic for forms and toggles once sessions are server-held.</li></ul></article>
+        <article><h4>5. One player pool and UI-thread chrome on mobile <span class="tag med">M</span></h4><ul><li>A single provider-owned pool driven by syncWindow, pinned current player, time updates only where needed.</li><li>Reanimated shared values for position and scrub, gestures via RNGH, useEventListener.</li></ul></article>
+        <article><h4>6. Observability and release engineering <span class="tag low">S</span></h4><ul><li>OpenTelemetry and Sentry across API, worker and apps; structured logs with request ids are already in.</li><li>EAS profiles and app.config.ts per environment; Playwright and Detox smoke tests on the money paths.</li></ul></article>
+      </div>
+    </section>
+
+    <section id="release">
+      <h2>Before the first release</h2>
+      <p class="sub">Items that need your accounts or assets, in the order they block.</p>
+      <ol>
+        <li><strong>Docker Desktop locally</strong>, then migrate, seed and run the database tests that have only run in CI configuration.</li>
+        <li><strong>Media edge.</strong> Pick CloudFront, Bunny or the nginx verifier and set the production signing mode. Until then production refuses to boot by design.</li>
+        <li><strong>Brand assets.</strong> Real icons and splash replace the generated placeholders; fonts are bundled.</li>
+        <li><strong>Store accounts.</strong> App Store Connect and Play Console apps for <code>com.mobirizer.katha</code>, EAS project and credentials, Google OAuth clients with the signing fingerprints, Sign in with Apple, universal link files at <code>katha.app</code>.</li>
+        <li><strong>Gateways.</strong> Stripe and Razorpay webhook endpoints and secrets; RevenueCat for the stores in phase 2.</li>
+        <li><strong>Pin model ids</strong> and run a re-embed of the catalogue once the embedding model is final.</li>
+        <li><strong>Content.</strong> Nothing plays until real episodes are uploaded; a synthetic test-clip script is available on request for development.</li>
+      </ol>
+    </section>
+
+    <footer>Companion to the Katha Rebuild Plan and the SnapReels Source Analysis. Every finding is tracked with file and line references in the review transcripts; the app-level responses are logged in <code>docs/frontend-gaps.md</code>.</footer>
+  </main>
+</div>

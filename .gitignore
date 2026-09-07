@@ -1,0 +1,44 @@
+# dependencies
+node_modules/
+.pnpm-store/
+.venv/
+__pycache__/
+*.pyc
+.uv-cache/
+
+# build output
+.next/
+out/
+dist/
+build/
+.expo/
+*.tsbuildinfo
+.turbo/
+
+# env and secrets
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+google-services.json
+GoogleService-Info.plist
+service-account*.json
+
+# tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
+htmlcov/
+
+# os / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# vendor reference package (kept locally, never committed)
+ref/

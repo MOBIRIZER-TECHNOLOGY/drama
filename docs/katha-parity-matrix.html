@@ -1,0 +1,394 @@
+<title>Katha Parity Matrix</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #FBF8F8; --surface: #FFFFFF; --surface-2: #F3EDEE;
+    --ink: #1F1A1C; --ink-2: #463D40; --muted: #6B5F63;
+    --line: #E6DEE0; --line-2: #D5CACD;
+    --accent: #B3213B; --accent-soft: #F7E4E8;
+    --gold: #B8891F; --gold-soft: #F6EED9;
+    --same: #2E6B4F; --same-soft: #E1EFE7;
+    --better: #1F5C8A; --better-soft: #E0ECF6;
+    --partial: #8A4A12; --partial-soft: #F6E8DA;
+    --missing: #7A2430; --missing-soft: #F5E0E3;
+    --dropped: #4A4358; --dropped-soft: #ECE9F2;
+    --display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+      --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+      --line: #332A2E; --line-2: #463A3F;
+      --accent: #F05A72; --accent-soft: #3A1F26;
+      --gold: #E0B44A; --gold-soft: #3A3120;
+      --same: #8ED1AE; --same-soft: #1E3328;
+      --better: #8EC0EA; --better-soft: #1B2D3D;
+      --partial: #E9A968; --partial-soft: #3A2A1A;
+      --missing: #F09AA6; --missing-soft: #3B1F24;
+      --dropped: #BDB3D1; --dropped-soft: #2A2533;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+    --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+    --line: #332A2E; --line-2: #463A3F;
+    --accent: #F05A72; --accent-soft: #3A1F26;
+    --gold: #E0B44A; --gold-soft: #3A3120;
+    --same: #8ED1AE; --same-soft: #1E3328;
+    --better: #8EC0EA; --better-soft: #1B2D3D;
+    --partial: #E9A968; --partial-soft: #3A2A1A;
+    --missing: #F09AA6; --missing-soft: #3B1F24;
+    --dropped: #BDB3D1; --dropped-soft: #2A2533;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font-family: var(--body); font-size: 15.5px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  a { color: var(--accent); text-decoration: none; } a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .page { display: grid; grid-template-columns: 1fr; max-width: 1240px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1040px) { .page { grid-template-columns: 220px minmax(0, 1fr); gap: 52px; } .toc { display: block; position: sticky; top: 24px; align-self: start; padding-top: 72px; } }
+  .toc { display: none; }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 4px 0 4px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); font-size: 12.5px; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--line-2); text-decoration: none; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  main { min-width: 0; }
+  header.masthead { padding: 64px 0 32px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
+  h1 { font-family: var(--display); font-weight: 800; font-size: clamp(30px, 4vw, 42px); line-height: 1.08; letter-spacing: -.02em; margin: 0 0 12px; text-wrap: balance; max-width: 24ch; }
+  .lede { font-size: 17.5px; color: var(--ink-2); max-width: 64ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 20px; font-size: 12.5px; color: var(--muted); font-family: var(--mono); }
+  section { margin: 0 0 48px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 25px; letter-spacing: -.015em; margin: 0 0 6px; scroll-margin-top: 24px; text-wrap: balance; }
+  h2 + .sub { color: var(--muted); margin: 0 0 18px; max-width: 66ch; }
+  p { max-width: 70ch; margin: 0 0 12px; }
+  ul { max-width: 70ch; padding-left: 22px; margin: 0 0 12px; } li { margin-bottom: 5px; }
+  code { font-family: var(--mono); font-size: .88em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 16px 0 20px; }
+  .facts div { background: var(--surface); padding: 12px 14px; }
+  .facts b { display: block; font-family: var(--display); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .facts span { font-size: 12px; color: var(--muted); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  .legend .tag { margin-right: 6px; }
+  .tablewrap { overflow-x: auto; margin: 0 0 18px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 760px; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 600; white-space: nowrap; }
+  .tag { display: inline-block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.same { color: var(--same); background: var(--same-soft); }
+  .tag.better { color: var(--better); background: var(--better-soft); }
+  .tag.partial { color: var(--partial); background: var(--partial-soft); }
+  .tag.missing { color: var(--missing); background: var(--missing-soft); }
+  .tag.dropped { color: var(--dropped); background: var(--dropped-soft); }
+  .callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 14px 18px; margin: 16px 0 20px; max-width: 76ch; }
+  .callout.gold { border-left-color: var(--gold); }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <div class="eyebrow">Sections</div>
+    <ol>
+      <li><a href="#score">Scorecard</a></li>
+      <li><a href="#viewer">Viewer, web</a></li>
+      <li><a href="#mobile">Mobile app</a></li>
+      <li><a href="#player">Player and video</a></li>
+      <li><a href="#money">Wallet and payments</a></li>
+      <li><a href="#rewards">Rewards and growth</a></li>
+      <li><a href="#account">Account and auth</a></li>
+      <li><a href="#i18n">Localisation and SEO</a></li>
+      <li><a href="#admin">Admin panel</a></li>
+      <li><a href="#settings">Settings and integrations</a></li>
+      <li><a href="#ai">AI</a></li>
+      <li><a href="#platform">Platform and security</a></li>
+      <li><a href="#gaps">Open gaps, prioritised</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="eyebrow">SnapReels 1.1.7 versus Katha, as built</div>
+      <h1>Feature parity matrix</h1>
+      <p class="lede">Every feature the purchased package ships, side by side with what Katha has today. Statuses come from the current routes, endpoints and source, not from the plan.</p>
+      <div class="meta"><span>Compared 2026-09-07</span><span>80 API paths, 11 web routes, 19 admin routes, 19 mobile routes</span></div>
+    </header>
+
+    <section id="score">
+      <h2>Scorecard</h2>
+      <p class="sub">124 features compared. Where Katha is "partial" or "missing", the gap is named in the last section with the phase it belongs to.</p>
+      <div class="facts">
+        <div><b>41</b><span>same as the reference</span></div>
+        <div><b>48</b><span>better than the reference</span></div>
+        <div><b>10</b><span>partial</span></div>
+        <div><b>13</b><span>missing, planned</span></div>
+        <div><b>12</b><span>dropped on purpose</span></div>
+      </div>
+      <div class="legend">
+        <span><span class="tag same">Same</span>equivalent behaviour</span>
+        <span><span class="tag better">Better</span>same feature, stronger mechanics</span>
+        <span><span class="tag partial">Partial</span>exists but narrower</span>
+        <span><span class="tag missing">Missing</span>not built yet, with its phase</span>
+        <span><span class="tag dropped">Dropped</span>intentionally not carried over</span>
+      </div>
+      <div class="callout"><p>The honest headline: Katha matches or beats SnapReels on the core loop of browse, watch, unlock, pay and earn, and on everything an operator does in admin. The gaps are ads, push, store billing, transactional email, sitemap and a few small screens. None of them is a security or money-path regression, and all of them were planned for phases 2 and later.</p></div>
+    </section>
+
+    <section id="viewer">
+      <h2>Viewer, web</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Home hero carousel</td><td>Featured series, Embla autoplay</td><td>Featured rail, pause control, three mounted slides</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Continue watching</td><td>Client fetches all series and joins history</td><td>Server rail with episode number and position</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Top picks and category rails</td><td>Client-side filtering of the whole catalogue</td><td>One home endpoint returns every rail</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Browse all series and category pages</td><td><code>/series</code> grouped by category, <code>/category/[slug]</code></td><td>Search page only; API supports category filter</td><td><span class="tag missing">Missing</span> phase 2, small</td></tr>
+          <tr><td class="k">Search</td><td>Downloads catalogue, title contains</td><td>Server search, semantic when embeddings exist</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Series page</td><td>Portrait player, episode grid, similar by category</td><td>Same, similar by embeddings, refetched after sign-in</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Lock states and sequential unlock</td><td>Client-side only</td><td>Server-enforced, rendered from flags</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Likes, favourites, share, report</td><td>Present; two like collections</td><td>Present; single source, Web Share API</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">My List</td><td>Favourites and history tabs</td><td>Same with per-episode progress</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Contact form</td><td>reCAPTCHA v2 or v3</td><td>Cloudflare Turnstile, verified server-side</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">CMS pages</td><td>Raw HTML injected</td><td>Sanitised on save and at render, per language</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Shorts feed on web</td><td>None</td><td>None yet</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">PWA install prompt and service worker</td><td>Install card, empty service worker</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 5</td></tr>
+          <tr><td class="k">Web push</td><td>OneSignal</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Dark theme</td><td>Hard-coded dark</td><td>Dark-first design tokens</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">404 and error pages</td><td>Custom 404</td><td>Translated 404 and error boundary</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Install wizard and licence activation</td><td>Five-step wizard, vendor phone-home</td><td>Environment and seed script</td><td><span class="tag dropped">Dropped</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="mobile">
+      <h2>Mobile app</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels Android</th><th>Katha iOS and Android</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">iOS app</td><td>None</td><td>Same codebase, Sign in with Apple, associated domains</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Onboarding with language picker</td><td>Three pages</td><td>Three pages, device locale as default</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Connection check and force update</td><td>Branded splash with retry; blocking update screen</td><td>Config cached, timeout and banner; force-update flag typed but no blocking screen</td><td><span class="tag partial">Partial</span></td></tr>
+          <tr><td class="k">Home tab</td><td>Featured slider, continue, newest, categories, banner ad</td><td>Same rails, no banner ad</td><td><span class="tag partial">Partial</span> ads phase 2</td></tr>
+          <tr><td class="k">Shorts tab</td><td>Episode 1 of every series, one detail call per item, sign-in required to play</td><td>Guest playable, no extra calls, pooled players</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Series detail</td><td>Episode list with locks</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">My List tab</td><td>Favourites and history</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">My tab</td><td>Profile, coins, VIP, rewards, history, settings, delete account, clear cache</td><td>Same plus avatar upload; no clear cache</td><td><span class="tag partial">Partial</span></td></tr>
+          <tr><td class="k">Search</td><td>Dialog over the catalogue</td><td>Server search screen</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Share and deep links</td><td>Plain share, no link handling</td><td>Universal links to series, not-found route</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Languages</td><td>86 static string files shipped in the APK</td><td>Runtime strings from the API, seven languages seeded</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Offline state</td><td>Room cache of user profile only</td><td>Config and translations cached; home still needs network</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Brand fonts and icons</td><td>System fonts, Material icons</td><td>Bundled Bricolage and Plex, vector icons</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Interstitial and banner ads</td><td>AdMob, AppLovin MAX, Facebook rotation</td><td>Not built; placement table exists</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Google Play Billing</td><td>Present but never acknowledges purchases</td><td>Not built; RevenueCat planned</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Push notifications</td><td>Documented, not wired in the shipped app</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">On-device Gemini service</td><td>Dead code with an empty key</td><td>All AI server-side</td><td><span class="tag dropped">Dropped</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="player">
+      <h2>Player and video</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Storage and delivery</td><td>Six providers, MP4 proxied through Node</td><td>One S3-compatible bucket, ffmpeg HLS ladder, CDN</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Adaptive quality</td><td>Manual quality URLs per episode</td><td>1080p, 720p, 480p ABR ladder</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Signed URLs</td><td>Time-bucketed token, same for everyone, locked episodes leak</td><td>Per-user 15-minute grant, locked episodes never get a URL</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Edge enforcement of signatures</td><td>None</td><td>Key and mode defined; verifier not deployed</td><td><span class="tag partial">Partial</span> blocks charging money</td></tr>
+          <tr><td class="k">Guest playback of free episodes</td><td>Web yes, Android no</td><td>Both</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Vertical episode pager</td><td>Android</td><td>Mobile, pooled three players</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Preload next episode</td><td>Full download of N+1 on Android, 5 MB on web</td><td>Grant and player prepared for N+1 on mobile</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Controls</td><td>Seek, speed, hold 2x, fullscreen, quality menu</td><td>Same plus captions; quality is automatic</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Resume</td><td>Episode only</td><td>Episode and position</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Subtitles</td><td>None</td><td>AI-generated tracks, CC menu on web and mobile</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Embed sources</td><td>Any iframe or Dailymotion URL</td><td>One allowlisted iframe host, sandboxed</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Auto-advance and auto-unlock toggle</td><td>Android</td><td>Both platforms</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Picture in picture</td><td>None</td><td>None</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Watch progress reporting</td><td>Every 30 s as a percentage</td><td>Every 15 s wall-clock, on pause, hide and background</td><td><span class="tag better">Better</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="money">
+      <h2>Wallet and payments</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Coin balance</td><td>Mutable field, client-supplied on signup</td><td>Append-only ledger with idempotency keys</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Episode price</td><td>One global price</td><td>Global, per-series and per-episode overrides</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Free episodes per series</td><td>Count</td><td>Count plus per-episode override</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">VIP membership</td><td>Flag and expiry</td><td>Membership rows, stacking, ended on refund</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Coin packs</td><td>One price in one currency</td><td>Regional price table per pack</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Stripe</td><td>Client-verified, no webhook</td><td>Checkout plus signature-verified webhook, amount checked</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Razorpay</td><td>Payment link, client-verified</td><td>Orders and Checkout.js, HMAC webhook</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">PayPal</td><td>Present, no amount check</td><td>Not built</td><td><span class="tag dropped">Dropped</span> adapter slot exists</td></tr>
+          <tr><td class="k">Flutterwave</td><td>Present, accepts 95 percent of price</td><td>Not built</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Google Play and App Store billing</td><td>Play only, broken acknowledgement</td><td>RevenueCat planned</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Refunds</td><td>None</td><td>Webhook-driven, ledger reversal, VIP ended</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Purchase history</td><td>Transactions list</td><td>Ledger and purchases lists</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Mobile checkout</td><td>WebView showing success regardless of result</td><td>Browser session, polled until the webhook confirms</td><td><span class="tag better">Better</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="rewards">
+      <h2>Rewards and growth</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Signup bonus</td><td>Configurable</td><td>Configurable, ledger row</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Daily check-in streak</td><td>Seven days, UTC rollover</td><td>Configurable cycle, India timezone rollover</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Link tasks</td><td>Client-side timer</td><td>Client-side timer, server frequency rules</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Rewarded ad tasks and ad unlocks</td><td>Client-attested</td><td>Require a network-verified event; no network wired yet</td><td><span class="tag missing">Missing</span> phase 2 with server verification</td></tr>
+          <tr><td class="k">Per-platform task catalogue</td><td>Website, Android, iOS</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Referral programme</td><td>None</td><td>Codes at signup, reward on first purchase</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Experiments and feature flags</td><td>None</td><td>Sticky assignments in config, recorded on every money row</td><td><span class="tag better">Better</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="account">
+      <h2>Account and auth</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Email and password</td><td>Firebase</td><td>Firebase, exchanged for Katha tokens</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Google sign-in</td><td>Web popup; Android legacy SDK</td><td>Web popup with redirect fallback; native Google Sign-In on mobile</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Apple sign-in</td><td>Web only; Android stub</td><td>Web and iOS</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Facebook sign-in</td><td>Web; Android stub</td><td>Toggle exists, not wired</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Phone OTP</td><td>Web and Android</td><td>Web yes; mobile needs native Firebase</td><td><span class="tag partial">Partial</span> phase 2</td></tr>
+          <tr><td class="k">Sessions and devices</td><td>None</td><td>Per-device sessions, list, revoke, reuse detection</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Account linking</td><td>Duplicate accounts on second provider</td><td>Same verified email or phone links</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Delete account</td><td>Mobile endpoint</td><td>Both platforms, PII scrubbed, ledger kept</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Blocked users</td><td>Client-side screen</td><td>Server refuses, sessions revoked</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Password reset emails</td><td>SMTP through the app</td><td>Firebase sends them; no app SMTP</td><td><span class="tag same">Same</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="i18n">
+      <h2>Localisation and SEO</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Language list</td><td>103 codes, admin activates</td><td>Admin CRUD, seven seeded</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">UI string translation</td><td>177 keys, one giant prompt</td><td>Keys in Postgres, chunked and validated AI job, human overrides</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Content translation</td><td>Visibility filter only, no translated text</td><td>Title, synopsis and SEO per language</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Per-language content visibility</td><td>Target languages per series</td><td>Territory columns exist, not enforced</td><td><span class="tag partial">Partial</span></td></tr>
+          <tr><td class="k">RTL</td><td>Wrapper dir only</td><td>Logical properties, dir per language</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Localised fonts</td><td>None</td><td>Devanagari body and display faces</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Metadata and social cards</td><td>Title and description only</td><td>OpenGraph, Twitter, hreflang</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Sitemap and robots</td><td>Dynamic routes</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 2, small</td></tr>
+          <tr><td class="k">IndexNow ping and ads.txt</td><td>Present</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 2, small</td></tr>
+          <tr><td class="k">Structured data</td><td>None</td><td>Not built</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Google Analytics</td><td>GA4 tag</td><td>Events table exists, no tag</td><td><span class="tag missing">Missing</span> phase 2 analytics</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="admin">
+      <h2>Admin panel</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Area</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Dashboard</td><td>Revenue, users, counts, top by views; two metrics hard-coded zero</td><td>Revenue by currency, paying users, unlock funnel by method, coins granted and spent, daily chart, top series by unlocks</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Series editor</td><td>One language, genres as text, cover and banner</td><td>Translation tabs, categories, tags, status workflow, AI generation with undo</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Episode editor</td><td>Number and quality URLs only</td><td>Title, thumbnail, asset status with retry, price and free overrides, subtitles job</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Bulk add episodes</td><td>Add several numbered at once</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Video upload</td><td>Through the Node server, 2 GB cap</td><td>Presigned direct to bucket, abortable, transcode queue</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Video assets page</td><td>None</td><td>List, status, retry, delete</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Categories</td><td>CRUD, homepage toggle</td><td>Same with ordering</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Trending page</td><td>"Under construction"</td><td>Not built</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Users</td><td>Whole list in the browser, ban, edit coins directly</td><td>Server search, ban, ledger-backed coin adjustments with confirmation, VIP grant, ledger view</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Coin packs and monetisation</td><td>Packs with store ids, global price and currency</td><td>Same plus regional prices</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Purchase history</td><td>Table</td><td>Table with status filter</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Rewards configuration</td><td>Streak schedule, tasks per platform</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Ads configuration</td><td>AdSense script, ads.txt, player ad, mobile unit ids</td><td>Placement table, no page</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Push notifications</td><td>OneSignal send to all or one</td><td>Table, no page or sender</td><td><span class="tag missing">Missing</span> phase 2</td></tr>
+          <tr><td class="k">Mailbox</td><td>Inbox, read, delete</td><td>Same</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">CMS pages</td><td>Title, slug, HTML, footer toggle</td><td>Same per language, sanitised</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Languages and AI translate</td><td>Single prompt, no status</td><td>Chunked job with status, missing-key filter</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Translation editor</td><td>UI, SEO and page tabs</td><td>UI strings windowed with RTL; pages edited on the pages screen</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Reports</td><td>Resolve, delete</td><td>Resolve, dismiss, reopen</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Admin accounts and roles</td><td>One account</td><td>Owner, editor, support, finance; create, edit, disable</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Admin password reset</td><td>Email flow</td><td>Owner resets another admin's password; no self-service email flow</td><td><span class="tag partial">Partial</span></td></tr>
+          <tr><td class="k">Backup and restore</td><td>JSON dump, destructive restore</td><td>Managed database backups</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Licence page</td><td>Vendor activation</td><td>None</td><td><span class="tag dropped">Dropped</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="settings">
+      <h2>Settings and integrations</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Setting or integration</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Site, auth toggles, economy, rewards, mobile URLs, SEO</td><td>Mongo documents including secrets</td><td>Settings namespaces for toggles; secrets refused</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Firebase configuration</td><td>Pasted into admin, hard-coded vendor fallback</td><td>Environment, public part served through config</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">SMTP and test email</td><td>Admin-configured, sendmail path hard-coded</td><td>None; Firebase handles auth mail</td><td><span class="tag dropped">Dropped</span> revisit for marketing mail</td></tr>
+          <tr><td class="k">Storage providers</td><td>Six, chosen in admin</td><td>One S3-compatible target by environment</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Payment gateway keys</td><td>In admin</td><td>Environment; admin toggles which are offered</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Captcha</td><td>reCAPTCHA, Turnstile, hCaptcha keys; only reCAPTCHA verified</td><td>Turnstile, verified</td><td><span class="tag same">Same</span></td></tr>
+          <tr><td class="k">Video protection toggle</td><td>On or off with rotation period</td><td>Always on, per user</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">AI provider and keys</td><td>Groq, OpenAI, Gemini in admin</td><td>Anthropic, OpenAI, Gemini, Groq, Voyage by environment, per task</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">OneSignal, AdMob, AppLovin, Facebook Audience Network</td><td>Configured in admin</td><td>Not integrated</td><td><span class="tag missing">Missing</span> phase 2 (FAN deferred)</td></tr>
+          <tr><td class="k">Mobile API key</td><td>Static shared secret in the APK</td><td>None; per-user tokens</td><td><span class="tag dropped">Dropped</span></td></tr>
+          <tr><td class="k">Performance and PWA page</td><td>Could not save</td><td>None</td><td><span class="tag dropped">Dropped</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="ai">
+      <h2>AI</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Capability</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Series metadata from a seed</td><td>One prompt, JSON, no review</td><td>Draft plus editorial review, rating and moderation flags, human approval</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">UI translation</td><td>All keys in one prompt, fails when long</td><td>Chunked, validated, retried, concurrent</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Content translation</td><td>None</td><td>Titles, synopses and SEO per language</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Subtitles</td><td>None</td><td>Transcription and translated tracks</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Similar series and semantic search</td><td>Shared genre, title contains</td><td>Embeddings in pgvector</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Job visibility</td><td>None</td><td>Status endpoint, admin toasts</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Genkit flows and on-device Gemini</td><td>Dead code</td><td>Not carried</td><td><span class="tag dropped">Dropped</span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="platform">
+      <h2>Platform and security</h2>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Concern</th><th>SnapReels</th><th>Katha</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Authorisation on money endpoints</td><td>Client-supplied user id</td><td>Session on every mutation</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Rate limiting</td><td>Login and reset only</td><td>Auth, search, unlock, checkout, contact, views, admin login</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Secrets</td><td>Database, exportable</td><td>Environment, production guard</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Logging and errors</td><td>Console</td><td>Structured logs, request ids, uniform errors</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Tests</td><td>Three template tests on Android</td><td>API, AI and worker suites; database tests in CI; no front-end tests yet</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">CI</td><td>None</td><td>Lint, migrate, drift check, tests, client drift, typecheck</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Deployment</td><td>Bash installer, PM2, shared host</td><td>Compose for dev, hardened images; cloud manifests not written</td><td><span class="tag partial">Partial</span></td></tr>
+          <tr><td class="k">Security headers and CSP</td><td>None</td><td>Web and admin</td><td><span class="tag better">Better</span></td></tr>
+          <tr><td class="k">Analytics and QoE events</td><td>Tracking endpoint disabled</td><td>Events table with variant map; no client beacons yet</td><td><span class="tag partial">Partial</span> phase 2</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="gaps">
+      <h2>Open gaps, prioritised</h2>
+      <p class="sub">Everything marked partial or missing, grouped by what it takes to close.</p>
+      <div class="callout gold">
+        <p><strong>Small, this week if wanted.</strong> Web browse and category pages. Sitemap, robots, ads.txt and IndexNow. Force-update screen on mobile. Clear-cache row on mobile. Admin self-service password reset by email. Per-language content visibility enforcement.</p>
+      </div>
+      <div class="callout">
+        <p><strong>Phase 2, needs your accounts.</strong> RevenueCat store billing. AdMob rewarded, interstitial and banner with server-side verification, and the admin ads page. Push notifications on all platforms and the admin sender. Phone OTP on mobile through native Firebase. Analytics tag and client beacons. Web Shorts feed. JSON-LD structured data.</p>
+      </div>
+      <div class="callout">
+        <p><strong>Blocks charging money.</strong> The media edge verifier. Production will not boot until a signing mode is set, which is deliberate.</p>
+      </div>
+      <p><strong>Dropped on purpose and not coming back:</strong> vendor licence check and install wizard, JSON backup and restore, six storage providers, the static mobile API key, admin-stored secrets, the on-device Gemini service, PayPal and Flutterwave for the first release, Facebook login, the Trending stub, and the performance page that could not save.</p>
+    </section>
+
+    <footer>Statuses reflect the tree on 2026-09-07 after the review round. The SnapReels column comes from the source analysis; the Katha column from the current routes, endpoints and code.</footer>
+  </main>
+</div>

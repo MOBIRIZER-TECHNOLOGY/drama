@@ -1,0 +1,570 @@
+<title>Katha Rebuild Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Devanagari:wght@700&display=swap">
+<style>
+  :root {
+    --ground: #FBF8F8;
+    --surface: #FFFFFF;
+    --surface-2: #F3EDEE;
+    --ink: #1F1A1C;
+    --ink-2: #463D40;
+    --muted: #6B5F63;
+    --line: #E6DEE0;
+    --line-2: #D5CACD;
+    --accent: #B3213B;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #F7E4E8;
+    --gold: #B8891F;
+    --gold-soft: #F6EED9;
+    --screen: #141013;
+    --screen-ink: #F3ECEE;
+    --screen-muted: #A99BA0;
+    --keep: #2E6B4F; --keep-soft: #E1EFE7;
+    --improve: #1F5C8A; --improve-soft: #E0ECF6;
+    --replace: #8A4A12; --replace-soft: #F6E8DA;
+    --drop: #7A2430; --drop-soft: #F5E0E3;
+    --display: "Bricolage Grotesque", "Segoe UI", Arial, sans-serif;
+    --body: "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
+    --mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+    --deva: "Noto Sans Devanagari", "Nirmala UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+      --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+      --line: #332A2E; --line-2: #463A3F;
+      --accent: #F05A72; --accent-ink: #1A0D11; --accent-soft: #3A1F26;
+      --gold: #E0B44A; --gold-soft: #3A3120;
+      --screen: #0C090A; --screen-ink: #F3ECEE; --screen-muted: #A99BA0;
+      --keep: #8ED1AE; --keep-soft: #1E3328;
+      --improve: #8EC0EA; --improve-soft: #1B2D3D;
+      --replace: #E9A968; --replace-soft: #3A2A1A;
+      --drop: #F09AA6; --drop-soft: #3B1F24;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #171214; --surface: #1F181B; --surface-2: #2A2125;
+    --ink: #F3ECEE; --ink-2: #D9CDD1; --muted: #A99BA0;
+    --line: #332A2E; --line-2: #463A3F;
+    --accent: #F05A72; --accent-ink: #1A0D11; --accent-soft: #3A1F26;
+    --gold: #E0B44A; --gold-soft: #3A3120;
+    --screen: #0C090A; --screen-ink: #F3ECEE; --screen-muted: #A99BA0;
+    --keep: #8ED1AE; --keep-soft: #1E3328;
+    --improve: #8EC0EA; --improve-soft: #1B2D3D;
+    --replace: #E9A968; --replace-soft: #3A2A1A;
+    --drop: #F09AA6; --drop-soft: #3B1F24;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--ground); color: var(--ink);
+    font-family: var(--body); font-size: 16px; line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover, a:focus-visible { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .page { display: grid; grid-template-columns: 1fr; gap: 0; max-width: 1180px; margin: 0 auto; padding: 0 20px 96px; }
+  @media (min-width: 1040px) {
+    .page { grid-template-columns: 220px minmax(0, 1fr); gap: 56px; }
+    .toc { position: sticky; top: 24px; align-self: start; padding-top: 72px; }
+  }
+  .toc { display: none; }
+  @media (min-width: 1040px) { .toc { display: block; } }
+  .toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line); }
+  .toc li a { display: block; padding: 5px 0 5px 14px; margin-left: -1px; border-left: 2px solid transparent; color: var(--muted); font-size: 13px; line-height: 1.35; }
+  .toc li a:hover { color: var(--ink); border-left-color: var(--line-2); text-decoration: none; }
+  .toc .eyebrow { margin-bottom: 10px; }
+
+  main { min-width: 0; }
+  .eyebrow { font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+
+  header.masthead { padding: 64px 0 36px; border-bottom: 1px solid var(--line); margin-bottom: 40px; }
+  .mark { display: flex; align-items: baseline; gap: 14px; margin-bottom: 18px; }
+  .mark .deva { font-family: var(--deva); font-size: 40px; color: var(--accent); line-height: 1; }
+  .mark .latin { font-family: var(--display); font-weight: 800; font-size: 40px; line-height: 1; letter-spacing: -.02em; }
+  h1 { font-family: var(--display); font-weight: 700; font-size: clamp(28px, 4vw, 40px); line-height: 1.1; letter-spacing: -.02em; margin: 0 0 14px; text-wrap: balance; max-width: 22ch; }
+  .lede { font-size: 18px; color: var(--ink-2); max-width: 62ch; margin: 0; }
+  .meta { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 22px; font-size: 13px; color: var(--muted); font-family: var(--mono); }
+
+  section { margin: 0 0 56px; }
+  h2 { font-family: var(--display); font-weight: 700; font-size: 26px; letter-spacing: -.015em; line-height: 1.2; margin: 0 0 6px; text-wrap: balance; scroll-margin-top: 24px; }
+  h2 + .sub { color: var(--muted); margin: 0 0 20px; max-width: 65ch; }
+  h3 { font-family: var(--display); font-weight: 700; font-size: 18px; margin: 30px 0 10px; letter-spacing: -.01em; }
+  p { max-width: 68ch; margin: 0 0 14px; }
+  ul, ol { max-width: 68ch; padding-left: 22px; margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  li::marker { color: var(--muted); }
+  strong { font-weight: 600; }
+  code { font-family: var(--mono); font-size: .9em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; }
+  pre { font-family: var(--mono); font-size: 13px; line-height: 1.5; background: var(--surface-2); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; margin: 0 0 16px; border-radius: 4px; }
+  pre code { background: none; padding: 0; }
+
+  .verdict { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin: 0 0 8px; }
+  .verdict article { background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); padding: 18px 18px 16px; }
+  .verdict .eyebrow { margin-bottom: 8px; }
+  .verdict h3 { margin: 0 0 8px; font-size: 17px; }
+  .verdict p { font-size: 14.5px; margin: 0; color: var(--ink-2); }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); margin: 18px 0 22px; }
+  .facts div { background: var(--surface); padding: 12px 14px; }
+  .facts b { display: block; font-family: var(--display); font-weight: 700; font-size: 22px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .facts span { font-size: 12.5px; color: var(--muted); }
+
+  .tablewrap { overflow-x: auto; margin: 0 0 20px; border: 1px solid var(--line); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 640px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  th { font-family: var(--mono); font-weight: 500; font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td.k { font-weight: 600; white-space: nowrap; }
+  td.mono, .mono { font-family: var(--mono); font-size: 13px; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .group td { background: var(--surface-2); font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); padding: 7px 12px; }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 3px; white-space: nowrap; }
+  .tag.keep { color: var(--keep); background: var(--keep-soft); }
+  .tag.improve { color: var(--improve); background: var(--improve-soft); }
+  .tag.replace { color: var(--replace); background: var(--replace-soft); }
+  .tag.drop { color: var(--drop); background: var(--drop-soft); }
+  .tag.new { color: var(--accent); background: var(--accent-soft); }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; font-size: 13px; color: var(--muted); margin: 0 0 14px; }
+  .legend span .tag { margin-right: 6px; }
+
+  .callout { background: var(--surface); border: 1px solid var(--line); border-left: 4px solid var(--accent); padding: 16px 18px; margin: 18px 0 22px; max-width: 74ch; }
+  .callout.gold { border-left-color: var(--gold); }
+  .callout .eyebrow { margin-bottom: 6px; }
+  .callout p:last-child, .callout ul:last-child { margin-bottom: 0; }
+
+  .arch { display: grid; gap: 10px; margin: 18px 0 22px; }
+  .tier { display: grid; grid-template-columns: 120px 1fr; gap: 12px; align-items: stretch; }
+  .tier .label { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding-top: 12px; }
+  .boxes { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .box { background: var(--surface); border: 1px solid var(--line-2); padding: 12px 13px; font-size: 13.5px; line-height: 1.4; }
+  .box b { display: block; font-family: var(--display); font-weight: 700; font-size: 15px; margin-bottom: 3px; }
+  .box small { color: var(--muted); display: block; font-size: 12.5px; }
+  .box.core { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .box.screen { background: var(--screen); color: var(--screen-ink); border-color: var(--screen); }
+  .box.screen small { color: var(--screen-muted); }
+  .flow { grid-column: 2; font-family: var(--mono); font-size: 11.5px; color: var(--muted); text-align: center; letter-spacing: .06em; }
+  @media (max-width: 640px) { .tier { grid-template-columns: 1fr; } .flow { grid-column: 1; } }
+
+  .phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin: 18px 0 22px; }
+  .phone { background: var(--screen); color: var(--screen-ink); border-radius: 18px; padding: 16px 16px 18px; aspect-ratio: 9 / 13; display: flex; flex-direction: column; border: 1px solid var(--line-2); }
+  .phone .eyebrow { color: var(--screen-muted); }
+  .phone h4 { font-family: var(--display); font-weight: 700; font-size: 17px; margin: 6px 0 8px; }
+  .phone ul { padding-left: 16px; margin: 0; font-size: 13px; color: var(--screen-ink); }
+  .phone ul li { margin-bottom: 4px; }
+  .phone ul li::marker { color: var(--screen-muted); }
+  .phone .pill { margin-top: auto; align-self: flex-start; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; background: var(--accent); color: var(--accent-ink); padding: 3px 8px; border-radius: 999px; }
+  .phone .pill.gold { background: var(--gold); color: #1F1A1C; }
+
+  .compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; margin: 16px 0 22px; }
+  .compare article { background: var(--surface); border: 1px solid var(--line); padding: 16px 18px; }
+  .compare article.pick { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .compare h4 { font-family: var(--display); font-weight: 700; font-size: 17px; margin: 0 0 8px; }
+  .compare ul { font-size: 14px; margin: 0; padding-left: 18px; }
+
+  .phases { display: grid; gap: 12px; margin: 18px 0 8px; }
+  .phase { display: grid; grid-template-columns: 96px 1fr; gap: 14px; background: var(--surface); border: 1px solid var(--line); padding: 14px 16px; }
+  .phase .when { font-family: var(--mono); font-size: 12px; color: var(--muted); line-height: 1.5; }
+  .phase .when b { display: block; font-family: var(--display); font-size: 18px; color: var(--ink); font-weight: 700; }
+  .phase h4 { font-family: var(--display); font-weight: 700; font-size: 16px; margin: 0 0 6px; }
+  .phase ul { margin: 0; font-size: 14px; padding-left: 18px; }
+  @media (max-width: 560px) { .phase { grid-template-columns: 1fr; } }
+
+  footer { border-top: 1px solid var(--line); padding-top: 18px; color: var(--muted); font-size: 13px; }
+  @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="page">
+  <nav class="toc" aria-label="Sections">
+    <div class="eyebrow">Sections</div>
+    <ol>
+      <li><a href="#verdict">Verdict</a></li>
+      <li><a href="#what">What SnapReels really is</a></li>
+      <li><a href="#features">End-to-end feature inventory</a></li>
+      <li><a href="#holes">What not to carry over</a></li>
+      <li><a href="#architecture">Katha architecture</a></li>
+      <li><a href="#data">Postgres data model</a></li>
+      <li><a href="#video">Video pipeline</a></li>
+      <li><a href="#money">Payments and in-app purchases</a></li>
+      <li><a href="#ai">AI layer with LangGraph</a></li>
+      <li><a href="#mobile">React Native or native</a></li>
+      <li><a href="#repo">Monorepo and roadmap</a></li>
+      <li><a href="#decide">Decisions to confirm</a></li>
+    </ol>
+  </nav>
+
+  <main>
+    <header class="masthead">
+      <div class="mark"><span class="deva">कथा</span><span class="latin">Katha</span></div>
+      <h1>Rebuilding SnapReels as Katha on FastAPI, Postgres, Next.js and React Native</h1>
+      <p class="lede">A feature-by-feature reading of the purchased SnapReels v1.1.7 package, the architecture that replaces it, and the mobile platform decision.</p>
+      <div class="meta">
+        <span>Source: SnapReels 1.1.7 (web) + Android 1.1.6</span>
+        <span>Target bundle: com.mobirizer.katha</span>
+        <span>Prepared 2026-09-07</span>
+      </div>
+    </header>
+
+    <section id="verdict">
+      <h2>Verdict</h2>
+      <p class="sub">Three conclusions that shape everything below.</p>
+      <div class="verdict">
+        <article>
+          <div class="eyebrow">The package</div>
+          <h3>Use it as a spec, not a codebase</h3>
+          <p>SnapReels is a Firebase Studio prototype that was migrated to MongoDB. The product surface is complete and worth copying. The backend trusts the client for coins, unlocks and payments, so none of its server code should ship.</p>
+        </article>
+        <article>
+          <div class="eyebrow">The stack</div>
+          <h3>Thin clients, one FastAPI core</h3>
+          <p>Next.js web and admin, plus a React Native app, all talk to one FastAPI service over a generated OpenAPI client. Postgres holds a coin ledger instead of a mutable balance. Video never transits the API server.</p>
+        </article>
+        <article>
+          <div class="eyebrow">Mobile</div>
+          <h3>React Native with Expo, native modules where it counts</h3>
+          <p>One TypeScript codebase gives you Android and iOS on day one, which the vendor never shipped. Player, billing and ads sit on native-backed libraries. Go native only if DRM with offline downloads becomes a hard requirement.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="what">
+      <h2>What SnapReels really is</h2>
+      <p class="sub">The listing says "SaaS script with Android app". The code says something more specific.</p>
+      <div class="facts">
+        <div><b>29.2k</b><span>lines of TypeScript in the web app</span></div>
+        <div><b>24</b><span>admin pages plus 12 settings pages</span></div>
+        <div><b>177</b><span>UI translation keys, AI-translated</span></div>
+        <div><b>103</b><span>locales in the language list</span></div>
+        <div><b>86</b><span>static Android string locales</span></div>
+        <div><b>0</b><span>iOS app, tests, webhooks</span></div>
+      </div>
+      <p><strong>Web and API</strong> are one Next.js 15 app. Pages call server actions that read and write MongoDB directly. Firebase is used only for end-user sign-in. The admin panel is a single hard-coded account with an encrypted cookie. A handful of REST routes under <code>/api/mobile/v1</code> and <code>/api/user</code> exist for the Android app, guarded by one shared static API key.</p>
+      <p><strong>The Android app</strong> is native Kotlin with Jetpack Compose, Media3 ExoPlayer, Room, and hand-rolled JSON parsing over OkHttp. It ships Google Play Billing, AdMob, AppLovin MAX and Facebook Audience Network, with a round-robin ad rotation. The package name is still <code>com.example</code> and the manifest carries Google's test AdMob app ID.</p>
+      <p><strong>The AI features</strong> are a single "generate metadata from a seed sentence" button and a bulk UI translation action, both calling Groq, OpenAI or Gemini with admin-entered keys. The Genkit flows in the source tree are dead scaffolding that nothing imports.</p>
+      <p>Video is served by proxying MP4 files through the Node process with an AES-encrypted, time-bucketed token. HLS URLs bypass the proxy entirely. There is no transcoding, no per-user token, and locked episodes' URLs are sent to every client.</p>
+    </section>
+
+    <section id="features">
+      <h2>End-to-end feature inventory</h2>
+      <p class="sub">Every feature the package ships, how it works today, and what Katha does with it.</p>
+      <div class="legend">
+        <span><span class="tag keep">Keep</span>parity, rebuilt cleanly</span>
+        <span><span class="tag improve">Improve</span>same feature, better mechanics</span>
+        <span><span class="tag replace">Replace</span>different mechanism</span>
+        <span><span class="tag drop">Drop</span>not carried over</span>
+        <span><span class="tag new">New</span>not in SnapReels</span>
+      </div>
+
+      <h3>Viewer experience</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Feature</th><th>SnapReels today</th><th>Katha</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Home</td><td>Featured hero carousel, Continue Watching, Top Picks, one row per homepage category, full grid. Android mirrors this with a banner ad slot.</td><td>Same layout, served by one <code>/v1/home</code> endpoint with pre-assembled rails so clients make one call.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Shorts feed</td><td>Android only. Vertical pager of episode 1 of every series, shuffled client-side after fetching every series' episodes.</td><td>Server-ranked feed endpoint with cursor pagination, personalised later via embeddings. Also on web.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Search</td><td>Downloads the whole catalogue and filters titles with <code>includes()</code>.</td><td>Postgres full-text search plus pgvector semantic search over synopsis and tags.</td><td><span class="tag replace">Replace</span></td></tr>
+          <tr><td class="k">Series page</td><td>9:16 portrait player, episode grid with lock states, sequential unlock, likes, favourites, share, report, similar series.</td><td>Same page. Per-language title and synopsis. Similar series from embeddings instead of shared genre.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Player</td><td>Web: react-player, MP4 progressive, hls.js for m3u8, iframe embeds, hold-to-2x, quality menu, autoplay next, precache 5 MB of next episode. Android: ExoPlayer per page, 500 MB disk cache, full precache of N+1, no HLS module, no PiP.</td><td>HLS everywhere with an ABR ladder. Web: hls.js or Vidstack. Mobile: expo-video with a three-player window and next-episode preload. Resume at timestamp, not just episode.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Episode unlock</td><td>Coins at a global price (50 on web, 10 on mobile by default), watch-an-ad unlock with a daily cap, VIP bypass, sequential gating, auto-unlock toggle on Android.</td><td>Identical rules, enforced server-side in one transaction against the ledger. Per-series and per-episode price overrides.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Wallet</td><td>Coin packs and VIP membership packs, transaction history.</td><td>Same, backed by an append-only ledger with idempotency keys.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Rewards</td><td>Signup bonus (100), 7-day check-in streak (10 to 70 coins), tasks of type link (open URL, wait N seconds) or ad (rewarded video), once or daily, per platform. Timers are client-attested.</td><td>Same catalogue. Rewarded ads verified through AdMob server-side verification. Link tasks capped and rate-limited.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Referral</td><td>None. Share opens a plain URL.</td><td>Referral codes, deep links, and a ledger reward on the referee's first unlock.</td><td><span class="tag new">New</span></td></tr>
+          <tr><td class="k">Account</td><td>Firebase email, Google, Facebook, Apple, phone OTP. Profile edit, password reset, delete account, ban screen. Facebook and Apple are stubs on Android.</td><td>Firebase Auth kept as the identity provider, exchanged for Katha session tokens. Apple Sign-In real on iOS. Device list.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">My List</td><td>Favourites and watch history stored server-side.</td><td>Same, plus per-episode progress.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Push</td><td>OneSignal on web. Android app has no push SDK wired in despite the docs.</td><td>FCM and APNs through Expo push, web push on Next.js. Topic and per-user sends from admin.</td><td><span class="tag replace">Replace</span></td></tr>
+          <tr><td class="k">Localisation</td><td>103-locale list, admin-managed active languages, 177 UI keys translated by one giant AI prompt, per-series target-language visibility, partial RTL. Android ships 86 static string files.</td><td>UI strings in Postgres, chunked LangGraph translation with validation, content translations per series, RTL via logical CSS properties, mobile strings fetched at runtime.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">SEO and PWA</td><td>Metadata, sitemap, robots, ads.txt, IndexNow ping. No OpenGraph, JSON-LD or hreflang. Service worker is an empty stub.</td><td>Full OpenGraph and Twitter cards, VideoObject and TVSeries JSON-LD, hreflang per locale, real offline shell.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">CMS pages, contact</td><td>HTML pages with footer toggle, contact form with reCAPTCHA into an admin mailbox.</td><td>Same, with Turnstile verified server-side.</td><td><span class="tag keep">Keep</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Admin panel</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Area</th><th>SnapReels today</th><th>Katha</th><th>Decision</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Dashboard</td><td>Revenue, new and total users, series and episode counts, top 10 by views, daily chart. Engagement and revenue-per-episode are hard-coded zero. "System health" card is static text.</td><td>Real metrics from the ledger and an events table: revenue by gateway, ARPPU, unlock funnel, ad-unlock ratio, completion rate.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Series and episodes</td><td>Series form with AI metadata button. Episodes are only a number plus quality/URL pairs from upload, direct link or embed code. No title, duration, thumbnail, subtitles or per-episode price.</td><td>Episode gets title, thumbnail, duration, subtitles, price override, publish state and a transcoding status. Bulk upload with drag and drop.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Categories, tags</td><td>Auto-created from series genres, homepage toggle.</td><td>Same, with ordering.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Users</td><td>List all users client-side, ban, edit coins directly, view transactions, delete.</td><td>Server pagination, coin adjustments as ledger entries with a reason, VIP grant, device and session view.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Monetisation</td><td>Episode cost, coins on/off, currency, coin packs with Google and Apple product IDs, purchase history.</td><td>Same, plus regional price tables so INR and USD packs coexist.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Rewards config</td><td>Streak schedule, task CRUD per platform.</td><td>Same.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Ads</td><td>AdSense header script, ads.txt, video-player ad HTML with skip timer and daily cap. Mobile: AdMob, AppLovin MAX, FAN IDs and rotation mode.</td><td>Ad placements table keyed by platform. Rewarded ads only through networks with server-side verification.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Notifications</td><td>Title and body to all or one user via OneSignal REST.</td><td>Segments, scheduling, per-language copy, delivery log.</td><td><span class="tag improve">Improve</span></td></tr>
+          <tr><td class="k">Mailbox, reports, pages</td><td>Contact inbox, content reports with resolve, CMS page CRUD.</td><td>Same, with reply-from-admin on mailbox and a link to the reported content.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Languages and translations</td><td>Language CRUD, AI bulk translate, per-key editor with SEO and CMS tabs.</td><td>Same editor over Postgres, with translation jobs visible as background tasks.</td><td><span class="tag keep">Keep</span></td></tr>
+          <tr><td class="k">Settings</td><td>General, auth toggles, SMTP, rate limits, SEO, PWA (page cannot save, keys missing from allowlist), plugins (GA, three captchas, video protection, AI provider, OneSignal, IndexNow), payment gateways with secrets, storage (local, S3, DigitalOcean, GCS, Backblaze, Bunny), mobile (API key, force update, legal URLs, ad IDs).</td><td>Non-secret toggles stay in a settings table. Secrets move to environment and a secret manager. Storage becomes one S3-compatible target plus CDN.</td><td><span class="tag replace">Replace</span></td></tr>
+          <tr><td class="k">Backup and restore</td><td>Dump every collection to JSON, restore wipes every collection first.</td><td>Managed Postgres backups and point-in-time recovery. Content export as CSV for editors.</td><td><span class="tag replace">Replace</span></td></tr>
+          <tr><td class="k">Roles</td><td>One admin account.</td><td>Admin users with roles: owner, editor, support, finance.</td><td><span class="tag new">New</span></td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>Mobile app screens</h3>
+      <p>The Android app is the clearest statement of the product. These are its screens, which the React Native app reproduces one for one.</p>
+      <div class="phones">
+        <div class="phone"><div class="eyebrow">Home</div><h4>Discover</h4><ul><li>Featured 16:9 slider</li><li>Continue Watching</li><li>Newest and category rows</li><li>Banner ad slot</li><li>Rewards shortcut, search</li></ul><span class="pill">4-tab bar</span></div>
+        <div class="phone"><div class="eyebrow">Shorts</div><h4>Vertical feed</h4><ul><li>Episode 1 of each series</li><li>Like, save, episodes, share rail</li><li>Watch Full opens the player</li></ul><span class="pill">Swipe up</span></div>
+        <div class="phone"><div class="eyebrow">Player</div><h4>Episode pager</h4><ul><li>Episode N / total badge</li><li>Locked page shows unlock sheet</li><li>Coins or watch ad, auto-unlock toggle</li><li>Speed, seek, fullscreen</li><li>Interstitial on exit</li></ul><span class="pill gold">Coins gate</span></div>
+        <div class="phone"><div class="eyebrow">My</div><h4>Account</h4><ul><li>Coins balance, Top Up</li><li>VIP status, Join VIP</li><li>Earn Rewards, history, settings</li><li>Language, legal, delete account</li></ul><span class="pill gold">Wallet</span></div>
+      </div>
+    </section>
+
+    <section id="holes">
+      <h2>What not to carry over</h2>
+      <p class="sub">These are the reasons the vendor backend is a spec rather than a starting point.</p>
+      <h3>Security holes that Katha must close by design</h3>
+      <ul>
+        <li><strong>Every coin mutation trusts the client.</strong> Unlock, claim reward, daily check-in, favourites, history and purchase verification are server actions that take a user id from the request and never check a session. Anyone can mint coins for any account.</li>
+        <li><strong>Unlock price comes from the payload.</strong> The web unlock action deducts whatever cost the browser sends, and spreads the raw payload into the database.</li>
+        <li><strong>Payments have no webhooks and no binding.</strong> Verification only compares the amount, so a paid session for one pack redeems any pack of the same price, and the first account to present someone else's session id wins.</li>
+        <li><strong>Google Play purchases are never acknowledged</strong>, the app sends the order id where the server expects the purchase token, and subscriptions are checked against the products endpoint. Real purchases would be auto-refunded after three days.</li>
+        <li><strong>Locked episodes leak their video URLs.</strong> Both the web page payload and the mobile episodes endpoint return playable proxy links for premium episodes. The lock is UI only.</li>
+        <li><strong>One static API key</strong> in the APK, extractable because release builds are not minified, is the only guard on unlock, claim, checkout and library endpoints.</li>
+        <li><strong>Rewarded ads and link timers are client-attested.</strong> No server-side verification from any ad network.</li>
+        <li><strong>All third-party secrets live in MongoDB</strong> and are returned in full by settings readers that client components import. A full-database export action exists with no session check.</li>
+        <li><strong>Admin mutations do not verify the session</strong>; they rely on the page being behind middleware that only regex-checks the cookie shape.</li>
+      </ul>
+      <h3>Dead weight to leave behind</h3>
+      <ul>
+        <li>The license phone-home to the vendor's server, the install wizard, and the "any string over 10 characters activates" test action.</li>
+        <li>Firestore client, rules and hooks, Genkit flows, App Hosting config and the on-device Gemini service with an empty key. All unused.</li>
+        <li>The Node video proxy, the global <code>removeChild</code> monkey-patch, the JSON backup and restore, the Trending and iOS placeholder pages, the duplicate unrouted episodes page.</li>
+        <li>Client-side pagination of the whole catalogue and user list, the two different "likes" collections, and the hard-coded dark theme with <code>lang="en"</code> on every locale.</li>
+      </ul>
+    </section>
+
+    <section id="architecture">
+      <h2>Katha architecture</h2>
+      <p class="sub">One API, three thin clients, workers for anything slow, and a CDN for anything heavy.</p>
+      <div class="arch">
+        <div class="tier"><div class="label">Clients</div><div class="boxes">
+          <div class="box"><b>Web</b><small>Next.js 15, App Router, SSR for SEO, hls.js player, next-intl</small></div>
+          <div class="box"><b>Admin</b><small>Next.js, shadcn/ui, RBAC, background job views</small></div>
+          <div class="box screen"><b>Mobile</b><small>React Native, Expo SDK 54, expo-video, RevenueCat, AdMob</small></div>
+        </div></div>
+        <div class="flow">https + JSON, OpenAPI-generated TypeScript client</div>
+        <div class="tier"><div class="label">Services</div><div class="boxes">
+          <div class="box core"><b>katha-api</b><small>FastAPI, Pydantic v2, SQLAlchemy 2 async, Alembic. Auth, catalogue, wallet ledger, unlocks, rewards, payments, admin, config</small></div>
+          <div class="box"><b>katha-worker</b><small>arq on Redis. Transcoding, webhooks fan-out, push, translation and metadata graphs</small></div>
+          <div class="box"><b>katha-ai</b><small>LangChain + LangGraph graphs, provider registry, pgvector embeddings</small></div>
+        </div></div>
+        <div class="flow">async SQL, Redis queues, S3 API, gateway webhooks</div>
+        <div class="tier"><div class="label">Data and edge</div><div class="boxes">
+          <div class="box"><b>Postgres 16</b><small>pgvector, ledger, catalogue, translations, settings</small></div>
+          <div class="box"><b>Redis</b><small>Rate limits, queues, feed cache, playback token cache</small></div>
+          <div class="box"><b>Object storage + CDN</b><small>S3 or R2 originals, HLS renditions, signed CDN URLs</small></div>
+          <div class="box"><b>External</b><small>Firebase Auth, Stripe, Razorpay, RevenueCat, AdMob SSV, FCM, Claude and other LLM APIs</small></div>
+        </div></div>
+      </div>
+
+      <h3>Component mapping</h3>
+      <div class="tablewrap"><table>
+        <thead><tr><th>SnapReels piece</th><th>Katha replacement</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Next.js server actions on MongoDB</td><td>FastAPI routers with a service layer and repository pattern, Postgres via SQLAlchemy 2 async</td><td>Auth on every request by dependency injection. Transactions for coin spend and unlock.</td></tr>
+          <tr><td class="k">Firebase Auth + identity toolkit lookup</td><td>Firebase Auth as identity provider, token verified with firebase-admin, exchanged for Katha access and refresh JWTs, sessions table per device</td><td>Keeps Google, Apple and phone OTP cheap to ship. Katha owns sessions, revocation and device limits.</td></tr>
+          <tr><td class="k">Shared mobile API key</td><td>Per-user bearer tokens plus app attestation (Play Integrity, App Attest) on money endpoints</td><td>No secret in the binary that grants access to other users' accounts.</td></tr>
+          <tr><td class="k">Video proxy through Node</td><td>Upload to object storage, worker transcodes to HLS, CDN serves with short-lived signed URLs minted per user per episode</td><td>API server never streams bytes. Locked episodes never get a URL.</td></tr>
+          <tr><td class="k">Client-verified payments</td><td>Stripe and Razorpay webhooks with signature checks; RevenueCat for Google Play and App Store; purchases keyed by external id</td><td>Money enters the ledger only from a verified server-to-server event.</td></tr>
+          <tr><td class="k">Coins field on the user</td><td>Append-only coin ledger with idempotency keys, balance maintained in the same transaction</td><td>Auditable, replayable, and safe under retries.</td></tr>
+          <tr><td class="k">Groq, OpenAI, Gemini switch</td><td>LangChain provider registry: Claude Opus 5 default, OpenAI, Gemini, Groq selectable per graph in admin</td><td>Same admin freedom, structured outputs, retries and evals in one place.</td></tr>
+          <tr><td class="k">Settings documents with secrets</td><td>Settings table for toggles, environment and secret manager for keys</td><td>Secrets never round-trip through the admin browser.</td></tr>
+          <tr><td class="k">OneSignal</td><td>FCM and APNs via Expo push, web push via VAPID</td><td>No third-party subscription, device tokens live next to sessions.</td></tr>
+          <tr><td class="k">Six storage providers</td><td>One S3-compatible bucket (S3, R2 or Bunny) plus a CDN hostname</td><td>One code path, the provider choice is configuration.</td></tr>
+          <tr><td class="k">JSON backup</td><td>Managed Postgres backups, point-in-time recovery, CSV content export</td><td>Restore without wiping.</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section id="data">
+      <h2>Postgres data model</h2>
+      <p class="sub">Twenty-odd tables. The ledger and the video asset are the two that change the product's behaviour.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Table</th><th>Key columns</th><th>Notes</th></tr></thead>
+        <tbody>
+          <tr class="group"><td colspan="3">Identity</td></tr>
+          <tr><td class="mono">users</td><td>id, public_id, display_name, email, phone, avatar_url, coin_balance, status, locale, created_at</td><td>Balance is a cache of the ledger, updated in the same transaction.</td></tr>
+          <tr><td class="mono">auth_identities</td><td>user_id, provider, provider_uid</td><td>Firebase uid, Google sub, Apple sub. Unique per provider.</td></tr>
+          <tr><td class="mono">sessions</td><td>user_id, device_id, platform, refresh_token_hash, push_token, last_seen_at, revoked_at</td><td>Powers device list and concurrent-stream limits.</td></tr>
+          <tr><td class="mono">admin_users, admin_roles</td><td>email, password_hash, role, totp_secret</td><td>Owner, editor, support, finance.</td></tr>
+          <tr class="group"><td colspan="3">Catalogue</td></tr>
+          <tr><td class="mono">series</td><td>id, slug, cover_url, banner_url, free_episodes, is_featured, is_premium, status, language, released_at, views, likes</td><td>Text lives in translations.</td></tr>
+          <tr><td class="mono">series_translations</td><td>series_id, lang, title, synopsis, seo_title, meta_description, keywords[]</td><td>Primary key (series_id, lang).</td></tr>
+          <tr><td class="mono">episodes</td><td>series_id, number, title, thumbnail_url, duration_sec, video_asset_id, price_override, is_free_override, published_at</td><td>Unique (series_id, number).</td></tr>
+          <tr><td class="mono">video_assets</td><td>id, source_key, status, renditions jsonb, hls_master_key, duration_sec, checksum, error</td><td>Status: uploaded, queued, transcoding, ready, failed.</td></tr>
+          <tr><td class="mono">subtitles</td><td>episode_id, lang, vtt_key, source (upload | ai)</td><td></td></tr>
+          <tr><td class="mono">categories, series_categories, tags, series_tags</td><td>slug, name, show_on_home, sort_order</td><td></td></tr>
+          <tr><td class="mono">embeddings</td><td>series_id, model, vector(1024)</td><td>pgvector, cosine index.</td></tr>
+          <tr class="group"><td colspan="3">Wallet and access</td></tr>
+          <tr><td class="mono">coin_ledger</td><td>id, user_id, delta, kind, ref_type, ref_id, idempotency_key, note, created_by, created_at</td><td>Kinds: signup_bonus, purchase, unlock, ad_unlock, checkin, task, referral, admin_adjust, refund. Idempotency key unique.</td></tr>
+          <tr><td class="mono">vip_memberships</td><td>user_id, starts_at, ends_at, source, purchase_id</td><td>Active if now within range.</td></tr>
+          <tr><td class="mono">episode_unlocks</td><td>user_id, episode_id, method, ledger_id, created_at</td><td>Unique (user_id, episode_id).</td></tr>
+          <tr><td class="mono">coin_packs, pack_prices</td><td>name, coins, kind, duration_days, store_product_ids; currency, amount</td><td>Regional pricing per pack.</td></tr>
+          <tr><td class="mono">purchases</td><td>user_id, pack_id, gateway, external_id, status, amount, currency, raw jsonb</td><td>Unique (gateway, external_id). Status: pending, paid, refunded.</td></tr>
+          <tr><td class="mono">checkins, reward_tasks, reward_claims, ad_events</td><td>user_id, date; platform, kind, coins, frequency; ssv_transaction_id</td><td>Check-in unique per user per day. Ad events unique per SSV transaction.</td></tr>
+          <tr><td class="mono">referrals</td><td>referrer_id, referee_id, code, rewarded_at</td><td></td></tr>
+          <tr class="group"><td colspan="3">Engagement and ops</td></tr>
+          <tr><td class="mono">favorites, likes, watch_progress</td><td>user_id, series_id | episode_id, position_sec, completed_at</td><td>Progress per episode enables true resume.</td></tr>
+          <tr><td class="mono">reports, contact_messages, cms_pages, cms_page_translations</td><td></td><td></td></tr>
+          <tr><td class="mono">languages, ui_translations</td><td>code, name, is_active, rtl; lang, key, value, source</td><td></td></tr>
+          <tr><td class="mono">settings, ad_placements, notifications, analytics_events</td><td>namespace, data jsonb; platform, network, unit_id, enabled; segment, payload, sent_at; user_id, name, props jsonb, variant_map jsonb, ts</td><td>Events partitioned by month, moved to ClickHouse when volume warrants.</td></tr>
+          <tr class="group"><td colspan="3">Experimentation (phase 4, tables created in phase 0)</td></tr>
+          <tr><td class="mono">feature_flags, experiments, experiment_assignments</td><td>key, rules jsonb, enabled; key, variants jsonb, allocation, started_at, ended_at; user_id, experiment_key, variant, assigned_at</td><td>Assignments are sticky per user. The config endpoint returns the variant map, and ledger rows and unlocks store it.</td></tr>
+          <tr><td class="mono">offers, coupon_codes</td><td>kind, pack_id, discount, eligibility jsonb, starts_at, ends_at; code, offer_id, max_uses, used</td><td>First-purchase, timed bundle and win-back offers.</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout gold">
+        <div class="eyebrow">Unlock in one transaction</div>
+        <p>Load episode and series with the user's active VIP row. Reject if not free, not VIP, and the previous episode is not unlocked. Insert the ledger row with delta = -price and an idempotency key of <code>unlock:{user}:{episode}</code>. Update the balance with a <code>coin_balance &gt;= price</code> guard. Insert the unlock row. Commit. The mobile client's "auto-unlock next" simply calls the same endpoint.</p>
+      </div>
+    </section>
+
+    <section id="video">
+      <h2>Video pipeline</h2>
+      <p class="sub">The single largest upgrade over the package, and the one that decides hosting cost.</p>
+      <ol>
+        <li><strong>Upload.</strong> Admin gets a presigned PUT URL from the API and uploads straight to the bucket. The API records a video asset in <code>uploaded</code> state.</li>
+        <li><strong>Transcode.</strong> The worker runs ffmpeg into an HLS ladder of 1080p, 720p and 480p portrait renditions, generates a poster and a sprite sheet for seeking, and writes the master playlist. Status moves to <code>ready</code> and the episode becomes publishable.</li>
+        <li><strong>Serve.</strong> Clients ask <code>POST /v1/episodes/{id}/play</code>. The API checks access, then mints a CDN signed URL or signed cookie valid for a few minutes, scoped to that episode's path. CloudFront, Bunny and Cloudflare all support this natively.</li>
+        <li><strong>Protect.</strong> Renditions are AES-128 encrypted with keys served by the API behind the same access check. This is not DRM, but it means a shared m3u8 link is useless without a session. Widevine and FairPlay can be added later through a packager such as Shaka if downloads or studio content require it.</li>
+        <li><strong>Preload.</strong> Because the URL is per-episode and short-lived, the mobile app requests play tokens for N and N+1 together, and the API returns both when N+1 is already accessible.</li>
+      </ol>
+      <div class="callout">
+        <div class="eyebrow">Managed alternative for the first release</div>
+        <p>Bunny Stream, Cloudflare Stream or Mux do steps 2 through 4 as a service with token authentication and their own players. For a first release with a small team this removes the ffmpeg worker entirely. The API contract stays the same, so self-hosting later is a worker swap, not a client change.</p>
+      </div>
+    </section>
+
+    <section id="money">
+      <h2>Payments and in-app purchases</h2>
+      <p class="sub">The vendor supports many gateways badly. Katha supports fewer, correctly.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Channel</th><th>Mechanism</th><th>Ledger entry created by</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Web, cards and wallets</td><td>Stripe Checkout with the pack id and user id in metadata</td><td><code>checkout.session.completed</code> webhook, signature verified</td></tr>
+          <tr><td class="k">Web, India</td><td>Razorpay Orders API, Checkout.js on the page, UPI included</td><td><code>payment.captured</code> webhook, HMAC verified, order id matched to the pending purchase</td></tr>
+          <tr><td class="k">Android</td><td>Google Play Billing through RevenueCat, coin packs as consumables, VIP as subscription</td><td>RevenueCat webhook, purchase acknowledged and consumed by the SDK</td></tr>
+          <tr><td class="k">iOS</td><td>StoreKit 2 through RevenueCat, same products</td><td>RevenueCat webhook</td></tr>
+          <tr><td class="k">PayPal, Flutterwave</td><td>Optional adapters behind the same purchase interface</td><td>Their webhooks</td></tr>
+        </tbody>
+      </table></div>
+      <p>Every purchase starts as a <code>pending</code> row created by the API before the client is redirected or the store sheet opens. Webhooks flip it to <code>paid</code> and write the ledger entry in the same transaction. The client only polls the purchase status, it never claims success. Refund events reverse the ledger with a negative entry rather than editing history.</p>
+      <p>Direct verification against the Google Play Developer API and the App Store Server API is possible instead of RevenueCat and saves its fee, at the cost of owning acknowledgement, subscription renewals and grace periods yourself. RevenueCat is the recommendation until store revenue justifies the work.</p>
+    </section>
+
+    <section id="ai">
+      <h2>AI layer with LangChain and LangGraph</h2>
+      <p class="sub">SnapReels has one prompt button. Katha gets four graphs that run in the worker, each with a human checkpoint where money or public text is involved.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Graph</th><th>Trigger</th><th>Nodes</th><th>Output</th></tr></thead>
+        <tbody>
+          <tr><td class="k">Content ingestion</td><td>Video asset becomes ready, or admin clicks Generate</td><td>Transcribe (Whisper or a hosted speech API) → summarise → draft title, synopsis, genres, tags, slug, SEO → content rating and moderation flags → <em>human approval interrupt</em> → save</td><td>Series and episode metadata in the admin's language, awaiting approval</td></tr>
+          <tr><td class="k">Translation</td><td>New language activated, keys changed, series published</td><td>Chunk by 40 keys or one CMS page → translate with structured output → validate placeholders and length → retry failures → write with source = ai</td><td>UI strings, CMS pages, series titles and synopses per language. Fixes the vendor's single-prompt truncation.</td></tr>
+          <tr><td class="k">Subtitles</td><td>Transcription exists</td><td>Segment transcript → translate per target language preserving timings → emit WebVTT → upload</td><td>Subtitle rows per episode and language. Big for a multi-language Indian audience.</td></tr>
+          <tr><td class="k">Recommendations</td><td>Series published or edited</td><td>Embed synopsis and tags → upsert pgvector → recompute similar-series cache</td><td>Similar series, semantic search, personalised Shorts ordering by recent watches</td></tr>
+        </tbody>
+      </table></div>
+      <p><strong>Provider strategy.</strong> A registry maps each graph to a LangChain chat model from admin settings. Claude Opus 5 through <code>langchain-anthropic</code> is the default for metadata, translation and moderation because of structured output quality and long context for whole-transcript work. OpenAI, Gemini and Groq stay selectable, which preserves the admin freedom the vendor offered. Embeddings use a dedicated embedding model, not the chat model.</p>
+      <p><strong>Operational shape.</strong> Graph state is checkpointed in Postgres with the LangGraph Postgres saver, so an approval can wait for days and resume. Every run is a job row visible in admin with cost, tokens and the diff it proposes. Prompt and model changes are evaluated against a small fixed set of series before rollout.</p>
+      <p>A support assistant over reports and mailbox is a plausible fifth graph, but not for the first release.</p>
+    </section>
+
+    <section id="mobile">
+      <h2>React Native or native</h2>
+      <p class="sub">The question is not whether React Native can do this. It is whether the three hard subsystems have native-backed libraries you can trust.</p>
+      <div class="compare">
+        <article class="pick">
+          <div class="eyebrow">Recommended</div>
+          <h4>React Native with Expo</h4>
+          <ul>
+            <li>One TypeScript codebase for Android and iOS; the vendor never shipped iOS.</li>
+            <li>Shares the generated API client, i18n bundle, design tokens and validation with the Next.js apps.</li>
+            <li>expo-video wraps ExoPlayer and AVPlayer: HLS, PiP, background audio, multiple preloaded player instances.</li>
+            <li>react-native-purchases (RevenueCat) handles acknowledgement, consumption and subscriptions that the Kotlin app got wrong.</li>
+            <li>react-native-google-mobile-ads supports rewarded ads with server-side verification. AppLovin MAX has an official RN SDK.</li>
+            <li>EAS Update ships JavaScript fixes without a store review. EAS Build produces both binaries from CI.</li>
+            <li>Expo Modules let you write Kotlin or Swift for any piece that needs it without leaving the RN shell.</li>
+          </ul>
+        </article>
+        <article>
+          <div class="eyebrow">When native wins</div>
+          <h4>Kotlin Compose and SwiftUI</h4>
+          <ul>
+            <li>Hard requirement for Widevine L1 and FairPlay with persistent offline licences. Possible in react-native-video, but far better supported natively.</li>
+            <li>Ad mediation waterfalls across three or more networks as a primary revenue line, where SDK maturity matters more than shared code.</li>
+            <li>An existing team of Kotlin and Swift engineers and no TypeScript bench.</li>
+            <li>Two codebases, two release trains, and no iOS until it is written.</li>
+          </ul>
+        </article>
+      </div>
+      <h3>Risks to manage in React Native, with the mitigation</h3>
+      <ul>
+        <li><strong>Memory in the vertical feed.</strong> Keep a window of three mounted players, release the rest, and preload only N+1. This is the same discipline the Kotlin app needed.</li>
+        <li><strong>Low-end Android in India.</strong> Hermes plus the New Architecture, FlashList for rails, image caching, and a performance budget measured on a 2 GB device in CI.</li>
+        <li><strong>Checkout in a WebView.</strong> Do not. Use RevenueCat for store purchases and Razorpay or Stripe native SDKs only if web checkout is ever needed in-app.</li>
+        <li><strong>Native library drift.</strong> Pin Expo SDK per release, upgrade on a schedule, and keep native customisations in Expo Modules under your own package so they survive upgrades.</li>
+      </ul>
+      <div class="callout">
+        <div class="eyebrow">Identifiers</div>
+        <p>Android application id and iOS bundle id <code>com.mobirizer.katha</code>, with <code>com.mobirizer.katha.dev</code> and <code>com.mobirizer.katha.staging</code> variants so all three install side by side. Deep link scheme <code>katha://</code> and universal links on the production domain for referrals and share.</p>
+      </div>
+    </section>
+
+    <section id="repo">
+      <h2>Monorepo and roadmap</h2>
+      <p class="sub">One repository, pnpm workspaces for the TypeScript apps, uv for the Python services.</p>
+<pre><code>katha/
+  apps/
+    web/            Next.js public site
+    admin/          Next.js admin panel
+    mobile/         Expo React Native app (com.mobirizer.katha)
+  packages/
+    api-client/     TypeScript client generated from FastAPI's OpenAPI
+    i18n/           shared message catalogue types and loaders
+    tokens/         colours, type scale, spacing shared by web and mobile
+  services/
+    api/            FastAPI, SQLAlchemy, Alembic
+    worker/         arq jobs: transcode, webhooks, push, AI graphs
+    ai/             LangGraph graphs and provider registry (imported by worker)
+  infra/
+    docker-compose  Postgres, Redis, MinIO, mailpit for local dev
+    terraform/      bucket, CDN, managed Postgres, secrets
+  ref/              the purchased SnapReels package, read-only</code></pre>
+      <p>Rough phases for one small team. Treat the durations as order-of-magnitude, not commitments. Phases 0 to 3 produce a correct, secure, shippable product. Phases 4 and 5 are what separates it from the category leaders and depend on real user data, so they start after launch.</p>
+      <div class="phases">
+        <div class="phase"><div class="when"><b>0</b>about 2 weeks</div><div><h4>Foundations</h4><ul><li>Monorepo, CI, local infra, FastAPI skeleton with auth exchange, Alembic schema, OpenAPI client generation.</li><li>Expo app shell with navigation and theme, Next.js shells with layouts.</li></ul></div></div>
+        <div class="phase"><div class="when"><b>1</b>6 to 8 weeks</div><div><h4>Feature parity</h4><ul><li>Catalogue admin, upload and transcode (or managed video), HLS player on web and mobile, home rails, series page, Shorts feed.</li><li>Ledger, unlocks, VIP, rewards, check-in, wallet with Stripe and Razorpay webhooks.</li><li>Account, My List, profile, languages and UI translation editor, CMS, contact, config endpoint with force update.</li><li>Android and iOS builds on EAS, internal testing tracks.</li></ul></div></div>
+        <div class="phase"><div class="when"><b>2</b>about 4 weeks</div><div><h4>Monetisation and growth</h4><ul><li>RevenueCat store purchases, AdMob rewarded with server verification, interstitial and banner placements.</li><li>Push notifications, referral programme, SEO structured data and hreflang, analytics events and the real dashboard.</li></ul></div></div>
+        <div class="phase"><div class="when"><b>3</b>3 to 4 weeks</div><div><h4>AI layer</h4><ul><li>Content ingestion graph with approval, chunked translation graph, subtitles, embeddings for similar series and search.</li><li>Job console in admin with cost per run.</li></ul></div></div>
+        <div class="phase"><div class="when"><b>4</b>8 to 10 weeks, after launch</div><div><h4>Retention and monetisation depth</h4><ul><li><strong>Experimentation.</strong> Feature flags and A/B assignments served from the config endpoint. First experiments: free-episode count, unlock price, paywall timing, ad-unlock ratio, first-purchase offer.</li><li><strong>Personalised feed.</strong> Ranking model over watch signals (completion, rewatch, unlock, skip) blended with embeddings. Cold start from language and region. Home rails and Shorts order become per user.</li><li><strong>Offers and pricing.</strong> Regional price tables per pack, first-purchase and timed bundles, VIP tiers, win-back offers for lapsed payers, coupon codes.</li><li><strong>Playback quality programme.</strong> Client QoE beacons (start time, rebuffer ratio, bitrate, errors) by device class and network. ABR ladders and prefetch policy tuned on that data. A start-time budget on a 2 GB Android device becomes a release gate.</li><li><strong>Growth loops.</strong> Referral tiers, share cards with episode preview, streak recovery, re-engagement push driven by unfinished series.</li><li><strong>Fraud and refunds.</strong> Velocity checks on ad unlocks and reward claims, chargeback and refund handling that reverses the ledger, device fingerprinting on money endpoints.</li></ul></div></div>
+        <div class="phase"><div class="when"><b>5</b>continuous from month 6</div><div><h4>Scale, content factory and trust</h4><ul><li><strong>Content factory.</strong> Dubbing pipeline (voice synthesis per language with QA review queue), bulk ingestion of whole series from a manifest, editor roles and review states, scheduling and drip release of episodes, licensing metadata and territory windows.</li><li><strong>Playback protection.</strong> Widevine and FairPlay through a packager when studio content or offline downloads require it. Concurrent-stream limits per account.</li><li><strong>Operational maturity.</strong> SLOs on play start and purchase completion, tracing and error budgets, load tests before launches, disaster recovery drills, a third-party security review, and store-compliance reviews for each Play and App Store policy change.</li><li><strong>Analytics at scale.</strong> Events moved from Postgres to ClickHouse or a managed warehouse, cohort and LTV dashboards, revenue reconciliation against gateway settlements.</li><li><strong>Trust and safety.</strong> Content rating and age gating, moderation queue fed by the ingestion graph and user reports, regional payment and data compliance, account recovery and takeover protection.</li><li><strong>Platforms.</strong> Web PWA with offline shell, TV apps if the catalogue justifies them, and a creator or partner portal for studios uploading their own series.</li></ul></div></div>
+      </div>
+      <div class="callout">
+        <div class="eyebrow">Shapes the schema in phase 0, even though it ships in phase 4</div>
+        <ul>
+          <li><strong>Experiment assignments.</strong> Every config response carries the user's variant map, and every ledger row, unlock and analytics event records the variant it happened under. Adding this later means re-keying history.</li>
+          <li><strong>Regional pricing.</strong> Packs have a price table keyed by currency and country from day one, not a single price.</li>
+          <li><strong>Playback events.</strong> The events table has a stable shape for QoE beacons so the phase 4 tuning has months of data waiting.</li>
+          <li><strong>Territory and windows on series.</strong> Nullable columns now, enforced later, so licensed content never needs a migration.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="decide">
+      <h2>Decisions to confirm</h2>
+      <p class="sub">Each of these has a recommended default, so work can start without waiting. Change any of them and the plan adjusts, not the architecture.</p>
+      <ol>
+        <li><strong>Identity provider.</strong> Default: keep Firebase Auth for Google, Apple and phone OTP, and exchange for Katha tokens. Alternative: own auth with an SMS provider such as MSG91, which costs a week and removes the Firebase dependency.</li>
+        <li><strong>Video hosting.</strong> Default: managed (Bunny Stream or Cloudflare Stream) for the first release, self-hosted ffmpeg worker on S3 plus CDN when volume or cost says so.</li>
+        <li><strong>Store purchases.</strong> Default: RevenueCat. Alternative: direct Google Play and App Store server APIs once store revenue justifies owning renewals.</li>
+        <li><strong>Launch markets and currencies.</strong> The name suggests India first, which puts Razorpay with UPI and INR pack pricing in phase 1 and makes low-end Android performance a release gate.</li>
+        <li><strong>Ad networks.</strong> Default: AdMob only at launch, AppLovin MAX second. Facebook Audience Network deferred because its React Native support is weak and its rewarded verification is not comparable.</li>
+        <li><strong>Reusing the purchased UI.</strong> The shadcn component styling and page compositions are fine to reuse under the CodeCanyon licence you hold. Confirm the licence tier covers charging end users, since the coin store does exactly that.</li>
+      </ol>
+    </section>
+
+    <footer>
+      Derived from a full read of the SnapReels 1.1.7 web source, Android 1.1.6 source, vendor changelog and documentation. Line-level references for every finding are in the session analysis and can be pulled into tickets on request.
+    </footer>
+  </main>
+</div>
