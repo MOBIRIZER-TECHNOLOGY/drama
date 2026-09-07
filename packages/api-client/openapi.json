@@ -1694,6 +1694,53 @@
         }
       }
     },
+    "/v1/purchases/play/redeem": {
+      "post": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Redeem Play",
+        "description": "Grant a Google Play purchase after verifying it with Google.\n\nAndroid must sell digital content through Play Billing, so this is the Android equivalent of the Stripe and\nRazorpay webhooks — and it keeps the same rule those follow: the client reports that a purchase happened,\nthe server asks the store what actually happened, and only a confirmed purchase moves coins.",
+        "operationId": "redeem_play_v1_purchases_play_redeem_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayRedeemIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PurchaseOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/purchases/checkout": {
       "post": {
         "tags": [
@@ -10281,6 +10328,29 @@
         ],
         "title": "PlayOut",
         "description": "Short-lived playback grant. The URL is CDN-signed for this user and episode."
+      },
+      "PlayRedeemIn": {
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Product Id"
+          },
+          "purchase_token": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 10,
+            "title": "Purchase Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "purchase_token"
+        ],
+        "title": "PlayRedeemIn",
+        "description": "A completed Google Play purchase, handed over for verification.\n\nOnly the token is trusted as an identifier; whether it was actually paid for, and how much, comes from\nGoogle. `product_id` selects which pack to grant and is checked against the token by the Play API."
       },
       "PresignIn": {
         "properties": {

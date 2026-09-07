@@ -10,9 +10,9 @@ from app.core.config import get_settings
 from app.core.errors import AppError, NotFound
 from app.core.ratelimit import limiter
 from app.models.wallet import Purchase
-from app.schemas.purchases import CheckoutIn, CheckoutOut, PurchaseOut, QuoteIn, QuoteOut
+from app.schemas.purchases import CheckoutIn, CheckoutOut, PlayRedeemIn, PurchaseOut, QuoteIn, QuoteOut
 from app.services import config as config_svc
-from app.services import payments
+from app.services import payments, store_billing
 
 router = APIRouter(tags=["purchases"])
 
@@ -28,6 +28,27 @@ def _out(p: Purchase) -> PurchaseOut:
         paid_at=p.paid_at,
         created_at=p.created_at,
     )
+
+
+@router.post("/purchases/play/redeem", response_model=PurchaseOut)
+@limiter.limit("20/minute")
+async def redeem_play(request: Request, body: PlayRedeemIn, ctx: CurrentUser, db: DB) -> PurchaseOut:
+    """Grant a Google Play purchase after verifying it with Google.
+
+    Android must sell digital content through Play Billing, so this is the Android equivalent of the Stripe and
+    Razorpay webhooks — and it keeps the same rule those follow: the client reports that a purchase happened,
+    the server asks the store what actually happened, and only a confirmed purchase moves coins.
+    """
+    variants = await config_svc.variant_map(db, ctx.user.id)
+    purchase = await store_billing.redeem(
+        db,
+        user=ctx.user,
+        product_id=body.product_id,
+        purchase_token=body.purchase_token,
+        variant_map=variants or None,
+    )
+    await db.commit()
+    return _out(purchase)
 
 
 @router.post("/purchases/checkout", response_model=CheckoutOut)

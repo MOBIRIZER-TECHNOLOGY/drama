@@ -35,7 +35,7 @@ DEFAULT_NAMESPACES: dict[str, dict] = {
         "rate_us_url": None,
     },
     "site": {"name": "Katha", "url": None},
-    "payments": {"stripe": True, "razorpay": True},
+    "payments": {"stripe": True, "razorpay": True, "play": True},
 }
 
 
@@ -134,14 +134,20 @@ async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: s
     site = await namespace(session, "site")
     site["captcha_site_key"] = s.turnstile_site_key
     pay = await namespace(session, "payments")
-    gateways = [
-        g
-        for g, configured in (
-            ("razorpay", bool(s.razorpay_key_id and s.razorpay_key_secret)),
-            ("stripe", bool(s.stripe_secret_key)),
-        )
-        if configured and pay.get(g, True)
-    ]
+    # Android must sell digital content through Play Billing, so on that platform Play is the only gateway the
+    # client is allowed to offer — listing card checkout beside it is what gets a build rejected.
+    play_ready = bool(s.google_play_package_name and s.google_play_service_account_file)
+    if platform == "android" and play_ready and pay.get("play", True):
+        gateways = ["play"]
+    else:
+        gateways = [
+            g
+            for g, configured in (
+                ("razorpay", bool(s.razorpay_key_id and s.razorpay_key_secret)),
+                ("stripe", bool(s.stripe_secret_key)),
+            )
+            if configured and pay.get(g, True)
+        ]
     firebase = {
         "api_key": s.firebase_web_api_key,
         "auth_domain": s.firebase_web_auth_domain,

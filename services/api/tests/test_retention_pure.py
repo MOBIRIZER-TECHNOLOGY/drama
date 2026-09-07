@@ -112,3 +112,47 @@ def test_transactional_messages_ignore_preferences():
 async def test_send_with_no_messages_does_not_call_the_network():
     result = await push.send([])
     assert (result.delivered, result.failed, result.dead_tokens) == (0, 0, [])
+
+
+# ---- Google Play verification ----
+
+
+def test_play_parses_a_completed_purchase():
+    from app.services import store_billing
+
+    p = store_billing.parse_product(
+        {
+            "orderId": "GPA.1234-5678",
+            "purchaseState": 0,
+            "acknowledgementState": 0,
+            "priceAmountMicros": "99000000",
+            "priceCurrencyCode": "INR",
+        }
+    )
+    assert p.is_purchased is True
+    assert p.acknowledged is False
+    assert p.order_id == "GPA.1234-5678"
+    # Play reports micros; the rest of the system speaks minor units, so ₹99 is 9900 paise.
+    assert p.price_minor == 9900
+    assert p.currency == "INR"
+
+
+@pytest.mark.parametrize("state", [1, 2])
+def test_play_rejects_cancelled_and_pending(state):
+    from app.services import store_billing
+
+    assert store_billing.parse_product({"purchaseState": state}).is_purchased is False
+
+
+def test_play_defaults_to_not_purchased_when_state_is_missing():
+    """A malformed or empty response must never read as a completed purchase."""
+    from app.services import store_billing
+
+    assert store_billing.parse_product({}).is_purchased is False
+
+
+def test_play_handles_a_response_with_no_price():
+    from app.services import store_billing
+
+    p = store_billing.parse_product({"purchaseState": 0, "orderId": "x"})
+    assert p.price_minor is None and p.currency is None

@@ -58,3 +58,14 @@ class QuoteOut(BaseModel):
     offer_id: uuid.UUID | None = None
     offer_title: str | None = None
     coupon_code: str | None = None
+
+
+class PlayRedeemIn(BaseModel):
+    """A completed Google Play purchase, handed over for verification.
+
+    Only the token is trusted as an identifier; whether it was actually paid for, and how much, comes from
+    Google. `product_id` selects which pack to grant and is checked against the token by the Play API.
+    """
+
+    product_id: str = Field(min_length=1, max_length=120)
+    purchase_token: str = Field(min_length=10, max_length=1024)

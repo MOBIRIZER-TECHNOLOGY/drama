@@ -618,6 +618,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/purchases/play/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem Play
+         * @description Grant a Google Play purchase after verifying it with Google.
+         *
+         *     Android must sell digital content through Play Billing, so this is the Android equivalent of the Stripe and
+         *     Razorpay webhooks — and it keeps the same rule those follow: the client reports that a purchase happened,
+         *     the server asks the store what actually happened, and only a confirmed purchase moves coins.
+         */
+        post: operations["redeem_play_v1_purchases_play_redeem_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/purchases/checkout": {
         parameters: {
             query?: never;
@@ -3318,6 +3342,19 @@ export interface components {
              */
             subtitles: components["schemas"]["SubtitleTrack"][];
         };
+        /**
+         * PlayRedeemIn
+         * @description A completed Google Play purchase, handed over for verification.
+         *
+         *     Only the token is trusted as an identifier; whether it was actually paid for, and how much, comes from
+         *     Google. `product_id` selects which pack to grant and is checked against the token by the Play API.
+         */
+        PlayRedeemIn: {
+            /** Product Id */
+            product_id: string;
+            /** Purchase Token */
+            purchase_token: string;
+        };
         /** PresignIn */
         PresignIn: {
             /** Kind */
@@ -5285,6 +5322,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ClaimOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    redeem_play_v1_purchases_play_redeem_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlayRedeemIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PurchaseOut"];
                 };
             };
             /** @description Validation Error */
