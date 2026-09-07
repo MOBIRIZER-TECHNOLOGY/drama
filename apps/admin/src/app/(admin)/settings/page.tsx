@@ -2,11 +2,25 @@
 
 import { useId, useState } from "react";
 import { useFieldErrors } from "@/lib/forms";
+import { coerce, specFor, validate } from "@/lib/settings-schema";
 import { api, call } from "@/lib/api";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
-import { Button, Card, EmptyState, ErrorState, Input, LoadingState, PageHeader, Select, TabPanel, Tabs } from "@/components/ui";
+import { JsonEditor } from "@/components/json-editor";
+import {
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  Input,
+  LoadingState,
+  PageHeader,
+  Select,
+  TabPanel,
+  Tabs,
+} from "@/components/ui";
 
 const NAMESPACES = ["auth", "economy", "rewards", "mobile", "site", "seo", "ads"] as const;
 type Namespace = (typeof NAMESPACES)[number];
@@ -22,6 +36,9 @@ const DESCRIPTIONS: Record<Namespace, string> = {
 };
 
 type Kind = "text" | "json";
+
+/** One value about to change, shown in the save confirmation. */
+type Change = { key: string; before: unknown; after: unknown; removed: boolean; sensitive: boolean };
 type Row = { id: number; key: string; value: string; kind: Kind };
 
 function looksSecret(key: string): boolean {
@@ -101,6 +118,8 @@ function RowsEditor({
   const [seq, setSeq] = useState(1000);
   const [saving, setSaving] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
+  /** Pending save, held until the operator has seen what is about to change. */
+  const [pending, setPending] = useState<{ data: Record<string, unknown>; changes: Change[] } | null>(null);
   const { errors, setErrors, clearError, formRef } = useFieldErrors<string>();
 
   const update = (id: number, p: Partial<Row>) => {
@@ -117,30 +136,57 @@ function RowsEditor({
   const flat = (rs: Row[]) => JSON.stringify(rs.map(({ key, value, kind }) => [key, value, kind]));
   const dirty = flat(rows) !== flat(toRows(initial));
 
-  async function save() {
+  /** Validate, coerce to the declared type, and work out what is actually changing. */
+  function review() {
     setApiError(null);
     const out: Record<string, unknown> = {};
     const next: Record<string, string> = {};
     for (const r of rows) {
       const key = r.key.trim();
+      const spec = specFor(ns, key);
       if (!key) next[`k${r.id}`] = "Key is required.";
       else if (key in out) next[`k${r.id}`] = `Duplicate key “${key}”.`;
-      if (r.kind === "json") {
-        try {
-          out[key] = JSON.parse(r.value);
-        } catch {
-          next[`v${r.id}`] = "Not valid JSON.";
-        }
-      } else {
-        out[key] = r.value;
+
+      const schemaError = validate(spec, r.value);
+      if (schemaError) {
+        next[`v${r.id}`] = schemaError;
+        continue;
+      }
+      try {
+        // A known key is written as its declared type. Saving the string "50" where the economy expects the
+        // number 50 silently changes the type of a live setting.
+        out[key] = spec ? coerce(spec, r.value) : r.kind === "json" ? JSON.parse(r.value) : r.value;
+      } catch {
+        next[`v${r.id}`] = "Not valid JSON.";
       }
     }
     setErrors(next);
     if (Object.keys(next).length) return;
+
+    const changes: Change[] = [];
+    for (const key of new Set([...Object.keys(initial), ...Object.keys(out)])) {
+      const before = initial[key];
+      const after = out[key];
+      const removed = !(key in out);
+      if (!removed && JSON.stringify(before) === JSON.stringify(after)) continue;
+      changes.push({ key, before, after, removed, sensitive: Boolean(specFor(ns, key)?.sensitive) });
+    }
+    if (changes.length === 0) {
+      toast.success("Nothing to save");
+      return;
+    }
+    setPending({ data: out, changes });
+  }
+
+  async function commit() {
+    if (!pending) return;
     setSaving(true);
     try {
-      const saved = await call(api.PUT("/v1/admin/settings/{namespace}", { params: { path: { namespace: ns } }, body: { data: out } }));
+      const saved = await call(
+        api.PUT("/v1/admin/settings/{namespace}", { params: { path: { namespace: ns } }, body: { data: pending.data } }),
+      );
       toast.success(`Saved ${ns} settings`);
+      setPending(null);
       onSaved(saved as Record<string, unknown>);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Save failed";
@@ -159,8 +205,8 @@ function RowsEditor({
           <Button size="sm" onClick={add}>
             <Icon name="plus" size={13} /> Add key
           </Button>
-          <Button size="sm" variant="primary" onClick={save} loading={saving} disabled={!dirty}>
-            Save
+          <Button size="sm" variant="primary" onClick={review} loading={saving} disabled={!dirty}>
+            Review and save
           </Button>
         </div>
       }
@@ -186,6 +232,7 @@ function RowsEditor({
             <tbody>
               {rows.map((r) => {
                 const secret = looksSecret(r.key);
+                const spec = specFor(ns, r.key.trim());
                 const keyError = errors[`k${r.id}`];
                 const valueError = errors[`v${r.id}`];
                 return (
@@ -204,7 +251,13 @@ function RowsEditor({
                         </p>
                       ) : secret ? (
                         <p className="mt-1 text-[11px] text-danger">Looks like a secret; the API will reject it.</p>
-                      ) : null}
+                      ) : spec ? (
+                        <p className="mt-1 text-[11px] text-muted">
+                          <span className="font-medium text-ink-2">{spec.label}.</span> {spec.description}
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-muted">Custom key — no schema, so no validation.</p>
+                      )}
                     </td>
                     <td className="w-28 px-2 py-2">
                       <Select aria-label="Value type" value={r.kind} onChange={(e) => update(r.id, { kind: e.target.value as Kind })} className="h-9 text-xs">
@@ -213,14 +266,32 @@ function RowsEditor({
                       </Select>
                     </td>
                     <td className="px-2 py-2">
-                      <Input
-                        aria-label="Value"
-                        value={r.value}
-                        onChange={(e) => update(r.id, { value: e.target.value })}
-                        className={`h-9 ${r.kind === "json" ? "font-mono text-xs" : ""}`}
-                        placeholder={r.kind === "json" ? 'e.g. 12, true, ["a","b"]' : ""}
-                        aria-invalid={Boolean(valueError) || undefined}
-                      />
+                      {spec?.kind === "boolean" ? (
+                        <Select
+                          aria-label="Value"
+                          value={r.value.trim() === "true" ? "true" : "false"}
+                          onChange={(e) => update(r.id, { value: e.target.value })}
+                          className="h-9 w-28 text-xs"
+                        >
+                          <option value="true">true</option>
+                          <option value="false">false</option>
+                        </Select>
+                      ) : spec?.kind === "json" || (!spec && r.kind === "json") ? (
+                        // The project has a JSON editor; a nested object in an h-9 input cannot be read or edited.
+                        <JsonEditor value={r.value} onChange={(v) => update(r.id, { value: v })} rows={4} />
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Input
+                            aria-label="Value"
+                            inputMode={spec?.kind === "number" ? "decimal" : undefined}
+                            value={r.value}
+                            onChange={(e) => update(r.id, { value: e.target.value })}
+                            className="h-9"
+                            aria-invalid={Boolean(valueError) || undefined}
+                          />
+                          {spec?.unit && <span className="shrink-0 text-xs text-muted">{spec.unit}</span>}
+                        </div>
+                      )}
                       {valueError && (
                         <p role="alert" className="mt-1 text-[11px] text-danger">
                           {valueError}
@@ -239,6 +310,42 @@ function RowsEditor({
           </table>
         </form>
       )}
+
+      <ConfirmDialog
+        open={pending != null}
+        title={`Save ${ns} settings`}
+        confirmLabel="Save changes"
+        loading={saving}
+        onCancel={() => setPending(null)}
+        onConfirm={() => void commit()}
+        message={
+          pending ? (
+            <div className="flex flex-col gap-3">
+              <p className="text-sm text-ink-2">
+                {pending.changes.length} value{pending.changes.length === 1 ? "" : "s"} will change. This is live
+                configuration and takes effect immediately.
+              </p>
+              <ul className="flex flex-col gap-2 text-sm">
+                {pending.changes.map((c) => (
+                  <li key={c.key} className="rounded-lg border border-line px-3 py-2">
+                    <p className="font-mono text-xs text-ink">
+                      {c.key}
+                      {c.sensitive && <span className="ml-2 rounded bg-danger/10 px-1.5 py-0.5 text-[10px] font-semibold text-danger">SENSITIVE</span>}
+                    </p>
+                    <p className="mt-1 break-all text-xs text-muted">
+                      <span className="line-through">{JSON.stringify(c.before) ?? "unset"}</span>
+                      {" → "}
+                      <span className="font-medium text-ink">{c.removed ? "removed" : JSON.stringify(c.after)}</span>
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            ""
+          )
+        }
+      />
     </Card>
   );
 }

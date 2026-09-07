@@ -367,6 +367,10 @@ class AdminAccountOut(ORMModel):
 class DashboardOut(BaseModel):
     range_days: int
     revenue: dict[str, float]  # by currency
+    # The same figures for the preceding window of equal length. Without a comparison a revenue number is
+    # decoration: an operator cannot tell whether today is good or bad, which is the whole point of the screen.
+    previous: "DashboardPrevious | None" = None
+    generated_at: datetime
     purchases_paid: int
     paying_users: int
     new_users: int
@@ -380,3 +384,15 @@ class DashboardOut(BaseModel):
     coins_granted: int
     daily: list[dict]
     top_series: list[dict]
+
+
+class DashboardPrevious(BaseModel):
+    """Totals for the window immediately before this one, for period-over-period deltas."""
+
+    revenue: dict[str, float]
+    purchases_paid: int
+    paying_users: int
+    new_users: int
+    active_users: int
+    unlocks: int
+    coins_spent: int

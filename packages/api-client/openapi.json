@@ -8754,6 +8754,21 @@
             "type": "object",
             "title": "Revenue"
           },
+          "previous": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardPrevious"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
           "purchases_paid": {
             "type": "integer",
             "title": "Purchases Paid"
@@ -8822,6 +8837,7 @@
         "required": [
           "range_days",
           "revenue",
+          "generated_at",
           "purchases_paid",
           "paying_users",
           "new_users",
@@ -8837,6 +8853,53 @@
           "top_series"
         ],
         "title": "DashboardOut"
+      },
+      "DashboardPrevious": {
+        "properties": {
+          "revenue": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Revenue"
+          },
+          "purchases_paid": {
+            "type": "integer",
+            "title": "Purchases Paid"
+          },
+          "paying_users": {
+            "type": "integer",
+            "title": "Paying Users"
+          },
+          "new_users": {
+            "type": "integer",
+            "title": "New Users"
+          },
+          "active_users": {
+            "type": "integer",
+            "title": "Active Users"
+          },
+          "unlocks": {
+            "type": "integer",
+            "title": "Unlocks"
+          },
+          "coins_spent": {
+            "type": "integer",
+            "title": "Coins Spent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revenue",
+          "purchases_paid",
+          "paying_users",
+          "new_users",
+          "active_users",
+          "unlocks",
+          "coins_spent"
+        ],
+        "title": "DashboardPrevious",
+        "description": "Totals for the window immediately before this one, for period-over-period deltas."
       },
       "EconomyConfig": {
         "properties": {

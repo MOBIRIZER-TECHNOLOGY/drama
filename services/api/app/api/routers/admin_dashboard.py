@@ -8,7 +8,7 @@ from app.api.deps import DB, AdminRole, require_role
 from app.models.catalog import Episode, PublishStatus, Series, SeriesTranslation
 from app.models.identity import User
 from app.models.wallet import CoinLedger, EpisodeUnlock, Purchase, PurchaseStatus
-from app.schemas.admin import DashboardOut
+from app.schemas.admin import DashboardOut, DashboardPrevious
 
 router = APIRouter(
     prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.editor, AdminRole.support, AdminRole.finance)]
@@ -19,6 +19,8 @@ router = APIRouter(
 async def dashboard(db: DB, days: int = Query(30, ge=1, le=365)) -> DashboardOut:
     now = datetime.now(UTC)
     since = now - timedelta(days=days)
+    # The window immediately before this one, of equal length, so deltas compare like with like.
+    prev_since = since - timedelta(days=days)
 
     paid = select(Purchase).where(Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= since).subquery()
     revenue_rows = await db.execute(select(paid.c.currency, func.sum(paid.c.amount)).group_by(paid.c.currency))
@@ -92,6 +94,8 @@ async def dashboard(db: DB, days: int = Query(30, ge=1, le=365)) -> DashboardOut
         for sid, title, views, unlocks in top_rows.all()
     ]
 
+    previous = await _previous_window(db, prev_since, since)
+
     return DashboardOut(
         range_days=days,
         revenue=revenue,
@@ -108,7 +112,46 @@ async def dashboard(db: DB, days: int = Query(30, ge=1, le=365)) -> DashboardOut
         coins_granted=int(coins_granted),
         daily=sorted(daily.values(), key=lambda r: r["date"]),
         top_series=top_series,
+        previous=previous,
+        generated_at=now,
     )
 
 
 _ = case  # keep import for future breakdowns
+
+
+async def _previous_window(db, start: datetime, end: datetime) -> DashboardPrevious:
+    """Totals for [start, end), the window immediately before the one on screen.
+
+    Counted the same way as the current window so the two are comparable; `total_users` and the published
+    catalogue counts are deliberately absent, because they are running totals rather than period figures and a
+    delta on them would be meaningless.
+    """
+    paid = (
+        select(Purchase)
+        .where(Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= start, Purchase.paid_at < end)
+        .subquery()
+    )
+    revenue_rows = await db.execute(select(paid.c.currency, func.sum(paid.c.amount)).group_by(paid.c.currency))
+    return DashboardPrevious(
+        revenue={cur: float(total or 0) for cur, total in revenue_rows.all()},
+        purchases_paid=await db.scalar(select(func.count()).select_from(paid)) or 0,
+        paying_users=await db.scalar(select(func.count(func.distinct(paid.c.user_id)))) or 0,
+        new_users=await db.scalar(select(func.count()).where(User.created_at >= start, User.created_at < end)) or 0,
+        active_users=await db.scalar(
+            select(func.count()).where(User.last_seen_at >= start, User.last_seen_at < end)
+        )
+        or 0,
+        unlocks=await db.scalar(
+            select(func.count()).where(EpisodeUnlock.created_at >= start, EpisodeUnlock.created_at < end)
+        )
+        or 0,
+        coins_spent=int(
+            await db.scalar(
+                select(func.coalesce(func.sum(-CoinLedger.delta), 0)).where(
+                    CoinLedger.created_at >= start, CoinLedger.created_at < end, CoinLedger.delta < 0
+                )
+            )
+            or 0
+        ),
+    )

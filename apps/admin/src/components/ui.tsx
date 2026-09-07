@@ -884,14 +884,49 @@ export function SearchInput({
   );
 }
 
-export function StatTile({ label, value, sub }: { label: string; value: ReactNode; sub?: ReactNode }) {
+export function StatTile({
+  label,
+  value,
+  sub,
+  delta,
+  deltaLabel,
+  higherIsBetter = true,
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: ReactNode;
+  /** Change against the previous period, as a fraction: 0.12 renders "+12%". */
+  delta?: number | null;
+  /** What the comparison is against, e.g. "vs previous 30 days". */
+  deltaLabel?: string;
+  /** Refunds and errors are better going down; the colour follows the direction that is actually good. */
+  higherIsBetter?: boolean;
+}) {
+  const good = delta == null || delta === 0 ? null : delta > 0 === higherIsBetter;
   return (
     <div className="rounded-card border border-line bg-surface px-4 py-3">
       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">{label}</p>
       <p className="mt-1 font-display text-2xl font-semibold text-ink">{value}</p>
-      {sub && <p className="mt-0.5 text-xs text-muted">{sub}</p>}
+      <div className="mt-0.5 flex flex-wrap items-baseline gap-x-2 text-xs text-muted">
+        {delta != null && (
+          <span
+            className={`font-medium tabular-nums ${good === null ? "text-muted" : good ? "text-success" : "text-danger"}`}
+            title={deltaLabel}
+          >
+            {delta > 0 ? "+" : ""}
+            {Math.abs(delta) >= 10 ? ">999" : `${Math.round(delta * 100)}%`}
+          </span>
+        )}
+        {sub && <span>{sub}</span>}
+      </div>
     </div>
   );
+}
+
+/** Fractional change from `before` to `after`. Null when there is no baseline to compare against. */
+export function periodDelta(after: number, before: number | undefined): number | null {
+  if (before == null || before === 0) return null;
+  return (after - before) / before;
 }
 
 export function ChipInput({

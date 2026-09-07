@@ -2744,6 +2744,12 @@ export interface components {
             revenue: {
                 [key: string]: number;
             };
+            previous?: components["schemas"]["DashboardPrevious"] | null;
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
             /** Purchases Paid */
             purchases_paid: number;
             /** Paying Users */
@@ -2776,6 +2782,28 @@ export interface components {
             top_series: {
                 [key: string]: unknown;
             }[];
+        };
+        /**
+         * DashboardPrevious
+         * @description Totals for the window immediately before this one, for period-over-period deltas.
+         */
+        DashboardPrevious: {
+            /** Revenue */
+            revenue: {
+                [key: string]: number;
+            };
+            /** Purchases Paid */
+            purchases_paid: number;
+            /** Paying Users */
+            paying_users: number;
+            /** New Users */
+            new_users: number;
+            /** Active Users */
+            active_users: number;
+            /** Unlocks */
+            unlocks: number;
+            /** Coins Spent */
+            coins_spent: number;
         };
         /** EconomyConfig */
         EconomyConfig: {

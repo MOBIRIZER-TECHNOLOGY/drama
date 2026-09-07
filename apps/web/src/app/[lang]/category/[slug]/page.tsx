@@ -22,8 +22,12 @@ async function findCategory(slug: string) {
   return (await fetchCategories()).find((c) => c.slug === slug) ?? null;
 }
 
-export async function generateMetadata({ params }: PageProps<"/[lang]/category/[slug]">): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+  searchParams,
+}: PageProps<"/[lang]/category/[slug]">): Promise<Metadata> {
   const { lang, slug } = await params;
+  const offset = pageOffset((await searchParams).offset);
   const [category, messages, languages] = await Promise.all([findCategory(slug), fetchTranslations(lang), fetchLanguages()]);
   if (!category) notFound();
   const t = (key: string, fallback: string, vars?: Record<string, string>) => {
@@ -31,15 +35,23 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/category/[
     if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, v);
     return s;
   };
-  const title = t("category.title", "{name} dramas", { name: category.name });
+  const page = Math.floor(offset / PAGE_SIZE) + 1;
+  const base = t("category.title", "{name} dramas", { name: category.name });
+  // Page 2 and beyond need their own title as well as their own canonical, or search results show several
+  // identical entries for the same category.
+  const title = page > 1 ? t("category.title_page", "{name} dramas — page {page}", { name: category.name, page: String(page) }) : base;
   const description = t("category.description", "Watch {name} short dramas on Katha.", { name: category.name });
   const path = `/category/${category.slug}`;
+  // The canonical must carry the offset. Without it every deep page declared itself a duplicate of page 1, so
+  // Google dropped them from the index and nothing past the first 40 titles could rank.
+  const suffix = offset > 0 ? `?offset=${offset}` : "";
+  const canonical = `${localeHref(lang, path)}${suffix}`;
   return {
     title,
     description,
     alternates: {
-      canonical: localeHref(lang, path),
-      languages: Object.fromEntries(languages.map((l) => [l.code, localeHref(l.code, path)])),
+      canonical,
+      languages: Object.fromEntries(languages.map((l) => [l.code, `${localeHref(l.code, path)}${suffix}`])),
     },
     openGraph: { title, description, type: "website", locale: lang },
   };
