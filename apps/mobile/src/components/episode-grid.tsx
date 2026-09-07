@@ -1,5 +1,5 @@
 import { colors, radii, spacing } from "@katha/tokens";
-import { memo } from "react";
+import { memo, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { Text } from "@/components/ui";
@@ -15,6 +15,9 @@ export function lockState(ep: Episode, episodes: Episode[]): EpisodeLockState {
   return ep.number === highestAccessible + 1 ? "unlockable" : "locked_sequential";
 }
 
+/** Episodes per range chip. A 120-episode series was 120 mounted Pressables and one undifferentiated wall. */
+const RANGE_SIZE = 50;
+
 export const EpisodeGrid = memo(function EpisodeGrid({
   episodes,
   currentNumber,
@@ -24,9 +27,45 @@ export const EpisodeGrid = memo(function EpisodeGrid({
   currentNumber?: number | null;
   onPress: (ep: Episode, state: EpisodeLockState) => void;
 }) {
+  const ranges = useMemo(() => {
+    if (episodes.length <= RANGE_SIZE) return [];
+    const out: { from: number; to: number }[] = [];
+    for (let i = 0; i < episodes.length; i += RANGE_SIZE) {
+      out.push({ from: episodes[i].number, to: episodes[Math.min(i + RANGE_SIZE, episodes.length) - 1].number });
+    }
+    return out;
+  }, [episodes]);
+
+  // Open on the range holding the current episode, so a viewer deep in a series does not land on episode 1.
+  const [range, setRange] = useState(() => {
+    if (episodes.length <= RANGE_SIZE || !currentNumber) return 0;
+    const index = episodes.findIndex((e) => e.number === currentNumber);
+    return index >= 0 ? Math.floor(index / RANGE_SIZE) : 0;
+  });
+
+  const visible = ranges.length === 0 ? episodes : episodes.slice(range * RANGE_SIZE, (range + 1) * RANGE_SIZE);
+
   return (
+    <>
+    {ranges.length > 1 ? (
+      <View style={styles.ranges}>
+        {ranges.map((r, i) => (
+          <Pressable
+            key={r.from}
+            onPress={() => setRange(i)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: i === range }}
+            style={[styles.rangeChip, i === range && styles.rangeChipActive]}
+          >
+            <Text variant="caption" color={i === range ? colors.accentInk : colors.ink2}>
+              {r.from}–{r.to}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    ) : null}
     <View style={styles.grid}>
-      {episodes.map((ep) => {
+      {visible.map((ep) => {
         const state = lockState(ep, episodes);
         const isCurrent = ep.number === currentNumber;
         const locked = state === "unlockable" || state === "locked_sequential";
@@ -59,11 +98,28 @@ export const EpisodeGrid = memo(function EpisodeGrid({
         );
       })}
     </View>
+    </>
   );
 });
 
 const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingHorizontal: spacing.lg },
+  ranges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  rangeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  rangeChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   cell: {
     width: 56,
     height: 56,

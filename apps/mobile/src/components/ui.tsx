@@ -15,6 +15,14 @@ import {
   type ViewProps,
   type ViewStyle,
 } from "react-native";
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from "react-native-reanimated";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { fontsFor, leadingFor, scriptFor, trackingFor } from "../lib/typography";
 import { useConfig } from "../providers/config";
@@ -233,8 +241,42 @@ export function ErrorState({ message, onRetry, retryLabel = "Retry" }: { message
   );
 }
 
-export function Skeleton({ width, height, radius = radii.md, style }: { width?: number | `${number}%`; height: number; radius?: number; style?: StyleProp<ViewStyle> }) {
-  return <View style={[{ width: width ?? "100%", height, borderRadius: radius, backgroundColor: colors.surface2 }, style]} />;
+/**
+ * Loading placeholder.
+ *
+ * It was a flat grey rectangle, which on the slow connections this product targets is indistinguishable from an
+ * image that failed to load — it reads as broken rather than as loading. A gentle pulse says "working".
+ *
+ * Reanimated is already a dependency and drives this on the UI thread, so a busy JS thread during a cold start
+ * (which is exactly when skeletons are on screen) does not freeze the animation. Honours the OS reduce-motion
+ * setting by holding still.
+ */
+export function Skeleton({
+  width,
+  height,
+  radius = radii.md,
+  style,
+}: {
+  width?: number | `${number}%`;
+  height: number;
+  radius?: number;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const progress = useSharedValue(0.55);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    progress.value = withRepeat(withTiming(1, { duration: 850, easing: Easing.inOut(Easing.quad) }), -1, true);
+  }, [progress, reduceMotion]);
+
+  const animated = useAnimatedStyle(() => ({ opacity: reduceMotion ? 1 : progress.value }));
+
+  return (
+    <Animated.View
+      style={[{ width: width ?? "100%", height, borderRadius: radius, backgroundColor: colors.surface2 }, animated, style]}
+    />
+  );
 }
 
 export function Pill({ label, tone = "muted", style }: { label: string; tone?: "muted" | "accent" | "gold" | "success"; style?: StyleProp<ViewStyle> }) {

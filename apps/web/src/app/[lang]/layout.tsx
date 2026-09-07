@@ -8,7 +8,7 @@ import { Header } from "@/components/Header";
 import { Providers } from "@/components/Providers";
 import { SITE_URL } from "@/lib/api";
 import { isSupportedLang, localeHref } from "@/lib/languages";
-import { fetchConfig, fetchFooterPages, fetchLanguages, fetchTranslations } from "@/lib/server-data";
+import { fetchCategories, fetchConfig, fetchFooterPages, fetchLanguages, fetchTranslations } from "@/lib/server-data";
 import { colors } from "@/lib/tokens";
 import "@katha/tokens/tokens.css";
 import "../globals.css";
@@ -58,11 +58,12 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
   const { lang } = await params;
   if (!isSupportedLang(lang)) notFound();
 
-  const [languages, messages, pages, config] = await Promise.all([
+  const [languages, messages, pages, config, categories] = await Promise.all([
     fetchLanguages(),
     fetchTranslations(lang),
     fetchFooterPages(lang),
     fetchConfig(),
+    fetchCategories(),
   ]);
   const dir: "ltr" | "rtl" = languages.find((l) => l.code === lang)?.rtl ? "rtl" : "ltr";
   const t = (key: string, fallback: string) => messages[key] || fallback;
@@ -78,8 +79,18 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
           <Footer
             lang={lang}
             pages={pages}
+            categories={categories}
+            languages={languages}
             contactLabel={t("nav.contact", "Contact")}
             tagline={t("footer.tagline", "Bite-sized dramas, made for your phone.")}
+            labels={{
+              browse: t("nav.browse", "Browse"),
+              watch: t("footer.watch", "Watch"),
+              company: t("footer.company", "Company"),
+              languages: t("footer.languages", "Languages"),
+              shorts: t("nav.shorts", "Shorts"),
+              rewards: t("nav.rewards", "Rewards"),
+            }}
           />
           <BottomNav />
         </Providers>
