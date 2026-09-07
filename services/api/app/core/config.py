@@ -106,6 +106,25 @@ class Settings(BaseSettings):
     google_play_service_account_file: str | None = None
 
     @model_validator(mode="after")
+    def _timezone_is_resolvable(self) -> "Settings":
+        """Fail at boot rather than mid-request if the reward timezone cannot be resolved.
+
+        `zoneinfo` reads the IANA database from the OS, and Windows and slim/distroless containers do not ship
+        one — `tzdata` is a dependency for exactly that reason. Falling back to UTC would be worse than
+        crashing: it silently shifts every check-in day by five and a half hours for the whole audience.
+        """
+        from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+        try:
+            ZoneInfo(self.reward_timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError(
+                f"KATHA_REWARD_TIMEZONE={self.reward_timezone!r} could not be resolved. "
+                "Install the `tzdata` package or set a timezone the host provides."
+            ) from exc
+        return self
+
+    @model_validator(mode="after")
     def _production_guard(self) -> "Settings":
         if self.env in ("staging", "production"):
             problems = []

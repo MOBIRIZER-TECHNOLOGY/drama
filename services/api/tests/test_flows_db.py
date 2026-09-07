@@ -8,7 +8,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.core.errors import Conflict
+from app.core.errors import AgeGateRequired, Conflict
 from app.models.catalog import PublishStatus, Series, SeriesTranslation
 from app.models.identity import Platform, User
 from app.models.wallet import (
@@ -141,23 +141,42 @@ async def test_ad_unlock_rejected_without_verified_event(session):
     from app.models.wallet import AdEvent, UnlockMethod
 
     u = await _user(session)
-    s = Series(slug=f"s-{uuid.uuid4().hex[:8]}", free_episodes=1, episode_price=10, status=PublishStatus.published)
+    # Rated explicitly: an unrated series counts as adult, which would trip the age gate before the ad check.
+    s = Series(
+        slug=f"s-{uuid.uuid4().hex[:8]}",
+        free_episodes=1,
+        episode_price=10,
+        status=PublishStatus.published,
+        content_rating="U",
+    )
     session.add(s)
     await session.flush()
     session.add(SeriesTranslation(series_id=s.id, lang="en", title="T"))
-    eps = [Ep(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC)) for n in (1, 2)]
+    # Three episodes: 1 is free, 2 and 3 are locked, so a reused ad event has a legitimate next target to try.
+    eps = [
+        Ep(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC)) for n in (1, 2, 3)
+    ]
     session.add_all(eps)
     await session.flush()
+
+    # A client-invented transaction id unlocks nothing: only a network-verified AdEvent counts.
     with pytest.raises(Conflict):
         await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="forged")
+
     session.add(
         AdEvent(user_id=u.id, network="admob", ssv_transaction_id="tx1", purpose="unlock", created_at=datetime.now(UTC))
     )
     await session.flush()
     row = await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="tx1")
     assert row.method == UnlockMethod.ad
-    with pytest.raises(Conflict):  # consumed
-        await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="tx1")
+
+    # Replaying the same request is idempotent: the same unlock comes back and nothing further is consumed.
+    again = await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="tx1")
+    assert again.id == row.id
+
+    # The fraud case: one verified ad completion must not unlock a second episode.
+    with pytest.raises(Conflict):
+        await access.unlock_episode(session, user=u, episode_id=eps[2].id, method=UnlockMethod.ad, ad_event_id="tx1")
 
 
 async def test_paid_then_refund_is_terminal(session):
@@ -248,7 +267,7 @@ async def test_age_gate_blocks_unlock(session):
     eps = [Ep(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC)) for n in (1, 2)]
     session.add_all(eps)
     await session.flush()
-    with pytest.raises(Conflict):
+    with pytest.raises(AgeGateRequired):
         await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.coins)
     u.age_confirmed_at = datetime.now(UTC)
     row = await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.coins)

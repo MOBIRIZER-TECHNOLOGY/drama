@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Katha background jobs: transcoding, webhooks fan-out, push, AI graphs"
 requires-python = ">=3.12"
 dependencies = [
+  # zoneinfo reads the IANA database from the OS; Windows and slim containers do not ship it.
+  "tzdata>=2024.1",
   "arq>=0.26",
   "redis>=5.0",
   "httpx>=0.27",

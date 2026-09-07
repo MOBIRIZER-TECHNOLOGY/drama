@@ -34,6 +34,18 @@ pnpm --filter admin dev                         # http://localhost:3001
 pnpm --filter mobile start                      # Expo dev server
 ```
 
+## Running the database-backed tests
+
+```bash
+pnpm db:bootstrap      # Docker: migrations + seed + the full suite. The real path.
+pnpm db:native         # No Docker: downloads PostgreSQL binaries, builds the schema from the models, runs pytest.
+pnpm db:native:stop
+```
+
+`db:native` exists because Docker Desktop on Windows needs WSL2, which needs a reboot to enable. It skips the
+`embeddings` table (pgvector is not in a stock PostgreSQL build) and does not exercise the migration chain, so
+`pnpm db:bootstrap` remains what CI and a release check run.
+
 ## Rules that keep the product safe
 
 - Coins move only through `services/api/app/services/ledger.py`. Never update `users.coin_balance` directly.

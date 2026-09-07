@@ -42,17 +42,32 @@ async def _user(session, coins=0) -> User:
     return u
 
 
-async def _series(session, free=1, price=20, episodes=3) -> Series:
+async def _series(session, free=1, price=20, episodes=3, rating="U") -> tuple[Series, dict[int, Episode]]:
+    """A published series and its episodes by number.
+
+    The rating is set explicitly because an unrated series counts as adult, so leaving it off would put every
+    test behind the age gate rather than exercising what it is named for.
+
+    Episodes are returned rather than reached through `series.episodes`: that relationship is lazy, and touching
+    it outside a greenlet context raises MissingGreenlet under the async driver.
+    """
     s = Series(
-        slug=f"s-{uuid.uuid4().hex[:8]}", free_episodes=free, episode_price=price, status=PublishStatus.published
+        slug=f"s-{uuid.uuid4().hex[:8]}",
+        free_episodes=free,
+        episode_price=price,
+        status=PublishStatus.published,
+        content_rating=rating,
     )
     session.add(s)
     await session.flush()
     session.add(SeriesTranslation(series_id=s.id, lang="en", title="Test"))
-    for n in range(1, episodes + 1):
-        session.add(Episode(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC)))
+    eps = {
+        n: Episode(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC))
+        for n in range(1, episodes + 1)
+    }
+    session.add_all(list(eps.values()))
     await session.flush()
-    return s
+    return s, eps
 
 
 async def test_ledger_is_idempotent_and_blocks_overdraft(session):
@@ -67,8 +82,7 @@ async def test_ledger_is_idempotent_and_blocks_overdraft(session):
 
 async def test_unlock_is_sequential_and_charges_once(session):
     u = await _user(session, coins=100)
-    s = await _series(session, free=1, price=20)
-    eps = {e.number: e for e in s.episodes}
+    _, eps = await _series(session, free=1, price=20)
     with pytest.raises(Conflict):
         await access.unlock_episode(session, user=u, episode_id=eps[3].id, method=UnlockMethod.coins)
     first = await access.unlock_episode(session, user=u, episode_id=eps[2].id, method=UnlockMethod.coins)

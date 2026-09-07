@@ -7,7 +7,7 @@ from langchain_core.embeddings import Embeddings
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DIMENSIONS = 1024
-EmbeddingProvider = Literal["openai", "voyage", "google"]
+EmbeddingProvider = Literal["openai", "voyage", "google", "ollama"]
 
 
 class EmbeddingSettings(BaseSettings):
@@ -17,6 +17,9 @@ class EmbeddingSettings(BaseSettings):
     openai_model: str = "text-embedding-3-small"  # supports the `dimensions` parameter
     voyage_model: str = "voyage-3"  # natively 1024-d
     google_model: str = "text-embedding-004"  # 768-d, padded (see embed())
+    # Self-hosted. mxbai-embed-large is natively 1024-d, so it needs no padding or truncation.
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = "mxbai-embed-large"
 
 
 @lru_cache
@@ -39,12 +42,21 @@ def embedder() -> Embeddings:
         from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
         return GoogleGenerativeAIEmbeddings(model=f"models/{s.google_model}")
+    if s.provider == "ollama":
+        from langchain_ollama import OllamaEmbeddings
+
+        return OllamaEmbeddings(model=s.ollama_model, base_url=s.ollama_base_url)
     raise ValueError(f"unknown embedding provider {s.provider}")
 
 
 def model_name() -> str:
     s = get_embedding_settings()
-    return {"openai": s.openai_model, "voyage": s.voyage_model, "google": s.google_model}[s.provider]
+    return {
+        "openai": s.openai_model,
+        "voyage": s.voyage_model,
+        "google": s.google_model,
+        "ollama": s.ollama_model,
+    }[s.provider]
 
 
 def _fit(vec: list[float]) -> list[float]:

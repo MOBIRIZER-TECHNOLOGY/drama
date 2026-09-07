@@ -18,18 +18,18 @@ class FakeModel:
 
 
 def _draft(**over):
-    base = dict(
-        title="The Heiress in Disguise",
-        synopsis="A wealthy heiress hides her identity. She falls for the wrong man. Then he learns who she is.",
-        genres=["Romance", "Nonsense"],
-        tags=["heiress", "secret identity"],
-        seo_title="The Heiress in Disguise",
-        meta_description="A heiress hides who she is and falls for the wrong man.",
-        keywords=["heiress", "romance"],
-        content_rating="UA13",
-        moderation_flags=[],
-        confidence=0.8,
-    )
+    base = {
+        "title": "The Heiress in Disguise",
+        "synopsis": "A wealthy heiress hides her identity. She falls for the wrong man. Then he learns who she is.",
+        "genres": ["Romance", "Nonsense"],
+        "tags": ["heiress", "secret identity"],
+        "seo_title": "The Heiress in Disguise",
+        "meta_description": "A heiress hides who she is and falls for the wrong man.",
+        "keywords": ["heiress", "romance"],
+        "content_rating": "UA13",
+        "moderation_flags": [],
+        "confidence": 0.8,
+    }
     base.update(over)
     return m.MetadataDraft(**base)
 

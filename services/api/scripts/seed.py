@@ -86,6 +86,11 @@ async def main(email: str, password: str) -> None:
                 status=PublishStatus.published,
                 released_at=datetime.now(UTC),
                 original_language="hi",
+                # Required in practice: an unrated series is treated as adult (see access.requires_age_gate),
+                # so a seeded catalogue with no ratings would be gated for every guest.
+                content_rating="U",
+                completion_status="Ongoing",
+                release_note="New episodes every Friday",
             )
             s.categories.append(cats["romance"])
             db.add(s)

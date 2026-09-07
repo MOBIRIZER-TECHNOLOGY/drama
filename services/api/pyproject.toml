@@ -24,6 +24,10 @@ dependencies = [
   "boto3>=1.34",
   "arq>=0.26",
   "nh3>=0.2",
+  # zoneinfo reads the IANA database from the OS, which Windows and slim/distroless
+  # containers do not ship. Without it ZoneInfo("Asia/Kolkata") raises and the daily
+  # check-in rollover and streak reminders crash. Carry the database with us.
+  "tzdata>=2024.1",
   "slowapi>=0.1.9",
   "aiosmtplib>=3.0",
   "sentry-sdk[fastapi]>=2.0",

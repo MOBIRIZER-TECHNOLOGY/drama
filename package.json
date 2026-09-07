@@ -18,7 +18,9 @@
     "db:bootstrap": "bash scripts/local-db.sh",
     "db:test": "bash scripts/local-db.sh --test",
     "infra:logs": "docker compose -f infra/docker/compose.yaml logs -f",
-    "i18n:check": "node scripts/check-i18n.mjs"
+    "i18n:check": "node scripts/check-i18n.mjs",
+    "db:native": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db-native.ps1",
+    "db:native:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db-native.ps1 -Stop"
   },
   "devDependencies": {
     "turbo": "^2.5.0"
