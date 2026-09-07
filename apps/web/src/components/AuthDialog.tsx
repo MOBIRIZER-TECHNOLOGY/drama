@@ -52,7 +52,7 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
 
   useEffect(() => {
     const signup = mode === "signup" && tab === "email";
-    onHeading(signup ? t("auth.create_account", "Create your account") : null);
+    onHeading(signup ? t("auth.create_account", "Create an account") : null);
   }, [mode, tab, onHeading, t]);
 
   useEffect(
@@ -202,7 +202,7 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
             />
           </Field>
           <Button type="submit" size="lg" loading={busy === "email"} disabled={!!busy} className="mt-1 w-full">
-            {mode === "signin" ? t("auth.sign_in", "Sign in") : t("auth.sign_up", "Sign up")}
+            {mode === "signin" ? t("auth.sign_in", "Sign in") : t("auth.sign_up", "Sign up free")}
           </Button>
           <p className="text-center text-sm text-muted">
             {mode === "signin" ? t("auth.no_account", "New to Katha?") : t("auth.have_account", "Already have an account?")}{" "}

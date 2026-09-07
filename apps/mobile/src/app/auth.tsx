@@ -239,7 +239,7 @@ export default function AuthScreen() {
             // TODO(phase 2): phone OTP needs the native Firebase SDK (react-native-firebase) because the JS SDK's
             // reCAPTCHA verifier is web-only. Wire signInWithPhoneNumber + confirm() here once the dev client ships.
             <View>
-              <Button title={t("auth.phone")} variant="ghost" disabled />
+              <Button title={t("auth.phone_cta")} variant="ghost" disabled />
               <Text variant="caption" style={styles.todo}>
                 Phone sign-in arrives with the native build (phase 2).
               </Text>

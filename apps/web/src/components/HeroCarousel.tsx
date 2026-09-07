@@ -89,7 +89,7 @@ export function HeroCarousel({ items }: { items: SeriesCard[] }) {
                     </span>
                   ))}
                   <span className="text-muted">
-                    {s.episode_count} {t("series.episodes", "episodes")}
+                    {s.episode_count} {t("series.episodes_count", "episodes")}
                   </span>
                 </div>
                 <h2 className="font-display text-2xl font-bold leading-tight text-ink sm:text-4xl lg:text-5xl">{s.title}</h2>

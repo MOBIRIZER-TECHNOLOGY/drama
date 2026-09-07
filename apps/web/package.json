@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "i18n:extract": "node scripts/extract-i18n.mjs"
   },
   "dependencies": {
     "@katha/api-client": "workspace:*",

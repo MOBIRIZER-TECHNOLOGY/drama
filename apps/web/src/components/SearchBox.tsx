@@ -121,7 +121,7 @@ export function SearchBox({ autoFocus = false, onNavigate }: { autoFocus?: boole
                     <span className="min-w-0 flex-1">
                       <span className="line-clamp-1 text-sm text-ink">{s.title}</span>
                       <span className="line-clamp-1 text-xs text-muted">
-                        {s.episode_count} {t("series.episodes", "episodes")}
+                        {s.episode_count} {t("series.episodes_count", "episodes")}
                         {s.categories[0] ? ` · ${s.categories[0].name}` : ""}
                       </span>
                     </span>

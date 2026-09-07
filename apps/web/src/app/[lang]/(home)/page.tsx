@@ -1,5 +1,6 @@
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { JsonLd } from "@/components/JsonLd";
+import { LandingIntro } from "@/components/LandingIntro";
 import { PersonalRails } from "@/components/PersonalRails";
 import { Rail } from "@/components/Rail";
 import { SeriesCard } from "@/components/SeriesCard";
@@ -47,6 +48,8 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
   return (
     <div className="pb-8">
       <JsonLd data={webSiteJsonLd(lang, t("meta.site_name", "Katha"))} />
+      {/* What Katha is — shown to anonymous visitors only. Returning viewers want their rails, not a pitch. */}
+      <LandingIntro />
       {heroItems.length > 0 && (
         <div className="pt-0 sm:pt-6">
           <HeroCarousel items={heroItems.slice(0, 8)} />

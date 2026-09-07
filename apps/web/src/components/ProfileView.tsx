@@ -90,7 +90,7 @@ function ProfileInner() {
       );
       if (presign.error) throw new Error(presign.error.message);
       const put = await fetch(presign.data.upload_url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
-      if (!put.ok) throw new Error(t("profile.avatar_upload_failed", "The upload was rejected by storage ({status}).", { status: put.status }));
+      if (!put.ok) throw new Error(t("profile.avatar_upload_rejected", "The upload was rejected by storage ({status}).", { status: put.status }));
       const patched = await call(() => clientApi.PATCH("/v1/auth/me", { body: { avatar_url: presign.data.public_url } }));
       if (patched.error) throw new Error(patched.error.message);
       setAvatar(presign.data.public_url);

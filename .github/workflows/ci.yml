@@ -73,3 +73,7 @@ jobs:
       - run: pnpm --filter @katha/api-client generate
       - run: pnpm -r --if-present typecheck
       - run: pnpm -r --if-present lint
+      # One key means one English string across both clients: they share the server's translation table, so a
+      # key that says "Retry" on mobile and "Try again" on web is one row each will overwrite for the other.
+      - name: i18n catalogue is current and consistent
+        run: pnpm i18n:check

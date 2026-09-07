@@ -236,7 +236,7 @@ export default function WalletScreen() {
 
         {(offers.data?.length ?? 0) > 0 ? (
           <View style={styles.offers}>
-            <Text variant="heading">{t("wallet.offers")}</Text>
+            <Text variant="heading">{t("wallet.offers_title")}</Text>
             {offers.data?.map((offer) => (
               <OfferCard
                 key={offer.id}

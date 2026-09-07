@@ -58,7 +58,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "i18n:extract": "node scripts/extract-i18n.mjs"
   },
   "private": true
 }

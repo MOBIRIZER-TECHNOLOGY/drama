@@ -26,7 +26,7 @@ export function useApp(): AppContextValue {
 
 export type Translate = (key: string, fallback: string, vars?: Record<string, string | number>) => string;
 
-/** `t("wallet.balance", "Balance")` returns the translated string or the inline English fallback. */
+/** `t("some.key", "Fallback")` returns the translated string or the inline English fallback. */
 export function useT(): Translate {
   const { messages } = useApp();
   return useCallback<Translate>(

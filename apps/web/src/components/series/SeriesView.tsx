@@ -494,7 +494,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
               </div>
               <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted">
                 <span>
-                  {series.episode_count} {t("series.episodes", "episodes")}
+                  {series.episode_count} {t("series.episodes_count", "episodes")}
                 </span>
                 <span>
                   {formatNumber(series.view_count, lang)} {t("series.views", "views")}
