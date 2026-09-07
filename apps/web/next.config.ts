@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const FALLBACK_LANGS = ["en", "hi"];
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
+const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const IS_DEV = process.env.NODE_ENV === "development";
 
 /** Media/CDN origins (HLS, covers, subtitles, avatars). Comma-separated, e.g. https://cdn.katha.app,http://localhost:9000 */
@@ -64,10 +65,13 @@ function contentSecurityPolicy(): string {
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com https://checkout.razorpay.com https://api.razorpay.com https://challenges.cloudflare.com https://*.firebaseapp.com",
     "style-src 'self' 'unsafe-inline'",
     "font-src 'self' data:",
-    "upgrade-insecure-requests",
   ];
-  // upgrade-insecure-requests would break plain-http local media in development.
-  return (IS_DEV ? directives.filter((d) => d !== "upgrade-insecure-requests") : directives).join("; ");
+  // upgrade-insecure-requests rewrites every http:// subresource to https://, which silently strips the
+  // stylesheet and media from any deployment actually served over http (dev, LAN preview, a staging box or a
+  // production build fronted by a proxy that has not terminated TLS yet). Emit it only when the site itself
+  // is https, where it is free protection rather than a self-inflicted outage.
+  if (SITE_URL.startsWith("https://")) directives.push("upgrade-insecure-requests");
+  return directives.join("; ");
 }
 
 export default async function config(): Promise<NextConfig> {
