@@ -17,6 +17,7 @@ from app.core.ratelimit import limiter
 from app.core.redis import redis_client
 from app.models.catalog import Category, Embedding, Episode, PublishStatus, Series, SeriesTranslation, Subtitle
 from app.models.engagement import Favorite, Like, WatchProgress
+from app.models.wallet import EpisodeUnlock
 from app.schemas.catalog import (
     BundleQuoteOut,
     BundleUnlockOut,
@@ -28,6 +29,8 @@ from app.schemas.catalog import (
     PlayOut,
     SeriesCard,
     SeriesDetail,
+    ShortItem,
+    ShortsOut,
     SubtitleTrack,
     UnlockOut,
     UnlockRequest,
@@ -440,6 +443,136 @@ async def unlock(request: Request, episode_id: uuid.UUID, body: UnlockRequest, c
     await db.commit()
     await db.refresh(ctx.user)
     return UnlockOut(episode_id=row.episode_id, method=row.method, coin_balance=ctx.user.coin_balance)
+
+
+SHORTS_SERIES_PER_PAGE = 8
+# Episodes emitted per series: the free run plus the first locked one, so the paywall is reached inside the
+# feed instead of only on the series page. This is the whole mechanic — swipe, swipe, cliffhanger, offer.
+SHORTS_MAX_PER_SERIES = 6
+
+
+@router.get("/shorts", response_model=ShortsOut)
+async def shorts(
+    db: DB,
+    ctx: OptionalUser,
+    country: Annotated[str | None, Depends(client_country)],
+    lang: Lang = "en",
+    cursor: Annotated[str | None, Query(max_length=64)] = None,
+    limit: Annotated[int, Query(ge=1, le=40)] = 20,
+) -> ShortsOut:
+    """The vertical feed, as a chain of episodes rather than a carousel of first episodes.
+
+    Each series contributes a run: its free episodes followed by the first locked one. Swiping therefore
+    continues the story the viewer is watching until it asks them to pay, which is the loop this format exists
+    for. A page ends on a series boundary so a run is never split across two requests.
+    """
+    offset = 0
+    if cursor and cursor.isdigit():
+        offset = min(int(cursor), 10_000)
+
+    rows = list(
+        (
+            await db.scalars(
+                _published_series(lang, country)
+                .order_by(Series.is_featured.desc(), Series.sort_weight.desc(), Series.view_count.desc(), Series.id)
+                .offset(offset)
+                .limit(SHORTS_SERIES_PER_PAGE)
+            )
+        ).all()
+    )
+    if not rows:
+        return ShortsOut(items=[], next_cursor=None)
+
+    series_ids = [s.id for s in rows]
+    counts = await _episode_counts(db, series_ids)
+    episodes = list(
+        (
+            await db.scalars(
+                select(Episode)
+                .where(Episode.series_id.in_(series_ids), Episode.status == PublishStatus.published)
+                .order_by(Episode.series_id, Episode.number)
+            )
+        ).all()
+    )
+    by_series: dict[uuid.UUID, list[Episode]] = {}
+    for ep in episodes:
+        by_series.setdefault(ep.series_id, []).append(ep)
+
+    unlocked: set[uuid.UUID] = set()
+    favourites: set[uuid.UUID] = set()
+    liked: set[uuid.UUID] = set()
+    vip = False
+    if ctx is not None:
+        vip = await access_svc.is_vip(db, ctx.user.id)
+        unlocked = set(
+            (
+                await db.scalars(
+                    select(EpisodeUnlock.episode_id).where(
+                        EpisodeUnlock.user_id == ctx.user.id, EpisodeUnlock.series_id.in_(series_ids)
+                    )
+                )
+            ).all()
+        )
+        favourites = set(
+            (
+                await db.scalars(
+                    select(Favorite.series_id).where(
+                        Favorite.user_id == ctx.user.id, Favorite.series_id.in_(series_ids)
+                    )
+                )
+            ).all()
+        )
+        liked = set(
+            (
+                await db.scalars(
+                    select(Like.series_id).where(Like.user_id == ctx.user.id, Like.series_id.in_(series_ids))
+                )
+            ).all()
+        )
+
+    items: list[ShortItem] = []
+    consumed = 0
+    for series in rows:
+        if len(items) >= limit:
+            break
+        consumed += 1
+        run = by_series.get(series.id, [])[:SHORTS_MAX_PER_SERIES]
+        tr = _pick_translation(series, lang)
+        for i, ep in enumerate(run):
+            free = access_svc.episode_is_free(series, ep)
+            accessible = free or vip or ep.id in unlocked
+            items.append(
+                ShortItem(
+                    episode_id=ep.id,
+                    episode_number=ep.number,
+                    episode_title=ep.title,
+                    thumbnail_url=ep.thumbnail_url,
+                    duration_sec=ep.duration_sec,
+                    is_free=free,
+                    price=access_svc.episode_price(series, ep),
+                    accessible=accessible,
+                    series_id=series.id,
+                    slug=series.slug,
+                    title=tr.title if tr else series.slug,
+                    synopsis=tr.synopsis if tr else None,
+                    cover_url=series.cover_url,
+                    categories=[CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in series.categories],
+                    episode_count=counts.get(series.id, 0),
+                    free_episodes=series.free_episodes,
+                    content_rating=series.content_rating,
+                    is_adult=_is_adult(series),
+                    is_favorite=series.id in favourites,
+                    is_liked=series.id in liked,
+                    starts_series=i == 0,
+                )
+            )
+            # Stop the run one past the free episodes: the first lock is the offer, the rest is the series page.
+            if not free:
+                break
+
+    # Only advance past series actually emitted, so nothing is skipped between pages.
+    next_cursor = str(offset + consumed) if len(rows) == SHORTS_SERIES_PER_PAGE else None
+    return ShortsOut(items=items, next_cursor=next_cursor)
 
 
 @router.get("/series/{series_id}/bundle", response_model=BundleQuoteOut)

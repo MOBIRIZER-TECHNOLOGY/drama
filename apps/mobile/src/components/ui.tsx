@@ -110,6 +110,7 @@ type ButtonVariant = "primary" | "secondary" | "ghost" | "gold" | "danger";
 
 export function Button({
   title,
+  subtitle,
   variant = "primary",
   loading,
   disabled,
@@ -119,6 +120,8 @@ export function Button({
   ...rest
 }: Omit<PressableProps, "style"> & {
   title: string;
+  /** Second line inside the button, e.g. the balance a purchase leaves behind. Keeps a judgement call in one glance. */
+  subtitle?: string;
   variant?: ButtonVariant;
   loading?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -153,6 +156,14 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator color={fg} />
+      ) : subtitle ? (
+        <View style={styles.buttonStack}>
+          <View style={styles.buttonRow}>
+            {left}
+            <RNText style={[styles.buttonText, small && styles.buttonTextSmall, { color: fg }]}>{title}</RNText>
+          </View>
+          <RNText style={[styles.buttonSub, { color: fg }]}>{subtitle}</RNText>
+        </View>
       ) : (
         <>
           {left}
@@ -329,6 +340,9 @@ const styles = StyleSheet.create({
   buttonDanger: { borderWidth: 1, borderColor: colors.danger },
   buttonText: { fontFamily: fonts.bold, fontSize: 15 },
   buttonTextSmall: { fontSize: 13 },
+  buttonStack: { alignItems: "center", gap: 1, paddingVertical: spacing.sm },
+  buttonRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  buttonSub: { fontFamily: fonts.regular, fontSize: 11, opacity: 0.8 },
   input: {
     minHeight: 48,
     borderRadius: radii.md,

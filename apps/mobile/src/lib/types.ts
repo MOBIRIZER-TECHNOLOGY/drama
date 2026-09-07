@@ -3,6 +3,7 @@ import type { components } from "@katha/api-client";
 export type SeriesCard = components["schemas"]["SeriesCard"];
 export type SeriesDetail = components["schemas"]["SeriesDetail"];
 export type Episode = components["schemas"]["EpisodeOut"];
+export type ShortItem = components["schemas"]["ShortItem"];
 export type HomeRail = components["schemas"]["HomeRail"];
 export type HistoryItem = components["schemas"]["HistoryItem"];
 export type ContinueProgress = components["schemas"]["ContinueProgress"];

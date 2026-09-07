@@ -10,6 +10,7 @@ import type {
   LanguageOut,
   SeriesCard,
   SeriesDetail,
+  ShortsOut,
   SitemapOut,
 } from "./types";
 
@@ -90,6 +91,12 @@ async function load<T>(fn: () => Promise<{ data?: T; response: Response }>): Pro
 
 export const fetchHome = cache(
   (lang: string): Promise<Loaded<HomeOut>> => load(() => api.GET("/v1/home", { params: { query: { lang } }, signal: timeoutSignal() })),
+);
+
+/** The vertical feed's first page. Episode-level and paginated; the client continues from `next_cursor`. */
+export const fetchShorts = cache(
+  (lang: string): Promise<Loaded<ShortsOut>> =>
+    load(() => api.GET("/v1/shorts", { params: { query: { lang } }, signal: timeoutSignal() })),
 );
 
 export const fetchSeries = cache(

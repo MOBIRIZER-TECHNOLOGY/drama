@@ -27,7 +27,16 @@ import { useConfig } from "@/providers/config";
 export default function WalletScreen() {
   const t = useT();
   const router = useRouter();
-  const { purchase_id: returnedPurchaseId } = useLocalSearchParams<{ purchase_id?: string }>();
+  const {
+    purchase_id: returnedPurchaseId,
+    need: needParam,
+    series: seriesParam,
+    episode: episodeParam,
+  } = useLocalSearchParams<{ purchase_id?: string; need?: string; series?: string; episode?: string }>();
+  // The paywall sends how short the viewer is and where they were, so a top-up can end where it started rather
+  // than dropping them on the wallet with no way back to the episode they wanted.
+  const needCoins = Number(needParam ?? 0) || 0;
+  const returnTo = seriesParam ? { pathname: "/player/[seriesId]" as const, params: { seriesId: seriesParam, ...(episodeParam ? { episode: episodeParam } : {}) } } : null;
   const { config, country } = useConfig();
   const { status, requireAuth, setBalance, refreshUser } = useAuth();
   const currency = config.economy.currency ?? "INR";
@@ -196,6 +205,15 @@ export default function WalletScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {returnTo ? (
+          <Card style={styles.returnCard}>
+            <Text variant="label" style={{ flex: 1 }}>
+              {needCoins > 0 ? t("player.unlock_need", { n: needCoins }) : t("wallet.top_up")}
+            </Text>
+            <Button title={t("wallet.back_to_episode")} small variant="ghost" onPress={() => router.replace(returnTo)} />
+          </Card>
+        ) : null}
+
         <Card style={styles.balanceCard}>
           <Text variant="caption">{t("player.balance")}</Text>
           <View style={styles.balanceRow}>
@@ -448,6 +466,7 @@ function PackCard({
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
+  returnCard: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderColor: colors.gold },
   balanceCard: { gap: spacing.sm, borderColor: colors.gold, borderRadius: radii.lg },
   balanceRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   message: { textAlign: "center" },

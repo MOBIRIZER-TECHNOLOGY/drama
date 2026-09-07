@@ -124,3 +124,42 @@ class PlayOut(BaseModel):
     resume_position_sec: int
     next_episode_id: uuid.UUID | None
     subtitles: list[SubtitleTrack] = []
+
+
+class ShortItem(BaseModel):
+    """One swipe in the vertical feed: a specific episode, with everything needed to render and act on it.
+
+    The feed is episode-level rather than series-level so a swipe can continue the story the viewer was just
+    hooked by. Carrying `is_favorite`/`is_liked` matters: the clients previously seeded both to false, so a
+    series someone had already saved rendered unsaved and a tap silently removed it.
+    """
+
+    episode_id: uuid.UUID
+    episode_number: int
+    episode_title: str | None
+    thumbnail_url: str | None
+    duration_sec: int | None
+    is_free: bool
+    price: int
+    accessible: bool
+
+    series_id: uuid.UUID
+    slug: str
+    title: str
+    synopsis: str | None
+    cover_url: str | None
+    categories: list[CategoryOut]
+    episode_count: int
+    free_episodes: int
+    content_rating: str | None = None
+    is_adult: bool = False
+    is_favorite: bool = False
+    is_liked: bool = False
+    # True for the first episode of a run, so a client can announce a new series rather than a new episode.
+    starts_series: bool = False
+
+
+class ShortsOut(BaseModel):
+    items: list[ShortItem]
+    # Opaque continuation. Absent means the catalogue is exhausted for this language.
+    next_cursor: str | None = None

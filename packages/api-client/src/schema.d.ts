@@ -307,6 +307,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/shorts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Shorts
+         * @description The vertical feed, as a chain of episodes rather than a carousel of first episodes.
+         *
+         *     Each series contributes a run: its free episodes followed by the first locked one. Swiping therefore
+         *     continues the story the viewer is watching until it asks them to pay, which is the loop this format exists
+         *     for. A page ends on a series boundary so a run is never split across two requests.
+         */
+        get: operations["shorts_v1_shorts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/series/{series_id}/bundle": {
         parameters: {
             query?: never;
@@ -3893,6 +3917,83 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /**
+         * ShortItem
+         * @description One swipe in the vertical feed: a specific episode, with everything needed to render and act on it.
+         *
+         *     The feed is episode-level rather than series-level so a swipe can continue the story the viewer was just
+         *     hooked by. Carrying `is_favorite`/`is_liked` matters: the clients previously seeded both to false, so a
+         *     series someone had already saved rendered unsaved and a tap silently removed it.
+         */
+        ShortItem: {
+            /**
+             * Episode Id
+             * Format: uuid
+             */
+            episode_id: string;
+            /** Episode Number */
+            episode_number: number;
+            /** Episode Title */
+            episode_title: string | null;
+            /** Thumbnail Url */
+            thumbnail_url: string | null;
+            /** Duration Sec */
+            duration_sec: number | null;
+            /** Is Free */
+            is_free: boolean;
+            /** Price */
+            price: number;
+            /** Accessible */
+            accessible: boolean;
+            /**
+             * Series Id
+             * Format: uuid
+             */
+            series_id: string;
+            /** Slug */
+            slug: string;
+            /** Title */
+            title: string;
+            /** Synopsis */
+            synopsis: string | null;
+            /** Cover Url */
+            cover_url: string | null;
+            /** Categories */
+            categories: components["schemas"]["CategoryOut"][];
+            /** Episode Count */
+            episode_count: number;
+            /** Free Episodes */
+            free_episodes: number;
+            /** Content Rating */
+            content_rating?: string | null;
+            /**
+             * Is Adult
+             * @default false
+             */
+            is_adult: boolean;
+            /**
+             * Is Favorite
+             * @default false
+             */
+            is_favorite: boolean;
+            /**
+             * Is Liked
+             * @default false
+             */
+            is_liked: boolean;
+            /**
+             * Starts Series
+             * @default false
+             */
+            starts_series: boolean;
+        };
+        /** ShortsOut */
+        ShortsOut: {
+            /** Items */
+            items: components["schemas"]["ShortItem"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** SiteConfig */
         SiteConfig: {
             /**
@@ -4763,6 +4864,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnlockOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    shorts_v1_shorts_get: {
+        parameters: {
+            query?: {
+                lang?: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShortsOut"];
                 };
             };
             /** @description Validation Error */

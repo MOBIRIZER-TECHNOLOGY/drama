@@ -213,23 +213,25 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   };
 
   // Price "unlock everything left" as soon as the paywall opens, so the bundle is a visible choice rather than
-  // something the viewer would have to know to ask for.
+  // something the viewer would have to know to ask for. Stored against the auth status it was fetched under, so
+  // signing out invalidates it by comparison instead of by an effect that resets state.
+  const [bundleFor, setBundleFor] = useState<string | null>(null);
   useEffect(() => {
-    if (!unlockTarget || status !== "authenticated") {
-      setBundle(null);
-      return;
-    }
+    if (!unlockTarget || status !== "authenticated") return;
     let live = true;
     void (async () => {
       const { data } = await call(() =>
         clientApi.GET("/v1/series/{series_id}/bundle", { params: { path: { series_id: series.id } } }),
       );
-      if (live && data) setBundle(data);
+      if (!live || !data) return;
+      setBundle(data);
+      setBundleFor(status);
     })();
     return () => {
       live = false;
     };
   }, [unlockTarget, status, series.id]);
+  const visibleBundle = unlockTarget && status === "authenticated" && bundleFor === status ? bundle : null;
 
   const unlockBundle = useCallback(async () => {
     if (status !== "authenticated") return openAuth();
@@ -260,7 +262,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
     } else {
       setUnlockStatus({ kind: "error", message: error.message });
     }
-  }, [status, series.id, unlockTarget, openAuth, t, toast]);
+  }, [status, series.id, unlockTarget, openAuth, t, toast, setBalance, dropGrant]);
 
   const unlock = useCallback(async (method: "coins" | "ad") => {
     const ep = unlockTarget;
@@ -556,7 +558,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
         episode={unlockTarget}
         balance={balance}
         status={unlockStatus}
-        bundle={bundle}
+        bundle={visibleBundle}
         episodeCount={sorted.length}
         seriesSlug={series.slug}
         onClose={() => {

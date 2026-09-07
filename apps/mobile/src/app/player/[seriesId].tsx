@@ -345,6 +345,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
           <Pressable style={styles.scrim} onPress={sheet.reason === "ended" ? () => setUnlockTarget(null) : undefined} accessibilityRole="button" accessibilityLabel="Dismiss" />
           <UnlockSheet
             episode={sheet.episode}
+            seriesId={series.id}
             total={total}
             autoUnlock={autoUnlock}
             onAutoUnlockChange={setAutoUnlock}

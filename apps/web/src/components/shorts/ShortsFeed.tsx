@@ -4,14 +4,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
-import { useApp, useHref, useT } from "@/lib/app-context";
+import { useHref, useT } from "@/lib/app-context";
 import { useAuth } from "@/lib/auth-context";
 import { clientApi } from "@/lib/client-api";
 import { call } from "@/lib/errors";
-import { formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import { useLoader } from "@/lib/use-loader";
-import type { PlayOut, SeriesCard } from "@/lib/types";
+import type { PlayOut, ShortItem as ShortItemData } from "@/lib/types";
 import { AgeGateDialog } from "../AgeGateDialog";
 import { PlaybackBeacons } from "../player/beacons";
 import { useHls } from "../player/use-hls";
@@ -27,16 +26,43 @@ type ItemState =
   | { kind: "age_gate" }
   | { kind: "error"; message: string };
 
+/** Load the next page once the viewer is within this many items of the end. */
+const PREFETCH_WITHIN = 4;
+
 /**
- * Vertical, scroll-snapped feed of portrait players — one per series, playing its first episode.
- * Only the centred item holds a video element; everything else is a poster, so the feed never
- * keeps more than one HLS session alive.
+ * The vertical feed: a chain of episodes, not a carousel of first episodes.
+ *
+ * `/v1/shorts` returns each series' free run followed by its first locked episode, so scrolling continues the
+ * story the viewer was hooked by and arrives at the paywall inside the feed. Previously every item was episode
+ * one of a different series, the list stopped after twelve, and the paywall was never reached at all.
+ *
+ * Only the centred item holds a video element; everything else is a poster, so the feed never keeps more than
+ * one HLS session alive.
  */
-export function ShortsFeed({ items }: { items: SeriesCard[] }) {
+export function ShortsFeed({ initial, nextCursor, lang }: { initial: ShortItemData[]; nextCursor: string | null; lang: string }) {
   const t = useT();
-  const [activeId, setActiveId] = useState<string | null>(items[0]?.id ?? null);
+  const [extra, setExtra] = useState<ShortItemData[]>([]);
+  const [cursor, setCursor] = useState<string | null>(nextCursor);
+  const [activeId, setActiveId] = useState<string | null>(initial[0]?.episode_id ?? null);
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+  const loadingMore = useRef(false);
+
+  const items = useMemo(() => [...initial, ...extra], [initial, extra]);
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore.current || !cursor) return;
+    loadingMore.current = true;
+    const { data } = await call(() => clientApi.GET("/v1/shorts", { params: { query: { lang, cursor } } }));
+    if (data) {
+      setExtra((prev) => {
+        const seen = new Set([...initial, ...prev].map((i) => i.episode_id));
+        return [...prev, ...data.items.filter((i) => !seen.has(i.episode_id))];
+      });
+      setCursor(data.next_cursor ?? null);
+    }
+    loadingMore.current = false;
+  }, [cursor, lang, initial]);
 
   useEffect(() => {
     const root = containerRef.current;
@@ -46,17 +72,25 @@ export function ShortsFeed({ items }: { items: SeriesCard[] }) {
         // The most visible item wins; ties keep the current one (no flapping mid-scroll).
         let best: { id: string; ratio: number } | null = null;
         for (const entry of entries) {
-          const id = (entry.target as HTMLElement).dataset.seriesId;
+          const id = (entry.target as HTMLElement).dataset.episodeId;
           if (!id || !entry.isIntersecting) continue;
           if (!best || entry.intersectionRatio > best.ratio) best = { id, ratio: entry.intersectionRatio };
         }
-        if (best && best.ratio >= 0.55) setActiveId(best.id);
+        if (!best || best.ratio < 0.55) return;
+        const id = best.id;
+        setActiveId(id);
+        const index = items.findIndex((i) => i.episode_id === id);
+        if (index >= 0) {
+          const item = items[index];
+          track("shorts_swipe", { position: index, series_id: item.series_id, episode_number: item.episode_number });
+          if (index >= items.length - PREFETCH_WITHIN) void loadMore();
+        }
       },
       { root, threshold: [0.25, 0.55, 0.8] },
     );
-    root.querySelectorAll("[data-series-id]").forEach((el) => observer.observe(el));
+    root.querySelectorAll("[data-episode-id]").forEach((el) => observer.observe(el));
     return () => observer.disconnect();
-  }, [items]);
+  }, [items, loadMore]);
 
   if (items.length === 0) return null;
 
@@ -66,12 +100,13 @@ export function ShortsFeed({ items }: { items: SeriesCard[] }) {
       className="no-scrollbar h-[calc(100svh-3.5rem)] snap-y snap-mandatory overflow-y-auto overscroll-y-contain sm:h-[calc(100svh-4rem)]"
       aria-label={t("shorts.title", "Shorts")}
     >
-      {items.map((series, index) => (
+      {items.map((item, index) => (
         <ShortItem
-          key={series.id}
-          series={series}
-          active={activeId === series.id}
+          key={item.episode_id}
+          item={item}
+          active={activeId === item.episode_id}
           priority={index === 0}
+          showSwipeHint={index === 0}
           muted={muted}
           onToggleMuted={() => setMuted((m) => !m)}
         />
@@ -81,41 +116,40 @@ export function ShortsFeed({ items }: { items: SeriesCard[] }) {
 }
 
 function ShortItem({
-  series,
+  item,
   active,
   priority,
+  showSwipeHint,
   muted,
   onToggleMuted,
 }: {
-  series: SeriesCard;
+  item: ShortItemData;
   active: boolean;
   priority: boolean;
+  showSwipeHint: boolean;
   muted: boolean;
   onToggleMuted: () => void;
 }) {
   const t = useT();
   const href = useHref();
   const toast = useToast();
-  const { lang } = useApp();
   const { status, user, openAuth, refreshUser } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<ItemState>({ kind: "idle" });
-  const [liked, setLiked] = useState(false);
-  const [saved, setSaved] = useState(false);
-  const [likeCount, setLikeCount] = useState(series.like_count);
+  // Seeded from the server. Both used to start `false` regardless of the truth, so a series the viewer had
+  // already saved rendered unsaved and one tap silently removed it.
+  const [liked, setLiked] = useState(item.is_liked);
+  const [saved, setSaved] = useState(item.is_favorite);
   const [ageGateBusy, setAgeGateBusy] = useState(false);
   const [ageGateOpen, setAgeGateOpen] = useState(false);
   const [ageGateError, setAgeGateError] = useState<string | null>(null);
-  const episodeId = series.first_episode_id ?? null;
+  const episodeId = item.episode_id;
+  const seriesId = item.series_id;
 
-  const beacons = useMemo(
-    () => (episodeId ? new PlaybackBeacons({ episodeId, seriesId: series.id, surface: "shorts" }) : undefined),
-    [episodeId, series.id],
-  );
+  const beacons = useMemo(() => new PlaybackBeacons({ episodeId, seriesId, surface: "shorts" }), [episodeId, seriesId]);
 
   /** Ask for a playback grant. State is only written after the request resolves, so activation never cascades renders. */
   const loadGrant = useCallback(async () => {
-    if (!episodeId) return;
     const { data, error } = await call(() =>
       clientApi.POST("/v1/episodes/{episode_id}/play", { params: { path: { episode_id: episodeId } } }),
     );
@@ -161,11 +195,10 @@ function ShortItem({
   const toggle = async (kind: "like" | "favorite") => {
     if (status !== "authenticated") return openAuth();
     const path = kind === "like" ? "/v1/series/{series_id}/like" : "/v1/series/{series_id}/favorite";
-    const { data, error } = await call(() => clientApi.POST(path, { params: { path: { series_id: series.id } } }));
+    const { data, error } = await call(() => clientApi.POST(path, { params: { path: { series_id: seriesId } } }));
     if (error) return toast(error.message, "error");
     if (kind === "like") {
       setLiked(data.active);
-      setLikeCount((c) => (typeof data.count === "number" ? data.count : c + (data.active ? 1 : -1)));
     } else {
       setSaved(data.active);
       toast(data.active ? t("series.added_to_list", "Added to My List") : t("series.removed_from_list", "Removed from My List"), "success");
@@ -173,11 +206,16 @@ function ShortItem({
   };
 
   const share = async () => {
-    const url = `${window.location.origin}${href(`/series/${series.slug}`)}`;
-    track("share", { series_id: series.id, episode_id: episodeId, surface: "shorts", method: typeof navigator.share === "function" ? "native" : "clipboard" });
+    // Carry the episode and a campaign tag, so the recipient lands on the cliffhanger that prompted the share
+    // rather than on episode one, and the funnel can tell organic shares apart.
+    const params = new URLSearchParams({ utm_source: "share" });
+    if (item.episode_number > 1) params.set("ep", String(item.episode_number));
+    if (user?.referral_code) params.set("ref", user.referral_code);
+    const url = `${window.location.origin}${href(`/series/${item.slug}`)}?${params}`;
+    track("share", { series_id: seriesId, episode_id: episodeId, surface: "shorts", method: typeof navigator.share === "function" ? "native" : "clipboard" });
     try {
       if (navigator.share) {
-        await navigator.share({ title: series.title, text: series.synopsis ?? undefined, url });
+        await navigator.share({ title: item.title, text: item.synopsis ?? undefined, url });
         return;
       }
       await navigator.clipboard.writeText(url);
@@ -204,13 +242,14 @@ function ShortItem({
     void loadGrant();
   };
 
-  const watchFull = href(`/series/${series.slug}?ep=1`);
-  const poster = series.cover_url;
+  const watchFull = href(`/series/${item.slug}?ep=${item.episode_number}`);
+  const poster = item.thumbnail_url ?? item.cover_url;
+  const genre = item.categories[0]?.name;
 
   return (
     <section
-      data-series-id={series.id}
-      aria-label={series.title}
+      data-episode-id={item.episode_id}
+      aria-label={`${item.title} - ${t("unlock.position", "Episode {n} of {total}", { n: item.episode_number, total: item.episode_count })}`}
       className="flex h-full snap-start snap-always items-center justify-center px-2 py-2"
     >
       <div className="relative h-full w-auto max-w-full" style={{ aspectRatio: "9 / 16" }}>
@@ -273,9 +312,12 @@ function ShortItem({
               ) : state.kind === "locked" ? (
                 <>
                   <IconLock size={28} className="text-gold" />
-                  <p className="text-sm text-ink2">{t("player.locked", "This episode is locked.")}</p>
-                  <Link href={watchFull} className={buttonClass("gold", "sm")}>
-                    {t("shorts.watch_full", "Watch full")}
+                  <p className="font-display text-lg font-semibold text-ink">
+                    {t("unlock.title", "Unlock episode {n}", { n: item.episode_number })}
+                  </p>
+                  <p className="text-sm text-ink2">{t("shorts.locked_price", "{n} coins, unlocked forever", { n: item.price })}</p>
+                  <Link href={watchFull} className={buttonClass("gold", "md")}>
+                    {t("shorts.unlock_cta", "Unlock and keep watching")}
                   </Link>
                 </>
               ) : (
@@ -299,14 +341,21 @@ function ShortItem({
           {/* Title + watch full */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4 pt-12">
             <div className="pointer-events-auto flex flex-col items-start gap-2 pe-14">
-              <Link href={href(`/series/${series.slug}`)} className="font-display line-clamp-2 text-lg font-semibold text-ink hover:underline">
-                {series.title}
+              <div className="flex flex-wrap items-center gap-2">
+                {genre && <span className="rounded-pill bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-ink">{genre}</span>}
+                <span className="text-[11px] text-ink2">
+                  {t("unlock.position", "Episode {n} of {total}", { n: item.episode_number, total: item.episode_count })}
+                </span>
+              </div>
+              <Link href={href(`/series/${item.slug}`)} className="font-display line-clamp-2 text-lg font-semibold text-ink hover:underline">
+                {item.title}
               </Link>
-              {series.synopsis && <p className="line-clamp-2 text-xs text-ink2">{series.synopsis}</p>}
+              {item.synopsis && <p className="line-clamp-2 text-xs text-ink2">{item.synopsis}</p>}
               <Link href={watchFull} className={buttonClass("primary", "sm")}>
                 <IconPlay size={14} />
                 {t("shorts.watch_full", "Watch full")}
               </Link>
+              {showSwipeHint && <p className="text-[11px] text-muted">{t("shorts.swipe_hint", "Swipe up for the next episode")}</p>}
             </div>
           </div>
 
@@ -323,7 +372,6 @@ function ShortItem({
               label={liked ? t("series.liked", "Liked") : t("series.like", "Like")}
               onClick={() => void toggle("like")}
               pressed={liked}
-              caption={formatNumber(likeCount, lang)}
             >
               <IconHeart size={22} filled={liked} className={liked ? "text-accent" : ""} />
             </RailButton>

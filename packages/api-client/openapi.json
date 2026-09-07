@@ -799,6 +799,85 @@
         }
       }
     },
+    "/v1/shorts": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Shorts",
+        "description": "The vertical feed, as a chain of episodes rather than a carousel of first episodes.\n\nEach series contributes a run: its free episodes followed by the first locked one. Swiping therefore\ncontinues the story the viewer is watching until it asks them to pay, which is the loop this format exists\nfor. A page ends on a series boundary so a run is never split across two requests.",
+        "operationId": "shorts_v1_shorts_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 10,
+              "default": "en",
+              "title": "Lang"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 64
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 40,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShortsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/series/{series_id}/bundle": {
       "get": {
         "tags": [
@@ -11941,6 +12020,193 @@
           "data"
         ],
         "title": "SettingsIn"
+      },
+      "ShortItem": {
+        "properties": {
+          "episode_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Episode Id"
+          },
+          "episode_number": {
+            "type": "integer",
+            "title": "Episode Number"
+          },
+          "episode_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Title"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "duration_sec": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Sec"
+          },
+          "is_free": {
+            "type": "boolean",
+            "title": "Is Free"
+          },
+          "price": {
+            "type": "integer",
+            "title": "Price"
+          },
+          "accessible": {
+            "type": "boolean",
+            "title": "Accessible"
+          },
+          "series_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Series Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "synopsis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synopsis"
+          },
+          "cover_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Url"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/CategoryOut"
+            },
+            "type": "array",
+            "title": "Categories"
+          },
+          "episode_count": {
+            "type": "integer",
+            "title": "Episode Count"
+          },
+          "free_episodes": {
+            "type": "integer",
+            "title": "Free Episodes"
+          },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
+          },
+          "is_adult": {
+            "type": "boolean",
+            "title": "Is Adult",
+            "default": false
+          },
+          "is_favorite": {
+            "type": "boolean",
+            "title": "Is Favorite",
+            "default": false
+          },
+          "is_liked": {
+            "type": "boolean",
+            "title": "Is Liked",
+            "default": false
+          },
+          "starts_series": {
+            "type": "boolean",
+            "title": "Starts Series",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "episode_id",
+          "episode_number",
+          "episode_title",
+          "thumbnail_url",
+          "duration_sec",
+          "is_free",
+          "price",
+          "accessible",
+          "series_id",
+          "slug",
+          "title",
+          "synopsis",
+          "cover_url",
+          "categories",
+          "episode_count",
+          "free_episodes"
+        ],
+        "title": "ShortItem",
+        "description": "One swipe in the vertical feed: a specific episode, with everything needed to render and act on it.\n\nThe feed is episode-level rather than series-level so a swipe can continue the story the viewer was just\nhooked by. Carrying `is_favorite`/`is_liked` matters: the clients previously seeded both to false, so a\nseries someone had already saved rendered unsaved and a tap silently removed it."
+      },
+      "ShortsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ShortItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ShortsOut"
       },
       "SiteConfig": {
         "properties": {

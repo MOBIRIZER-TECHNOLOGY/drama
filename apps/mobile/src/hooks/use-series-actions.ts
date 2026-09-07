@@ -9,7 +9,8 @@ import { useAuth } from "@/providers/auth";
 
 /** Favourite / like toggles with optimistic state and a guest sign-in prompt, plus native share. */
 export function useSeriesActions(seriesId: string, initial: { favorite: boolean; liked: boolean; likeCount: number }) {
-  const { requireAuth } = useAuth();
+  const { requireAuth, user } = useAuth();
+  const referralCode = user?.referral_code ?? null;
   const [favorite, setFavorite] = useState(initial.favorite);
   const [liked, setLiked] = useState(initial.liked);
   const [likeCount, setLikeCount] = useState(initial.likeCount);
@@ -47,15 +48,17 @@ export function useSeriesActions(seriesId: string, initial: { favorite: boolean;
   }, [liked, requireAuth, seriesId]);
 
   const share = useCallback(
-    async (title: string, slug: string) => {
+    async (title: string, slug: string, episode?: number) => {
+      // The referral code rides along, so a share that converts pays the sharer.
+      const url = seriesShareUrl(slug, { episode, ref: referralCode });
       try {
-        const result = await Share.share({ message: `${title} — watch on Katha ${seriesShareUrl(slug)}`, url: seriesShareUrl(slug) });
-        track("share", { series_id: seriesId, slug, shared: result.action === Share.sharedAction });
+        const result = await Share.share({ message: `${title} — watch on Katha ${url}`, url });
+        track("share", { series_id: seriesId, slug, episode: episode ?? null, shared: result.action === Share.sharedAction });
       } catch {
         // The share sheet was dismissed or unavailable.
       }
     },
-    [seriesId],
+    [seriesId, referralCode],
   );
 
   return { favorite, liked, likeCount, error, clearError: () => setError(null), toggleFavorite, toggleLike, share };
