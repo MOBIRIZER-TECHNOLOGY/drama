@@ -1,0 +1,97 @@
+@import "tailwindcss";
+
+/*
+ * Light admin theme. Accent, gold and status colours come from @katha/tokens
+ * (set as CSS variables on <html> in layout.tsx); the neutral ramp is a light
+ * counterpart of the dark-first product palette.
+ */
+:root {
+  --ground: #faf8f9;
+  --surface: #ffffff;
+  --surface-2: #f5f0f2;
+  --ink: #1b1418;
+  --ink-2: #4a3f44;
+  --muted: #8a7d82;
+  --line: #e9e1e4;
+  --line-strong: #d6cbd0;
+}
+
+@theme inline {
+  --color-ground: var(--ground);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-gold: var(--gold);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Bricolage Grotesque", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --radius-card: 12px;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Native dialogs used for modals / drawers */
+dialog::backdrop {
+  background: rgba(27, 20, 24, 0.45);
+}
+
+dialog {
+  color: inherit;
+}
+
+/* Scroll lock while any modal is open */
+body:has(dialog[open]) {
+  overflow: hidden;
+}
+
+/* Focus ring shared by all controls */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Thin scrollbars for table overflow */
+.scroll-x {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-in {
+  animation: toast-in 160ms ease-out;
+}

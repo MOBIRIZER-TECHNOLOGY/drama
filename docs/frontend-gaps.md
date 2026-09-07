@@ -232,3 +232,52 @@ tabs, series distribution + moderation fields, episode drip scheduling, admin pa
 - ✅ `POST /v1/purchases/quote` prices a pack with any offer or coupon applied and creates nothing, so a confirmation sheet no longer leaves abandoned `pending` purchases. Also validates a coupon before a pack is committed.
 - ✅ `SeriesCard.content_rating` and `SeriesCard.is_adult` let clients pre-warn on adult titles instead of only reacting to the 403.
 - Still open: no App Store id in `config.mobile` for the iOS update URL (add one alongside `update_url` when the app exists); no on-disk event queue, so a flush during a process kill can lose a batch.
+
+## web (tranche 1)
+
+- `GET /v1/series` returns a bare array with no `total`, so `/[lang]/category/[slug]` paginates blind: a full page
+  (`limit` items) is treated as "there may be more" and the Next link can lead to an empty page. A `{items, total}`
+  envelope (or an `X-Total-Count` header) would let the UI render real page numbers.
+- Browse (`/[lang]/series`) groups by category with one `GET /v1/series?category=` per category — N+1 calls for N
+  categories. A grouped catalogue endpoint (or `GET /v1/series?group_by=category&per_group=12`) would make it one call.
+- `GET /v1/categories` has no ordering or "featured" flag, so the browse page renders categories in API order and
+  cannot hide empty ones without an extra request per category.
+- `GET /v1/sitemap` returns `langs` per series (the translations that exist), but the web lists **every** supported
+  language as an alternate because `/xx/series/{slug}` renders for any active language with a fallback translation.
+  If untranslated languages should not be indexed, the sitemap consumer needs a signal for "canonical language".
+  The feed also has no `updated_at` for CMS pages, so page entries use the fetch time as `lastModified`.
+- `SeriesDetail` has no `content_rating` / `is_adult` field, so the web cannot warn before playback: the age gate is
+  only discovered from the 403 `age_gate_required` on `POST /play` (409 with the same code on `/unlock`). Exposing the
+  rating on the card/detail would let the client show the gate up front instead of after a failed play.
+- `age_gate_required` arrives with two different statuses (403 from `/play`, 409 from `/unlock`); the web branches on
+  `detail.code` and ignores the status.
+- `PATCH /v1/auth/me {age_confirmed: true}` is write-once and irreversible from the client (no way to un-confirm) —
+  fine for the product, noted for account deletion flows.
+- `GET /v1/wallet/offers` gives `pack_id` but not the discounted price, so the wallet can only show the percentage
+  until `POST /v1/purchases/checkout` returns `amount`/`discount_pct`. The client therefore shows a confirmation step
+  with the real price before redirecting to the gateway. A dry-run price endpoint
+  (`POST /v1/purchases/quote {pack_id, coupon_code, offer_id}`) would let the pack cards show the discounted price directly.
+- Coupon validation only happens at checkout, so a wrong code is reported after the viewer picks a pack. The
+  client maps `coupon_invalid`, `coupon_exhausted`, `coupon_inactive`, `coupon_region`, `coupon_first_purchase` and
+  `offer_unavailable` to friendly copy next to the field.
+- `POST /v1/events` takes `device` as a free-form dict; the web sends `{os, model, network?, app_version}` where
+  `model` is the browser name (there is no device model in a browser) and `network` comes from the experimental
+  `navigator.connection.effectiveType` (absent on Safari/Firefox).
+- `EventBatch.session_id` must be a UUID: the web generates one per tab in `sessionStorage`. Anonymous events
+  therefore cannot be joined to the session the API creates on sign-in — the API would need to accept a client
+  session id alias, or return one from `/v1/config`.
+- The events allow-list has no `screen_view` payload contract and no `paywall_view` → `unlock` correlation id; the web
+  sends `series_id`/`episode_id` props on both so the funnel can be reconstructed.
+- `GET /v1/home` is anonymous-cached, so the server-rendered home page never contains the personal rails. The web
+  drops `continue` and `for_you` from the SSR response and refetches `/v1/home` in the browser once a session exists
+  (one extra call per signed-in home view). A `GET /v1/home/personal` (uncached, session-only) would avoid re-fetching
+  the whole catalogue.
+- Shorts is built from the `featured` / `top_picks` / `newest` rails of `GET /v1/home` deduplicated by series, because
+  there is no dedicated shorts feed. Cards without `first_episode_id` are skipped, and there is no paging: the feed is
+  as long as the home rails. A `GET /v1/shorts?cursor=` returning `{series, episode}` pairs would make it endless.
+- `ads.txt` content and the IndexNow key are deployment config (`NEXT_PUBLIC_ADS_TXT`, `NEXT_PUBLIC_INDEXNOW_KEY`), not
+  API data. If they should be editable from the admin, they need to come from `GET /v1/config` (`site.ads_txt`,
+  `site.indexnow_key`) — today a change needs a redeploy. IndexNow **submission** (pinging the search engines when a
+  series is published) belongs on the server and is not implemented anywhere yet.
+- `PlayOut` has no poster/preview image for the shorts feed, so the feed uses `SeriesCard.cover_url` as the poster and
+  the `VideoObject` JSON-LD is only emitted when the episode itself has a `thumbnail_url` (Google requires one).

@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import Conflict, NotFound
+from app.core.errors import AgeGateRequired, Conflict, NotFound
 from app.models.catalog import Episode, PublishStatus, Series
 from app.models.identity import User
 from app.models.wallet import EpisodeUnlock, LedgerKind, UnlockMethod, VipMembership
@@ -86,7 +86,7 @@ async def unlock_episode(
         return existing
 
     if (series.content_rating or "") in get_settings().adult_ratings and user.age_confirmed_at is None:
-        raise Conflict("Confirm your age first", code="age_gate_required")
+        raise AgeGateRequired()
     if episode_is_free(series, episode) or await is_vip(session, user.id):
         raise Conflict("Episode is already accessible", code="already_accessible")
 

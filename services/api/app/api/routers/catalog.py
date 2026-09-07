@@ -4,7 +4,6 @@ import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
-from typing import Annotated as _Ann
 
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
@@ -13,7 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, CurrentUser, OptionalUser, client_country
 from app.core.config import get_settings
-from app.core.errors import AppError, Conflict, Forbidden, NotFound, Unauthorized
+from app.core.errors import AgeGateRequired, Conflict, Forbidden, NotFound, Unauthorized
 from app.core.ratelimit import limiter
 from app.core.redis import redis_client
 from app.models.catalog import Category, Embedding, Episode, PublishStatus, Series, SeriesTranslation, Subtitle
@@ -211,7 +210,7 @@ def _is_adult(series: Series) -> bool:
 
 @router.get("/home", response_model=HomeOut)
 async def home(
-    db: DB, ctx: OptionalUser, country: _Ann[str | None, Depends(client_country)], lang: Lang = "en"
+    db: DB, ctx: OptionalUser, country: Annotated[str | None, Depends(client_country)], lang: Lang = "en"
 ) -> HomeOut:
     """All home rails in one call: featured, continue, for you, top picks, newest, one per home category.
 
@@ -312,7 +311,7 @@ async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> 
 async def list_series(
     request: Request,
     db: DB,
-    country: _Ann[str | None, Depends(client_country)],
+    country: Annotated[str | None, Depends(client_country)],
     lang: Lang = "en",
     category: str | None = None,
     q: str | None = None,
@@ -359,7 +358,11 @@ async def _load_series(
 
 @router.get("/series/{id_or_slug}", response_model=SeriesDetail)
 async def series_detail(
-    id_or_slug: str, db: DB, ctx: OptionalUser, country: _Ann[str | None, Depends(client_country)], lang: Lang = "en"
+    id_or_slug: str,
+    db: DB,
+    ctx: OptionalUser,
+    country: Annotated[str | None, Depends(client_country)],
+    lang: Lang = "en",
 ) -> SeriesDetail:
     series = await _load_series(db, id_or_slug, lang, country)
     published = [e for e in series.episodes if e.status == PublishStatus.published]
@@ -452,13 +455,7 @@ async def play(episode_id: uuid.UUID, ctx: OptionalUser, db: DB) -> PlayOut:
         if ctx is None:
             raise Unauthorized("Sign in to watch this episode")
         if ctx.user.age_confirmed_at is None:
-            raise (
-                Forbidden(
-                    "Confirm your age to watch this episode",
-                )
-                if False
-                else AppError("Confirm your age to watch this episode", status_code=403, code="age_gate_required")
-            )
+            raise AgeGateRequired("Confirm your age to watch this episode")
     if ctx is None:
         if not access_svc.episode_is_free(series, episode):
             raise Unauthorized("Sign in to watch this episode")

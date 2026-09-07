@@ -1,0 +1,32 @@
+import type { components } from "@katha/api-client";
+
+type S = components["schemas"];
+
+export type SeriesCard = S["SeriesCard"];
+export type SeriesDetail = S["SeriesDetail"];
+export type EpisodeOut = S["EpisodeOut"];
+export type HomeOut = S["HomeOut"];
+export type HomeRail = S["HomeRail"];
+export type LanguageOut = S["LanguageOut"];
+export type FooterLink = S["FooterLink"];
+export type CmsPageOut = S["CmsPageOut"];
+export type UserOut = S["UserOut"];
+export type PlayOut = S["PlayOut"];
+export type WalletOut = S["WalletOut"];
+export type PackOut = S["PackOut"];
+export type LedgerRow = S["LedgerRow"];
+export type PurchaseOut = S["PurchaseOut"];
+export type CheckoutOut = S["CheckoutOut"];
+export type CheckinStatus = S["CheckinStatus"];
+export type TaskOut = S["TaskOut"];
+export type MyListOut = S["MyListOut"];
+export type HistoryItem = S["HistoryItem"];
+export type SessionOut = S["SessionOut"];
+export type CategoryOut = S["CategoryOut"];
+export type SubtitleTrack = S["SubtitleTrack"];
+export type FirebaseWebConfig = S["FirebaseWebConfig"];
+export type AppConfig = S["ConfigOut"];
+export type OfferOut = S["app__api__routers__wallet__OfferOut"];
+export type SitemapOut = S["SitemapOut"];
+export type SitemapEntry = S["SitemapEntry"];
+export type ContinueProgress = S["ContinueProgress"];

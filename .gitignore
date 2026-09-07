@@ -42,3 +42,6 @@ Thumbs.db
 
 # vendor reference package (kept locally, never committed)
 ref/
+.playwright/
+test-results/
+playwright-report/

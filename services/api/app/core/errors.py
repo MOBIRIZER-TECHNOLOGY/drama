@@ -36,6 +36,15 @@ class Conflict(AppError):
         super().__init__(detail, status.HTTP_409_CONFLICT, code)
 
 
+class AgeGateRequired(AppError):
+    """Adult-rated content before the viewer has confirmed their age. Always 403, from play and from unlock."""
+
+    code = "age_gate_required"
+
+    def __init__(self, detail: str = "Confirm your age to watch this"):
+        super().__init__(detail, status.HTTP_403_FORBIDDEN)
+
+
 class InsufficientCoins(AppError):
     code = "insufficient_coins"
 
