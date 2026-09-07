@@ -100,3 +100,55 @@ export function downloadCsv(filename: string, columns: { key: string; label: str
   a.remove();
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Parse CSV into rows. Handles quoted fields, escaped quotes and embedded newlines per RFC 4180.
+ *
+ * A translation vendor returns the file we exported, and their tooling will have quoted anything containing a
+ * comma — splitting on "," would silently shred exactly the long sentences most likely to contain one.
+ */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let quoted = false;
+  // A leading BOM survives a round trip through Excel and would otherwise become part of the first header.
+  const input = text.replace(/^\uFEFF/, "");
+
+  for (let i = 0; i < input.length; i += 1) {
+    const c = input[i];
+    if (quoted) {
+      if (c === '"') {
+        if (input[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          quoted = false;
+        }
+      } else {
+        field += c;
+      }
+      continue;
+    }
+    if (c === '"') {
+      quoted = true;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\n" || c === "\r") {
+      // Swallow the \n of a \r\n pair rather than emitting an empty row.
+      if (c === "\r" && input[i + 1] === "\n") i += 1;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+  if (field || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((cell) => cell.trim() !== ""));
+}

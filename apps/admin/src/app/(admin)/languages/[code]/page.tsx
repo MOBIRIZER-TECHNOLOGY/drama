@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { memo, useCallback, useMemo, useState } from "react";
 import { api, call } from "@/lib/api";
+import { downloadCsv, parseCsv } from "@/lib/editing";
+import { checkPlaceholders, describeProblem, tooLong, type PlaceholderProblem } from "@/lib/placeholders";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
@@ -95,6 +97,20 @@ export default function TranslationsPage() {
       toast.error("Nothing to save: empty values are ignored");
       return;
     }
+
+    // Refuse the whole save rather than shipping a string that will render braces to a viewer.
+    const broken = Object.entries(messages)
+      .map(([k, v]) => [k, checkPlaceholders(data.source[k] ?? "", v)] as const)
+      .filter((entry): entry is [string, PlaceholderProblem] => entry[1] !== null);
+    if (broken.length) {
+      toast.error(
+        `${broken.length} string${broken.length === 1 ? "" : "s"} would break: ${broken
+          .slice(0, 3)
+          .map(([k, problem]) => `${k} (${describeProblem(problem)})`)
+          .join(", ")}`,
+      );
+      return;
+    }
     setSaving(true);
     try {
       await call(api.PUT("/v1/admin/translations/{lang}", { params: { path: { lang: code } }, body: { messages, source: "human" } }));
@@ -111,6 +127,72 @@ export default function TranslationsPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  /** Export every key with its source and current translation, for a vendor or a spreadsheet. */
+  function exportCsv() {
+    if (!data) return;
+    downloadCsv(
+      `katha-translations-${code}`,
+      [
+        { key: "key", label: "Key" },
+        { key: "source", label: "English" },
+        { key: "translation", label: code },
+        { key: "state", label: "State" },
+      ],
+      Object.keys(data.source)
+        .sort()
+        .map((k) => ({
+          key: k,
+          source: data.source[k],
+          translation: drafts[k] ?? data.target[k]?.value ?? "",
+          state: data.target[k]?.source ?? "missing",
+        })),
+    );
+  }
+
+  /**
+   * Import a returned CSV as drafts rather than writing straight through.
+   *
+   * Nothing is saved until the operator reviews and presses Save, so a vendor file with a broken placeholder is
+   * caught by the same check as hand editing, and an unexpected column layout is visible before it lands.
+   */
+  async function importCsv(file: File) {
+    if (!data) return;
+    const text = await file.text();
+    const rows = parseCsv(text);
+    if (rows.length === 0) {
+      toast.error("That file has no rows");
+      return;
+    }
+    const header = rows[0].map((h) => h.trim().toLowerCase());
+    const keyAt = header.indexOf("key");
+    // The translation column is named after the language, and falls back to the third column.
+    const valueAt = header.indexOf(code.toLowerCase()) >= 0 ? header.indexOf(code.toLowerCase()) : 2;
+    if (keyAt < 0 || valueAt < 0) {
+      toast.error('Expected a "key" column and a column named after the language');
+      return;
+    }
+
+    const next: Record<string, string> = {};
+    let unknown = 0;
+    for (const row of rows.slice(1)) {
+      const k = (row[keyAt] ?? "").trim();
+      const v = (row[valueAt] ?? "").trim();
+      if (!k || !v) continue;
+      if (!(k in data.source)) {
+        unknown += 1;
+        continue;
+      }
+      if (v !== (data.target[k]?.value ?? "")) next[k] = v;
+    }
+    setDrafts((d) => ({ ...d, ...next }));
+    const count = Object.keys(next).length;
+    toast.success(
+      count === 0
+        ? "Nothing new in that file"
+        : `${count} string${count === 1 ? "" : "s"} loaded as drafts${unknown ? `, ${unknown} unknown key${unknown === 1 ? "" : "s"} skipped` : ""}. Review, then Save.`,
+    );
   }
 
   async function aiTranslate() {
@@ -151,10 +233,29 @@ export default function TranslationsPage() {
             <Link href="/languages" className="mr-2 text-sm text-muted hover:text-ink">
               ← Languages
             </Link>
+            <Button onClick={exportCsv} disabled={!data}>
+              Export CSV
+            </Button>
             {!isSource && (
-              <Button onClick={aiTranslate} loading={aiBusy} disabled={!data || data.missing.length === 0}>
-                <Icon name="globe" size={15} /> AI translate missing
-              </Button>
+              <>
+                {/* A vendor returns the file we exported; it lands as drafts so the placeholder check still runs. */}
+                <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-line-strong bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-2">
+                  Import CSV
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="sr-only"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) void importCsv(file);
+                    }}
+                  />
+                </label>
+                <Button onClick={aiTranslate} loading={aiBusy} disabled={!data || data.missing.length === 0}>
+                  <Icon name="globe" size={15} /> AI translate missing
+                </Button>
+              </>
             )}
             <Button variant="primary" onClick={save} loading={saving} disabled={dirtyCount === 0}>
               Save {dirtyCount > 0 ? `(${dirtyCount})` : ""}
@@ -278,6 +379,8 @@ const TranslationRow = memo(function TranslationRow({
   onChange: (key: string, value: string) => void;
 }) {
   const missing = targetSource == null;
+  const problem = checkPlaceholders(source, value);
+  const long = !problem && tooLong(source, value);
   return (
     <tr className={changed ? "bg-accent/5" : undefined}>
       <Td className="align-top font-mono text-xs text-ink-2">{k}</Td>
@@ -289,8 +392,17 @@ const TranslationRow = memo(function TranslationRow({
           placeholder={missing ? "missing" : ""}
           dir={rtl ? "rtl" : undefined}
           onChange={(e) => onChange(k, e.target.value)}
-          className={`h-9 ${missing && !value ? "border-warning/60" : ""}`}
+          aria-invalid={problem ? true : undefined}
+          className={`h-9 ${problem ? "border-danger" : missing && !value ? "border-warning/60" : ""}`}
         />
+        {/* A dropped {count} renders the literal brace text to a viewer, and nothing used to catch it. */}
+        {problem ? (
+          <p role="alert" className="mt-1 text-[11px] text-danger">
+            Placeholders: {describeProblem(problem)}
+          </p>
+        ) : long ? (
+          <p className="mt-1 text-[11px] text-warning">Much longer than the source — check it still fits.</p>
+        ) : null}
       </Td>
       <Td className="align-top">
         {changed ? (
