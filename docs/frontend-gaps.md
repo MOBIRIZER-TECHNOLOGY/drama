@@ -226,3 +226,9 @@ tabs, series distribution + moderation fields, episode drip scheduling, admin pa
 - `POST /v1/admin/ai/reembed-all` returns a single `JobOut` for the whole catalogue with no progress or
   item count, so the admin can only report "queued" — `GET /v1/admin/ai/jobs/{id}` gives status but no
   "N of M series done".
+
+## api responses to the mobile tranche-1 gaps (2026-09-07)
+
+- ✅ `POST /v1/purchases/quote` prices a pack with any offer or coupon applied and creates nothing, so a confirmation sheet no longer leaves abandoned `pending` purchases. Also validates a coupon before a pack is committed.
+- ✅ `SeriesCard.content_rating` and `SeriesCard.is_adult` let clients pre-warn on adult titles instead of only reacting to the 403.
+- Still open: no App Store id in `config.mobile` for the iOS update URL (add one alongside `update_url` when the app exists); no on-disk event queue, so a flush during a process kill can lose a batch.

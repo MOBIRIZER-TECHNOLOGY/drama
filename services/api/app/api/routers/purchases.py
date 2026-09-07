@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError, NotFound
 from app.core.ratelimit import limiter
 from app.models.wallet import Purchase
-from app.schemas.purchases import CheckoutIn, CheckoutOut, PurchaseOut
+from app.schemas.purchases import CheckoutIn, CheckoutOut, PurchaseOut, QuoteIn, QuoteOut
 from app.services import config as config_svc
 from app.services import payments
 
@@ -75,6 +75,40 @@ async def checkout(
         currency=purchase.currency,
         amount=float(purchase.amount),
         discount_pct=purchase.discount_pct,
+    )
+
+
+@router.post("/purchases/quote", response_model=QuoteOut)
+@limiter.limit("30/minute")
+async def quote(
+    request: Request,
+    body: QuoteIn,
+    ctx: CurrentUser,
+    db: DB,
+    country: Annotated[str | None, Depends(client_country)],
+) -> QuoteOut:
+    """Price a pack with any offer or coupon applied, without creating a purchase."""
+    resolved = body.country if body.country and body.country != "*" else (country or "*")
+    q = await payments.quote_purchase(
+        db,
+        user=ctx.user,
+        pack_id=body.pack_id,
+        currency=body.currency,
+        country=resolved,
+        coupon_code=body.coupon_code,
+        offer_id=body.offer_id,
+        country_hint=country,
+    )
+    return QuoteOut(
+        pack_id=q.pack.id,
+        currency=q.currency,
+        list_amount=float(q.list_amount),
+        amount=float(q.amount),
+        discount_pct=q.discount_pct,
+        coins=q.coins,
+        offer_id=q.offer.id if q.offer else None,
+        offer_title=q.offer.title if q.offer else None,
+        coupon_code=q.coupon.code if q.coupon else None,
     )
 
 

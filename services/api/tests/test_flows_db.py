@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import UTC, date, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -252,3 +253,32 @@ async def test_age_gate_blocks_unlock(session):
     u.age_confirmed_at = datetime.now(UTC)
     row = await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.coins)
     assert row.method == UnlockMethod.coins
+
+
+async def test_quote_prices_without_creating_a_purchase(session):
+    from sqlalchemy import func
+    from sqlalchemy import select as sel
+
+    from app.models.wallet import CoinPack as CP
+    from app.models.wallet import Offer
+    from app.models.wallet import PackPrice as PP
+    from app.services import payments as pay
+
+    u = await _user(session)
+    pack = CP(sku=f"q-{uuid.uuid4().hex[:6]}", name="Starter", kind=PackKind.coins, coins=100, bonus_coins=10)
+    session.add(pack)
+    await session.flush()
+    session.add(PP(pack_id=pack.id, currency="INR", country="*", amount=99))
+    offer = Offer(title="Welcome 30", kind="first_purchase", discount_pct=30, is_active=True)
+    session.add(offer)
+    await session.flush()
+
+    before = await session.scalar(sel(func.count()).select_from(Purchase))
+    plain = await pay.quote_purchase(session, user=u, pack_id=pack.id, currency="INR", country="*")
+    assert plain.amount == plain.list_amount == 99 and plain.coins == 110 and plain.discount_pct is None
+    discounted = await pay.quote_purchase(
+        session, user=u, pack_id=pack.id, currency="INR", country="*", offer_id=offer.id, country_hint="IN"
+    )
+    assert discounted.amount == Decimal("69.30") and discounted.discount_pct == 30
+    after = await session.scalar(sel(func.count()).select_from(Purchase))
+    assert before == after  # quoting creates nothing

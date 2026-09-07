@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
@@ -73,29 +74,43 @@ def _minor_units(amount: Decimal, currency: str) -> int:
     return int(amount) if currency.upper() in ZERO_DECIMAL else int(round(amount * 100))
 
 
-async def create_purchase(
+@dataclass
+class Quote:
+    """What a pack costs this user right now, after any eligible offer or coupon. Creates nothing."""
+
+    pack: CoinPack
+    currency: str
+    list_amount: Decimal
+    amount: Decimal
+    discount_pct: int | None
+    offer: Offer | None
+    coupon: Coupon | None
+
+    @property
+    def coins(self) -> int:
+        return self.pack.coins + self.pack.bonus_coins
+
+
+async def quote_purchase(
     session: AsyncSession,
     *,
     user: User,
     pack_id: uuid.UUID,
-    gateway: str,
     currency: str,
     country: str,
-    success_url: str,
-    cancel_url: str,
-    variant_map: dict | None,
     coupon_code: str | None = None,
     offer_id: uuid.UUID | None = None,
     country_hint: str | None = None,
-) -> tuple[Purchase, str]:
-    """Returns the pending purchase and the URL / order id the client needs to continue."""
+) -> Quote:
+    """Price a pack without creating a purchase, so clients can preview a discount before committing."""
     from app.services import offers as offers_svc
 
     pack = await session.get(CoinPack, pack_id)
     if pack is None or not pack.is_active:
         raise NotFound("Pack")
     price = await price_for(session, pack, currency, country)
-    amount = Decimal(price.amount)
+    list_amount = Decimal(price.amount)
+    amount = list_amount
     discount_pct: int | None = None
     applied_offer: Offer | None = None
     applied_coupon: Coupon | None = None
@@ -114,12 +129,51 @@ async def create_purchase(
             raise AppError("Offer applies to a different pack", code="offer_pack_mismatch")
         discount_pct = applied_offer.discount_pct
         amount = offers_svc.apply_discount(amount, discount_pct)
+    return Quote(
+        pack=pack,
+        currency=price.currency,
+        list_amount=list_amount,
+        amount=amount,
+        discount_pct=discount_pct,
+        offer=applied_offer,
+        coupon=applied_coupon,
+    )
+
+
+async def create_purchase(
+    session: AsyncSession,
+    *,
+    user: User,
+    pack_id: uuid.UUID,
+    gateway: str,
+    currency: str,
+    country: str,
+    success_url: str,
+    cancel_url: str,
+    variant_map: dict | None,
+    coupon_code: str | None = None,
+    offer_id: uuid.UUID | None = None,
+    country_hint: str | None = None,
+) -> tuple[Purchase, str]:
+    """Returns the pending purchase and the URL / order id the client needs to continue."""
+    quote = await quote_purchase(
+        session,
+        user=user,
+        pack_id=pack_id,
+        currency=currency,
+        country=country,
+        coupon_code=coupon_code,
+        offer_id=offer_id,
+        country_hint=country_hint,
+    )
+    pack, amount, currency_code = quote.pack, quote.amount, quote.currency
+    applied_offer, applied_coupon, discount_pct = quote.offer, quote.coupon, quote.discount_pct
     purchase = Purchase(
         user_id=user.id,
         pack_id=pack.id,
         gateway=gateway,
         status=PurchaseStatus.pending,
-        currency=price.currency,
+        currency=currency_code,
         amount=amount,
         coins_granted=0,
         variant_map=variant_map,
@@ -131,7 +185,7 @@ async def create_purchase(
     await session.flush()
 
     s = get_settings()
-    minor = _minor_units(amount, price.currency)
+    minor = _minor_units(amount, currency_code)
     if gateway == "stripe":
         if not s.stripe_secret_key:
             raise AppError("Stripe is not configured", code="gateway_unavailable")
@@ -145,7 +199,7 @@ async def create_purchase(
             line_items=[
                 {
                     "price_data": {
-                        "currency": price.currency.lower(),
+                        "currency": currency_code.lower(),
                         "unit_amount": minor,
                         "product_data": {"name": pack.name},
                     },
@@ -169,7 +223,7 @@ async def create_purchase(
                 "https://api.razorpay.com/v1/orders",
                 json={
                     "amount": minor,
-                    "currency": price.currency.upper(),
+                    "currency": currency_code.upper(),
                     "receipt": str(purchase.id),
                     "notes": {"purchase_id": str(purchase.id), "user_id": str(user.id), "pack_id": str(pack.id)},
                 },

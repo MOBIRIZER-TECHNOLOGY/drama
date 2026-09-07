@@ -583,6 +583,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/purchases/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Quote
+         * @description Price a pack with any offer or coupon applied, without creating a purchase.
+         */
+        post: operations["quote_v1_purchases_quote_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/purchases/{purchase_id}": {
         parameters: {
             query?: never;
@@ -3293,6 +3313,52 @@ export interface components {
             /** Error Rate */
             error_rate: number | null;
         };
+        /** QuoteIn */
+        QuoteIn: {
+            /**
+             * Pack Id
+             * Format: uuid
+             */
+            pack_id: string;
+            /**
+             * Currency
+             * @default INR
+             */
+            currency: string;
+            /**
+             * Country
+             * @default *
+             */
+            country: string;
+            /** Coupon Code */
+            coupon_code?: string | null;
+            /** Offer Id */
+            offer_id?: string | null;
+        };
+        /** QuoteOut */
+        QuoteOut: {
+            /**
+             * Pack Id
+             * Format: uuid
+             */
+            pack_id: string;
+            /** Currency */
+            currency: string;
+            /** List Amount */
+            list_amount: number;
+            /** Amount */
+            amount: number;
+            /** Discount Pct */
+            discount_pct: number | null;
+            /** Coins */
+            coins: number;
+            /** Offer Id */
+            offer_id?: string | null;
+            /** Offer Title */
+            offer_title?: string | null;
+            /** Coupon Code */
+            coupon_code?: string | null;
+        };
         /** RefreshRequest */
         RefreshRequest: {
             /** Refresh Token */
@@ -3433,6 +3499,13 @@ export interface components {
             categories: components["schemas"]["CategoryOut"][];
             /** Released At */
             released_at: string | null;
+            /** Content Rating */
+            content_rating?: string | null;
+            /**
+             * Is Adult
+             * @default false
+             */
+            is_adult: boolean;
             /** First Episode Id */
             first_episode_id?: string | null;
             progress?: components["schemas"]["ContinueProgress"] | null;
@@ -3470,6 +3543,13 @@ export interface components {
             categories: components["schemas"]["CategoryOut"][];
             /** Released At */
             released_at: string | null;
+            /** Content Rating */
+            content_rating?: string | null;
+            /**
+             * Is Adult
+             * @default false
+             */
+            is_adult: boolean;
             /** First Episode Id */
             first_episode_id?: string | null;
             progress?: components["schemas"]["ContinueProgress"] | null;
@@ -4957,6 +5037,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CheckoutOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quote_v1_purchases_quote_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QuoteIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QuoteOut"];
                 };
             };
             /** @description Validation Error */

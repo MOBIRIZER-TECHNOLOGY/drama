@@ -79,6 +79,8 @@ def _card(
         like_count=series.like_count,
         categories=[CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in series.categories],
         released_at=series.released_at,
+        content_rating=series.content_rating,
+        is_adult=_is_adult(series),
     )
 
 

@@ -38,3 +38,23 @@ class PurchaseOut(BaseModel):
     coins_granted: int
     paid_at: datetime | None
     created_at: datetime
+
+
+class QuoteIn(BaseModel):
+    pack_id: uuid.UUID
+    currency: str = Field(default="INR", min_length=3, max_length=3)
+    country: str = Field(default="*", max_length=2)
+    coupon_code: str | None = Field(default=None, max_length=32)
+    offer_id: uuid.UUID | None = None
+
+
+class QuoteOut(BaseModel):
+    pack_id: uuid.UUID
+    currency: str
+    list_amount: float
+    amount: float
+    discount_pct: int | None
+    coins: int
+    offer_id: uuid.UUID | None = None
+    offer_title: str | None = None
+    coupon_code: str | None = None

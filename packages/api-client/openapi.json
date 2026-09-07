@@ -1572,6 +1572,53 @@
         ]
       }
     },
+    "/v1/purchases/quote": {
+      "post": {
+        "tags": [
+          "purchases"
+        ],
+        "summary": "Quote",
+        "description": "Price a pack with any offer or coupon applied, without creating a purchase.",
+        "operationId": "quote_v1_purchases_quote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QuoteIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/purchases/{purchase_id}": {
       "get": {
         "tags": [
@@ -10262,6 +10309,137 @@
         ],
         "title": "QoeRow"
       },
+      "QuoteIn": {
+        "properties": {
+          "pack_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Pack Id"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency",
+            "default": "INR"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2,
+            "title": "Country",
+            "default": "*"
+          },
+          "coupon_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pack_id"
+        ],
+        "title": "QuoteIn"
+      },
+      "QuoteOut": {
+        "properties": {
+          "pack_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Pack Id"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "list_amount": {
+            "type": "number",
+            "title": "List Amount"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "discount_pct": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discount Pct"
+          },
+          "coins": {
+            "type": "integer",
+            "title": "Coins"
+          },
+          "offer_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Id"
+          },
+          "offer_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offer Title"
+          },
+          "coupon_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pack_id",
+          "currency",
+          "list_amount",
+          "amount",
+          "discount_pct",
+          "coins"
+        ],
+        "title": "QuoteOut"
+      },
       "RefreshRequest": {
         "properties": {
           "refresh_token": {
@@ -10602,6 +10780,22 @@
             ],
             "title": "Released At"
           },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
+          },
+          "is_adult": {
+            "type": "boolean",
+            "title": "Is Adult",
+            "default": false
+          },
           "first_episode_id": {
             "anyOf": [
               {
@@ -10734,6 +10928,22 @@
               }
             ],
             "title": "Released At"
+          },
+          "content_rating": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Rating"
+          },
+          "is_adult": {
+            "type": "boolean",
+            "title": "Is Adult",
+            "default": false
           },
           "first_episode_id": {
             "anyOf": [

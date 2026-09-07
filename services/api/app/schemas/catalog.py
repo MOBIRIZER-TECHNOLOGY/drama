@@ -34,6 +34,8 @@ class SeriesCard(BaseModel):
     like_count: int
     categories: list[CategoryOut]
     released_at: datetime | None
+    content_rating: str | None = None  # U | UA7 | UA13 | UA16 | A
+    is_adult: bool = False  # rating needs a confirmed adult viewer; clients can pre-warn
     first_episode_id: uuid.UUID | None = None  # lowest published episode, for feeds
     progress: ContinueProgress | None = None  # only on the continue-watching rail
 
