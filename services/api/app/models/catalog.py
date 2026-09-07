@@ -47,6 +47,11 @@ class Series(UUIDPrimaryKey, TimestampMixin, Base):
     original_language: Mapped[str] = mapped_column(String(10), default="hi", nullable=False)
     free_episodes: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     episode_price: Mapped[int | None] = mapped_column(Integer)  # overrides the global price
+    # Discount applied when a viewer unlocks every remaining episode at once; None uses the global default.
+    bundle_discount_pct: Mapped[int | None] = mapped_column(Integer)
+    # Editorial promise shown on the series page: "Ongoing", "Completed", or a drip note like "New episodes Friday".
+    completion_status: Mapped[str | None] = mapped_column(String(16))
+    release_note: Mapped[str | None] = mapped_column(String(120))
     is_featured: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     is_premium: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     status: Mapped[PublishStatus] = mapped_column(

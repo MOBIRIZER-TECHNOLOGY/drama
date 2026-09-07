@@ -31,8 +31,15 @@ async def publish_scheduled(ctx: dict) -> dict:
             ep.status = PublishStatus.published
             ep.published_at = ep.published_at or now
         await db.commit()
+        episode_ids = [str(ep.id) for ep in rows]
     if rows:
         log.info("publish.scheduled", count=len(rows))
+        # An episode going live is the one moment the people watching that series want to hear from us.
+        # Enqueued rather than sent inline so a push outage never blocks the release.
+        redis = ctx.get("redis")
+        if redis is not None:
+            for episode_id in episode_ids:
+                await redis.enqueue_job("new_episode_alert", episode_id)
     return {"published": len(rows)}
 
 

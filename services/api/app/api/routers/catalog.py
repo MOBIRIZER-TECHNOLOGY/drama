@@ -18,6 +18,8 @@ from app.core.redis import redis_client
 from app.models.catalog import Category, Embedding, Episode, PublishStatus, Series, SeriesTranslation, Subtitle
 from app.models.engagement import Favorite, Like, WatchProgress
 from app.schemas.catalog import (
+    BundleQuoteOut,
+    BundleUnlockOut,
     CategoryOut,
     ContinueProgress,
     EpisodeOut,
@@ -80,6 +82,9 @@ def _card(
         released_at=series.released_at,
         content_rating=series.content_rating,
         is_adult=_is_adult(series),
+        completion_status=series.completion_status,
+        release_note=series.release_note,
+        updated_at=series.updated_at,
     )
 
 
@@ -205,7 +210,7 @@ def _published_series(lang: str | None = None, country: str | None = None):
 
 
 def _is_adult(series: Series) -> bool:
-    return (series.content_rating or "") in get_settings().adult_ratings
+    return access_svc.requires_age_gate(series)
 
 
 @router.get("/home", response_model=HomeOut)
@@ -435,6 +440,44 @@ async def unlock(request: Request, episode_id: uuid.UUID, body: UnlockRequest, c
     await db.commit()
     await db.refresh(ctx.user)
     return UnlockOut(episode_id=row.episode_id, method=row.method, coin_balance=ctx.user.coin_balance)
+
+
+@router.get("/series/{series_id}/bundle", response_model=BundleQuoteOut)
+async def bundle_quote(series_id: uuid.UUID, ctx: CurrentUser, db: DB) -> BundleQuoteOut:
+    """Price every episode the viewer cannot yet watch, as one purchase. Creates nothing."""
+    series = await db.get(Series, series_id)
+    if series is None or series.status != PublishStatus.published:
+        raise NotFound("Series")
+    quote = await access_svc.quote_series_bundle(db, user=ctx.user, series=series)
+    return BundleQuoteOut(
+        series_id=series.id,
+        episode_count=quote.count,
+        list_price=quote.list_price,
+        price=quote.price,
+        discount_pct=quote.discount_pct,
+        saving=quote.saving,
+        affordable=ctx.user.coin_balance >= quote.price,
+        coin_balance=ctx.user.coin_balance,
+    )
+
+
+@router.post("/series/{series_id}/bundle", response_model=BundleUnlockOut)
+@limiter.limit("10/minute")
+async def unlock_bundle(request: Request, series_id: uuid.UUID, ctx: CurrentUser, db: DB) -> BundleUnlockOut:
+    """Unlock the rest of the series in one transaction, at the bundle discount."""
+    variants = await config_svc.variant_map(db, ctx.user.id)
+    before = ctx.user.coin_balance
+    rows = await access_svc.unlock_series_bundle(
+        db, user=ctx.user, series_id=series_id, variant_map=variants or None
+    )
+    await db.commit()
+    await db.refresh(ctx.user)
+    return BundleUnlockOut(
+        series_id=series_id,
+        episode_ids=[r.episode_id for r in rows],
+        spent=before - ctx.user.coin_balance,
+        coin_balance=ctx.user.coin_balance,
+    )
 
 
 @router.post("/episodes/{episode_id}/play", response_model=PlayOut)

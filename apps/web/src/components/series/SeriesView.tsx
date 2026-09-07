@@ -430,7 +430,10 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
                 {series.is_premium ? (
                   <span className="inline-flex items-center gap-1 text-gold">
                     <IconLock size={12} />
-                    {series.free_episodes} {t("series.free_episodes", "free episodes")}
+                    {series.free_episodes}{" "}
+                    {series.free_episodes === 1
+                      ? t("series.free_episode_one", "free episode")
+                      : t("series.free_episodes", "free episodes")}
                   </span>
                 ) : (
                   <span className="text-success">{t("series.free", "Free")}</span>

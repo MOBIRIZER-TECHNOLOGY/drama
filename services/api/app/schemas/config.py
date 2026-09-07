@@ -40,12 +40,23 @@ class EconomyConfig(OpenModel):
     episode_price: int = 50
     free_episodes: int = 5
     ad_unlocks_per_day: int = 5
+    bundle_discount_pct: int = 30
 
 
 class RewardsConfig(OpenModel):
     enabled: bool = True
-    daily_rewards: list[int] = [10, 20, 30, 40, 50, 60, 70]
+    daily_rewards: list[int] = [10, 15, 20, 30, 40, 60, 150]
     signup_bonus: int = 100
+
+
+class ReferralConfig(OpenModel):
+    enabled: bool = True
+    referrer_coins: int = 100
+    referee_coins: int = 100
+
+
+class NotificationsConfig(BaseModel):
+    channels: list[str] = []
 
 
 class MobileConfig(OpenModel):
@@ -72,6 +83,8 @@ class ConfigOut(BaseModel):
     auth: AuthConfig
     economy: EconomyConfig
     rewards: RewardsConfig
+    referral: ReferralConfig = ReferralConfig()
+    notifications: NotificationsConfig = NotificationsConfig()
     mobile: MobileConfig
     languages: list[ConfigLanguage]
     flags: dict[str, bool]

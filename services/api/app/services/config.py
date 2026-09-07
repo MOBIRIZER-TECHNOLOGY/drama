@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.models.ops import Experiment, ExperimentAssignment, FeatureFlag, Language, Setting
+from app.services import push
 
 DEFAULT_NAMESPACES: dict[str, dict] = {
     "auth": {
@@ -24,6 +25,7 @@ DEFAULT_NAMESPACES: dict[str, dict] = {
         "currency_symbol": "₹",
     },
     "rewards": {"enabled": True},
+    "referral": {"enabled": True},
     "mobile": {
         "min_version_code": 1,
         "force_update": False,
@@ -43,6 +45,25 @@ async def namespace(session: AsyncSession, name: str) -> dict:
     if row is not None:
         data.update(row.data)
     return data
+
+
+async def _referral(session: AsyncSession) -> dict:
+    """Referral economics, resolved once so the API and the clients cannot disagree about the numbers."""
+    s = get_settings()
+    data = await namespace(session, "referral")
+    data.setdefault("referrer_coins", s.default_referral_reward_coins)
+    data.setdefault("referee_coins", s.default_referee_reward_coins)
+    return data
+
+
+async def referral_reward_coins(session: AsyncSession) -> int:
+    """Coins the referrer earns when the person they invited first pays."""
+    return int((await _referral(session)).get("referrer_coins") or 0)
+
+
+async def referee_reward_coins(session: AsyncSession) -> int:
+    """Coins credited to a new account that arrived through someone's invite link."""
+    return int((await _referral(session)).get("referee_coins") or 0)
 
 
 def _bucket(user_id: uuid.UUID, experiment_key: str) -> int:
@@ -105,9 +126,11 @@ async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: s
     economy.setdefault("episode_price", s.default_episode_price)
     economy.setdefault("free_episodes", s.default_free_episodes)
     economy.setdefault("ad_unlocks_per_day", s.default_ad_unlocks_per_day)
+    economy.setdefault("bundle_discount_pct", s.default_bundle_discount_pct)
     rewards = await namespace(session, "rewards")
     rewards.setdefault("daily_rewards", s.default_daily_rewards)
     rewards.setdefault("signup_bonus", s.default_signup_bonus)
+    referral = await _referral(session)
     site = await namespace(session, "site")
     site["captcha_site_key"] = s.turnstile_site_key
     pay = await namespace(session, "payments")
@@ -134,6 +157,8 @@ async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: s
         "auth": await namespace(session, "auth"),
         "economy": economy,
         "rewards": rewards,
+        "referral": referral,
+        "notifications": {"channels": list(push.CHANNELS)},
         "mobile": await namespace(session, "mobile"),
         "languages": languages,
         "flags": flags,

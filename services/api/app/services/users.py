@@ -14,6 +14,7 @@ from app.core.firebase import FirebaseIdentity
 from app.core.security import mint_token, new_opaque_token
 from app.models.identity import AuthIdentity, Platform, Session, User, UserStatus
 from app.models.wallet import LedgerKind, Referral
+from app.services import config as config_svc
 from app.services import ledger
 
 _ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
@@ -108,6 +109,20 @@ async def get_or_create_from_firebase(
                     created_at=datetime.now(UTC),
                 )
             )
+            # The referee is paid immediately. The referrer's half waits for a real purchase (see payments.py);
+            # paying both sides at signup would make throwaway accounts profitable.
+            welcome = await config_svc.referee_reward_coins(session)
+            if welcome > 0:
+                await ledger.post(
+                    session,
+                    user_id=user.id,
+                    delta=welcome,
+                    kind=LedgerKind.referral,
+                    idempotency_key=f"referral-welcome:{user.id}",
+                    ref_type="user",
+                    ref_id=str(referrer.id),
+                    note="Invited by a friend",
+                )
     bonus = get_settings().default_signup_bonus
     if bonus > 0:
         await ledger.post(

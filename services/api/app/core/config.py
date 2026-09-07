@@ -74,8 +74,11 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.1
     otlp_endpoint: str | None = None
 
-    # Content safety: ratings that need a confirmed adult viewer
+    # Content safety: ratings that need a confirmed adult viewer.
     adult_ratings: list[str] = Field(default_factory=lambda: ["A", "UA16"])
+    # A series with no rating set is treated as adult. Fail closed: an editor who forgets a rating must not be
+    # able to publish mature content ungated. Set false only for a catalogue that is entirely general-audience.
+    unrated_is_adult: bool = True
     indexnow_key: str | None = None
     semantic_search_timeout_seconds: float = 2.0
 
@@ -83,8 +86,24 @@ class Settings(BaseSettings):
     default_signup_bonus: int = 100
     default_episode_price: int = 50
     default_free_episodes: int = 5
-    default_daily_rewards: list[int] = Field(default_factory=lambda: [10, 20, 30, 40, 50, 60, 70])
+    # A seven-day ladder that ends in a jackpot, so the last day is worth protecting a streak for.
+    default_daily_rewards: list[int] = Field(default_factory=lambda: [10, 15, 20, 30, 40, 60, 150])
     default_ad_unlocks_per_day: int = 5
+    # Both sides of a referral are paid, otherwise the referrer has nothing to offer when they ask.
+    default_referral_reward_coins: int = 100
+    default_referee_reward_coins: int = 100
+    # Unlocking every remaining episode at once costs this much less than buying them one at a time.
+    default_bundle_discount_pct: int = 30
+
+    # Push delivery. Expo relays to FCM and APNs; the access token is only needed for accounts with
+    # enhanced security enabled. Without it Expo still accepts sends for tokens issued to this project.
+    expo_access_token: str | None = None
+    expo_push_url: str = "https://exp.host/--/api/v2/push/send"
+
+    # Google Play Billing: purchases made in the Android app are verified against the Play Developer API
+    # before any coins are granted, exactly like a gateway webhook.
+    google_play_package_name: str | None = None
+    google_play_service_account_file: str | None = None
 
     @model_validator(mode="after")
     def _production_guard(self) -> "Settings":

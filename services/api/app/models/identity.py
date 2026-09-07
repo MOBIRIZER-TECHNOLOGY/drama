@@ -41,6 +41,8 @@ class User(UUIDPrimaryKey, TimestampMixin, Base):
     referred_by_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     age_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Per-channel opt-outs, e.g. {"new_episode": false}. Absent keys mean opted in; see services/push.py.
+    notification_prefs: Mapped[dict | None] = mapped_column(JSONB)
 
     identities: Mapped[list["AuthIdentity"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     sessions: Mapped[list["Session"]] = relationship(back_populates="user", cascade="all, delete-orphan")

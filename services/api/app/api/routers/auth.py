@@ -8,13 +8,21 @@ from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUser, client_ip
 from app.core.config import get_settings
-from app.core.errors import Unauthorized
+from app.core.errors import Conflict, Unauthorized
 from app.core.firebase import verify_id_token
 from app.core.ratelimit import limiter
 from app.models.identity import Session
-from app.schemas.auth import ExchangeRequest, RefreshRequest, SessionOut, TokenPair, UpdateMe, UserOut
+from app.schemas.auth import (
+    ExchangeRequest,
+    PushTokenIn,
+    RefreshRequest,
+    SessionOut,
+    TokenPair,
+    UpdateMe,
+    UserOut,
+)
 from app.schemas.common import Ok
-from app.services import storage
+from app.services import push, storage
 from app.services import users as users_svc
 from app.services.access import is_vip
 
@@ -97,6 +105,37 @@ async def update_me(body: UpdateMe, ctx: CurrentUser, db: DB) -> UserOut:
     await db.commit()
     await db.refresh(ctx.user)
     return await _user_out(db, ctx.user)
+
+
+@router.put("/me/push-token", response_model=Ok)
+async def set_push_token(body: PushTokenIn, ctx: CurrentUser, db: DB) -> Ok:
+    """Attach this device's push token to the current session.
+
+    The token lives on the session, not the user, so signing out or revoking a device stops delivery to it with
+    no extra bookkeeping. The same physical device re-registering on a new session simply writes a new row; the
+    old one is either revoked or expires, and `push.tokens_for` de-duplicates whatever overlap remains.
+    """
+    if ctx.session_id is None:
+        raise Unauthorized("This session cannot receive push")
+    if not push.is_expo_token(body.token):
+        raise Conflict("Not an Expo push token", code="bad_push_token")
+    session_row = await db.get(Session, ctx.session_id)
+    if session_row is None or session_row.revoked_at is not None:
+        raise Unauthorized("This session cannot receive push")
+    session_row.push_token = body.token
+    await db.commit()
+    return Ok()
+
+
+@router.delete("/me/push-token", response_model=Ok)
+async def clear_push_token(ctx: CurrentUser, db: DB) -> Ok:
+    """Stop delivery to this device without signing out — what a notifications toggle in settings calls."""
+    if ctx.session_id is not None:
+        session_row = await db.get(Session, ctx.session_id)
+        if session_row is not None:
+            session_row.push_token = None
+            await db.commit()
+    return Ok()
 
 
 class AvatarPresignIn(BaseModel):

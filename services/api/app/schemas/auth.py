@@ -44,6 +44,7 @@ class UserOut(ORMModel):
     vip_ends_at: datetime | None = None
     referral_code: str | None
     age_confirmed_at: datetime | None = None
+    notification_prefs: dict | None = None
     created_at: datetime
 
 
@@ -52,6 +53,13 @@ class UpdateMe(BaseModel):
     avatar_url: str | None = None
     locale: str | None = Field(default=None, max_length=10)
     age_confirmed: bool | None = None  # true once the viewer confirms they are an adult
+    notification_prefs: dict[str, bool] | None = None
+
+
+class PushTokenIn(BaseModel):
+    """An Expo push token for the device this session belongs to."""
+
+    token: str = Field(min_length=10, max_length=255)
 
 
 class SessionOut(ORMModel):

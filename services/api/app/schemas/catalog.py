@@ -36,6 +36,11 @@ class SeriesCard(BaseModel):
     released_at: datetime | None
     content_rating: str | None = None  # U | UA7 | UA13 | UA16 | A
     is_adult: bool = False  # rating needs a confirmed adult viewer; clients can pre-warn
+    # "Ongoing" / "Completed", and the drip promise ("New episodes every Friday"). A dripping-series app lives on
+    # the next-episode promise, so both belong on the card, not only the detail page.
+    completion_status: str | None = None
+    release_note: str | None = None
+    updated_at: datetime | None = None  # drives the "new episode" badge on clients
     first_episode_id: uuid.UUID | None = None  # lowest published episode, for feeds
     progress: ContinueProgress | None = None  # only on the continue-watching rail
 
@@ -81,6 +86,26 @@ class UnlockRequest(BaseModel):
 class UnlockOut(BaseModel):
     episode_id: uuid.UUID
     method: UnlockMethod
+    coin_balance: int
+
+
+class BundleQuoteOut(BaseModel):
+    """What "unlock everything left" costs, so the paywall can price the offer before the viewer commits."""
+
+    series_id: uuid.UUID
+    episode_count: int
+    list_price: int
+    price: int
+    discount_pct: int
+    saving: int
+    affordable: bool
+    coin_balance: int
+
+
+class BundleUnlockOut(BaseModel):
+    series_id: uuid.UUID
+    episode_ids: list[uuid.UUID]
+    spent: int
     coin_balance: int
 
 

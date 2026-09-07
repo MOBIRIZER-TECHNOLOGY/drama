@@ -39,12 +39,12 @@ from app.models.wallet import (
     VipMembership,
     WebhookEvent,
 )
+from app.services import config as config_svc
 from app.services import ledger
 
 log = structlog.get_logger()
 
 ZERO_DECIMAL = {"JPY", "KRW", "VND", "CLP", "ISK", "UGX", "XAF", "XOF"}
-REFERRAL_REWARD_COINS = 50
 TERMINAL = {PurchaseStatus.paid, PurchaseStatus.refunded, PurchaseStatus.failed}
 
 
@@ -322,6 +322,12 @@ async def mark_paid(
 
 
 async def _reward_referrer_on_first_purchase(session: AsyncSession, purchase: Purchase) -> None:
+    """Pay the referrer once, when the person they invited first spends money.
+
+    The referee is paid at signup instead (see `users.get_or_create_from_firebase`), because the invitation has
+    to be worth accepting before there is any reason to accept it. Holding the referrer's half back until a real
+    purchase is what stops the loop paying out for throwaway accounts.
+    """
     ref = await session.scalar(
         select(Referral)
         .where(Referral.referee_id == purchase.user_id, Referral.rewarded_at.is_(None))
@@ -329,16 +335,18 @@ async def _reward_referrer_on_first_purchase(session: AsyncSession, purchase: Pu
     )
     if ref is None:
         return
-    await ledger.post(
-        session,
-        user_id=ref.referrer_id,
-        delta=REFERRAL_REWARD_COINS,
-        kind=LedgerKind.referral,
-        idempotency_key=f"referral:{ref.id}",
-        ref_type="referral",
-        ref_id=str(ref.id),
-        note="Referral reward",
-    )
+    amount = await config_svc.referral_reward_coins(session)
+    if amount > 0:
+        await ledger.post(
+            session,
+            user_id=ref.referrer_id,
+            delta=amount,
+            kind=LedgerKind.referral,
+            idempotency_key=f"referral:{ref.id}",
+            ref_type="referral",
+            ref_id=str(ref.id),
+            note="Referral reward",
+        )
     ref.rewarded_at = datetime.now(UTC)
 
 
