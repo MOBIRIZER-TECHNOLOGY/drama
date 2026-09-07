@@ -475,6 +475,23 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
             )}
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-2xl font-bold leading-tight text-ink sm:text-3xl">{series.title}</h1>
+              {/* Classification and the next-episode promise: the two things a viewer decides on and neither was
+                  shown anywhere in the product. */}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                {series.content_rating && (
+                  <span
+                    className={`rounded-sm border px-1.5 py-0.5 text-[11px] font-semibold ${
+                      series.is_adult ? "border-danger/60 text-danger" : "border-line text-ink2"
+                    }`}
+                  >
+                    {series.content_rating}
+                  </span>
+                )}
+                {series.completion_status && (
+                  <span className="rounded-pill bg-surface2 px-2 py-0.5 text-[11px] text-ink2">{series.completion_status}</span>
+                )}
+                {series.release_note && <span className="text-[11px] text-muted">{series.release_note}</span>}
+              </div>
               <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted">
                 <span>
                   {series.episode_count} {t("series.episodes", "episodes")}

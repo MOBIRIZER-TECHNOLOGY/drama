@@ -9,11 +9,14 @@
   --color-ink2: var(--k-ink2);
   --color-muted: var(--k-muted);
   --color-line: var(--k-line);
+  --color-line-strong: var(--k-line-strong);
+  --color-scrim: var(--k-scrim);
+  --color-overlay: var(--k-overlay);
   --color-accent: var(--k-accent);
-  --color-accent-hover: color-mix(in oklab, var(--k-accent) 88%, white);
-  --color-accent-ink: var(--k-accentInk);
+  --color-accent-hover: var(--k-accent-hover);
+  --color-accent-ink: var(--k-accent-ink);
   --color-gold: var(--k-gold);
-  --color-gold-hover: color-mix(in oklab, var(--k-gold) 88%, white);
+  --color-gold-hover: var(--k-gold-hover);
   --color-success: var(--k-success);
   --color-warning: var(--k-warning);
   --color-danger: var(--k-danger);
@@ -160,25 +163,72 @@ input[type="range"].k-range:focus-visible {
   border-radius: 999px;
 }
 
+/* A sweep rather than a global opacity pulse: fading every skeleton in unison reads as a flicker, and a
+   directional sweep reads as loading. */
 @keyframes k-shimmer {
-  0% {
-    opacity: 0.55;
+  from {
+    background-position: 200% 0;
   }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.55;
+  to {
+    background-position: -200% 0;
   }
 }
 .k-skeleton {
-  background: var(--k-surface2);
-  animation: k-shimmer 1.6s ease-in-out infinite;
+  background-color: var(--k-surface2);
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in oklab, var(--k-ink) 7%, transparent) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: k-shimmer 1.4s linear infinite;
 }
 
+/* Toasts and dialogs: entering eases in, leaving is quick, because nobody watches something go. */
+@keyframes k-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.k-rise {
+  animation: k-rise var(--k-duration-base) var(--k-ease-standard) both;
+}
+
+/* One coin-count tick, for the moment a balance changes. The single most important feedback in a coin economy
+   was a hard number swap. */
+@keyframes k-bump {
+  0% {
+    transform: none;
+  }
+  35% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: none;
+  }
+}
+.k-bump {
+  animation: k-bump var(--k-duration-slow) var(--k-ease-spring) both;
+}
+
+/* One place, covering every animation in the product rather than only the skeleton. */
 @media (prefers-reduced-motion: reduce) {
-  .k-skeleton {
-    animation: none;
+  .k-skeleton,
+  .k-rise,
+  .k-bump,
+  dialog[open] {
+    animation: none !important;
+  }
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
   }
 }
 

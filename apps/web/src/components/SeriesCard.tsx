@@ -41,6 +41,25 @@ export function SeriesCard({
             <span className="font-display px-3 text-center text-sm text-muted">{series.title}</span>
           </div>
         )}
+        {/* Ratings were added to the API so clients could warn before playback, and then rendered nowhere: a
+            UA16 title looked identical to a U until playback was refused. India's IT Rules expect a prominent
+            classification, and a parent has no other signal. */}
+        {series.content_rating && (
+          <span
+            className={`absolute start-1.5 top-1.5 rounded-sm border px-1 py-px text-[10px] font-semibold leading-tight ${
+              series.is_adult ? "border-danger/60 bg-black/70 text-danger" : "border-line bg-black/60 text-ink2"
+            }`}
+            title={series.is_adult ? "Mature content" : "Content rating"}
+          >
+            {series.content_rating}
+          </span>
+        )}
+        {/* A dripping catalogue lives on the next-episode promise, so say when it last moved. */}
+        {series.completion_status && (
+          <span className="absolute end-1.5 top-1.5 rounded-sm bg-black/60 px-1 py-px text-[10px] leading-tight text-ink2">
+            {series.completion_status}
+          </span>
+        )}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
         <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-[11px] text-ink2">
           <span>

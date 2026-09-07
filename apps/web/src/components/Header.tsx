@@ -101,11 +101,15 @@ function HeaderInner({ pathname }: { pathname: string }) {
             <div ref={menuRef} className="relative flex items-center gap-2">
               <Link
                 href={href("/wallet")}
-                className="flex items-center gap-1 rounded-pill border border-gold/40 bg-surface px-2.5 py-1.5 text-sm font-medium text-gold hover:bg-surface2"
+                className="flex items-center gap-1 rounded-pill border border-gold/40 bg-surface px-2.5 py-1.5 text-sm font-medium tabular-nums text-gold hover:bg-surface2"
                 aria-label={t("wallet.balance", "Coin balance")}
               >
                 <IconCoin size={16} />
-                {formatCoins(balance, lang)}
+                {/* Keyed on the value so the number visibly ticks when it changes. Spending and earning were a
+                    hard swap, which is the single most important feedback moment in a coin economy. */}
+                <span key={balance} className="k-bump inline-block">
+                  {formatCoins(balance, lang)}
+                </span>
               </Link>
               <button
                 type="button"
