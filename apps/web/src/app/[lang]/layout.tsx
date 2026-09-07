@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Baloo_2, Bricolage_Grotesque, IBM_Plex_Sans, IBM_Plex_Sans_Devanagari } from "next/font/google";
 import { notFound } from "next/navigation";
+import { BottomNav } from "@/components/BottomNav";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { Providers } from "@/components/Providers";
@@ -45,6 +46,8 @@ export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Prom
     },
     openGraph: { siteName, type: "website", locale: lang },
     twitter: { card: "summary_large_image" },
+    icons: { icon: "/icon-192.png", apple: "/apple-icon.png" },
+    appleWebApp: { capable: true, title: siteName, statusBarStyle: "black-translucent" },
   };
 }
 
@@ -68,13 +71,15 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
       <body className="flex min-h-full flex-col">
         <Providers value={{ lang, dir, languages, messages, config }}>
           <Header />
-          <main className="flex-1">{children}</main>
+          {/* pb-14 clears the fixed bottom tab bar below md; it is `hidden` from md up, where the header nav takes over. */}
+          <main className="flex-1 pb-14 md:pb-0">{children}</main>
           <Footer
             lang={lang}
             pages={pages}
             contactLabel={t("nav.contact", "Contact")}
             tagline={t("footer.tagline", "Bite-sized dramas, made for your phone.")}
           />
+          <BottomNav />
         </Providers>
       </body>
     </html>

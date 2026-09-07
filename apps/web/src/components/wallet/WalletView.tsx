@@ -9,7 +9,7 @@ import { useAuth } from "@/lib/auth-context";
 import { clientApi } from "@/lib/client-api";
 import { call, type ApiError } from "@/lib/errors";
 import { useLoader } from "@/lib/use-loader";
-import { formatDate, formatMoney } from "@/lib/format";
+import { formatCoins, formatDate, formatMoney } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import { colors } from "@/lib/tokens";
 import type { CheckoutOut, OfferOut, PackOut, PurchaseOut, WalletOut } from "@/lib/types";
@@ -88,6 +88,13 @@ function WalletInner() {
   const { user, refreshUser } = useAuth();
   const offerMessage = useOfferErrorMessage();
   const currency = (config?.economy?.currency ?? "INR").toUpperCase();
+  const episodePrice = config?.economy?.episode_price ?? 0;
+  // Where the viewer was headed before they ran out of coins, and how many they needed. The paywall passes both,
+  // so a top-up can end where it started instead of stranding them on the wallet.
+  const nextPath = search.get("next");
+  const needCoins = Number(search.get("need") ?? 0) || 0;
+  // Only ever return to a path inside this site: `next` arrives in a URL and must not become an open redirect.
+  const returnHref = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? href(nextPath) : null;
   // Gateways the server has configured and enabled, in display order. Unknown names are ignored.
   const gateways = useMemo(
     () => (config?.payments?.gateways ?? []).filter((g): g is Gateway => g === "stripe" || g === "razorpay"),
@@ -97,7 +104,10 @@ function WalletInner() {
   const [wallet, setWallet] = useState<WalletOut | null>(null);
   const [packs, setPacks] = useState<PackOut[] | null>(null);
   const [error, setError] = useState<ApiError | null>(null);
-  const [gateway, setGateway] = useState<Gateway>(() => gateways[0] ?? "stripe");
+  // UPI is the overwhelming default in India, so when we are charging in rupees Razorpay leads if it is available.
+  const [gateway, setGateway] = useState<Gateway>(
+    () => (currency === "INR" && gateways.includes("razorpay") ? "razorpay" : gateways[0]) ?? "stripe",
+  );
   const [offers, setOffers] = useState<OfferOut[] | null>(null);
   const [offerId, setOfferId] = useState<string | null>(null);
   const [coupon, setCoupon] = useState("");
@@ -285,6 +295,20 @@ function WalletInner() {
         {t("wallet.title", "Wallet")}
       </PageTitle>
 
+      {/* Arriving from a paywall: say why, say how short they are, and keep the way back visible the whole time. */}
+      {returnHref && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gold/40 bg-gold/5 px-4 py-3">
+          <p className="text-sm text-ink2">
+            {needCoins > 0
+              ? t("wallet.need_coins", "You need {n} more coins to keep watching.", { n: formatCoins(needCoins, lang) })
+              : t("wallet.came_from_episode", "Top up and go straight back to your episode.")}
+          </p>
+          <Link href={returnHref} className={buttonClass("ghost", "sm")}>
+            {t("wallet.back_to_episode", "Back to the episode")}
+          </Link>
+        </div>
+      )}
+
       {/* Balance */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="rounded-lg border border-gold/40 bg-surface p-5">
@@ -379,15 +403,37 @@ function WalletInner() {
               <p className="mt-3 flex items-baseline gap-2">
                 <span className="inline-flex items-center gap-1 font-display text-3xl font-bold text-gold">
                   <IconCoin size={24} />
-                  {p.coins}
+                  {formatCoins(p.coins + p.bonus_coins, lang)}
                 </span>
-                {p.bonus_coins > 0 && <span className="text-sm font-medium text-success">+{p.bonus_coins} {t("wallet.bonus", "bonus")}</span>}
+                {p.bonus_coins > 0 && (
+                  <span className="rounded-pill bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">
+                    {t("wallet.bonus_pct", "+{pct}% extra", { pct: Math.round((p.bonus_coins / Math.max(1, p.coins)) * 100) })}
+                  </span>
+                )}
               </p>
+              {/* An abstract currency is unpriceable until it is tied to the thing it buys. */}
+              {p.kind !== "vip" && episodePrice > 0 && (
+                <p className="mt-1 text-sm text-ink2">
+                  {t("wallet.equivalent", "About {n} episodes", { n: Math.floor((p.coins + p.bonus_coins) / episodePrice) })}
+                  {p.price ? (
+                    <span className="text-muted">
+                      {" · "}
+                      {t("wallet.per_episode", "{price} each", {
+                        price: formatMoney(
+                          Math.round((p.price.amount / Math.max(1, Math.floor((p.coins + p.bonus_coins) / episodePrice))) * 100) / 100,
+                          p.price.currency,
+                          lang,
+                        ),
+                      })}
+                    </span>
+                  ) : null}
+                </p>
+              )}
               {p.description && <p className="mt-2 text-sm text-muted">{p.description}</p>}
               <div className="mt-auto pt-4">
                 {p.price ? (
                   <Button size="lg" className="w-full" loading={busy} disabled={gateways.length === 0} onClick={() => void checkout(p)}>
-                    {formatMoney(p.price.amount, p.price.currency, lang)}
+                    {t("wallet.buy_cta", "Get coins · {price}", { price: formatMoney(p.price.amount, p.price.currency, lang) })}
                   </Button>
                 ) : (
                   <Button size="lg" className="w-full" disabled>
@@ -412,6 +458,7 @@ function WalletInner() {
         onClose={() => setFlow({ kind: "idle" })}
         onCheckAgain={(id) => poll(id, Date.now())}
         onConfirm={(out, pack) => void proceed(out, pack)}
+        returnHref={returnHref}
       />
     </div>
   );
@@ -423,12 +470,15 @@ function PurchaseDialog({
   onClose,
   onCheckAgain,
   onConfirm,
+  returnHref,
 }: {
   flow: PurchaseFlow;
   busy: boolean;
   onClose: () => void;
   onCheckAgain: (id: string) => void;
   onConfirm: (out: CheckoutOut, pack: PackOut) => void;
+  /** Where the viewer was headed when they ran out of coins, so success can return them there. */
+  returnHref: string | null;
 }) {
   const t = useT();
   const { lang } = useApp();
@@ -490,9 +540,15 @@ function PurchaseDialog({
             <p className="text-sm text-muted">
               {formatMoney(flow.purchase.amount, flow.purchase.currency, lang)} · {formatDate(flow.purchase.paid_at ?? flow.purchase.created_at, lang)}
             </p>
-            <Button onClick={onClose} className="w-full">
-              {t("common.done", "Done")}
-            </Button>
+            {returnHref ? (
+              <Link href={returnHref} className={buttonClass("gold", "md", "w-full")}>
+                {t("wallet.back_to_episode", "Back to the episode")}
+              </Link>
+            ) : (
+              <Button onClick={onClose} className="w-full">
+                {t("common.done", "Done")}
+              </Button>
+            )}
           </>
         )}
         {flow.kind === "pending" && (

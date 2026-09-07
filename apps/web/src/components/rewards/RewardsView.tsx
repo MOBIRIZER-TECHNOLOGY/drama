@@ -8,6 +8,7 @@ import { call, type ApiError } from "@/lib/errors";
 import { useLoader } from "@/lib/use-loader";
 import { useToast } from "@/lib/toast";
 import type { CheckinStatus, TaskOut } from "@/lib/types";
+import { ReferralCard } from "../ReferralCard";
 import { PageTitle, RequireAuth } from "../RequireAuth";
 import { Button } from "../ui/Button";
 import { EmptyState, ErrorState, Skeleton } from "../ui/states";
@@ -127,6 +128,11 @@ function RewardsInner() {
       </section>
 
       {/* Tasks */}
+      {/* The cheapest growth loop in this market, on the screen people open to earn. */}
+      <div className="mt-8">
+        <ReferralCard />
+      </div>
+
       <section aria-labelledby="tasks-heading" className="mt-8">
         <h2 id="tasks-heading" className="font-display text-lg font-semibold text-ink">
           {t("rewards.tasks", "Tasks")}

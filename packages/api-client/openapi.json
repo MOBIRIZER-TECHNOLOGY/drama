@@ -255,6 +255,78 @@
         ]
       }
     },
+    "/v1/auth/me/push-token": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set Push Token",
+        "description": "Attach this device's push token to the current session.\n\nThe token lives on the session, not the user, so signing out or revoking a device stops delivery to it with\nno extra bookkeeping. The same physical device re-registering on a new session simply writes a new row; the\nold one is either revoked or expires, and `push.tokens_for` de-duplicates whatever overlap remains.",
+        "operationId": "set_push_token_v1_auth_me_push_token_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PushTokenIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Clear Push Token",
+        "description": "Stop delivery to this device without signing out — what a notifications toggle in settings calls.",
+        "operationId": "clear_push_token_v1_auth_me_push_token_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/auth/me/avatar/presign": {
       "post": {
         "tags": [
@@ -710,6 +782,102 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UnlockOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/series/{series_id}/bundle": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Bundle Quote",
+        "description": "Price every episode the viewer cannot yet watch, as one purchase. Creates nothing.",
+        "operationId": "bundle_quote_v1_series__series_id__bundle_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Series Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleQuoteOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Unlock Bundle",
+        "description": "Unlock the rest of the series in one transaction, at the bundle discount.",
+        "operationId": "unlock_bundle_v1_series__series_id__bundle_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "series_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Series Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BundleUnlockOut"
                 }
               }
             }
@@ -7459,6 +7627,89 @@
         ],
         "title": "AvatarPresignOut"
       },
+      "BundleQuoteOut": {
+        "properties": {
+          "series_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Series Id"
+          },
+          "episode_count": {
+            "type": "integer",
+            "title": "Episode Count"
+          },
+          "list_price": {
+            "type": "integer",
+            "title": "List Price"
+          },
+          "price": {
+            "type": "integer",
+            "title": "Price"
+          },
+          "discount_pct": {
+            "type": "integer",
+            "title": "Discount Pct"
+          },
+          "saving": {
+            "type": "integer",
+            "title": "Saving"
+          },
+          "affordable": {
+            "type": "boolean",
+            "title": "Affordable"
+          },
+          "coin_balance": {
+            "type": "integer",
+            "title": "Coin Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_id",
+          "episode_count",
+          "list_price",
+          "price",
+          "discount_pct",
+          "saving",
+          "affordable",
+          "coin_balance"
+        ],
+        "title": "BundleQuoteOut",
+        "description": "What \"unlock everything left\" costs, so the paywall can price the offer before the viewer commits."
+      },
+      "BundleUnlockOut": {
+        "properties": {
+          "series_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Series Id"
+          },
+          "episode_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Episode Ids"
+          },
+          "spent": {
+            "type": "integer",
+            "title": "Spent"
+          },
+          "coin_balance": {
+            "type": "integer",
+            "title": "Coin Balance"
+          }
+        },
+        "type": "object",
+        "required": [
+          "series_id",
+          "episode_ids",
+          "spent",
+          "coin_balance"
+        ],
+        "title": "BundleUnlockOut"
+      },
       "CategoryIn": {
         "properties": {
           "slug": {
@@ -7947,6 +8198,20 @@
           "rewards": {
             "$ref": "#/components/schemas/RewardsConfig"
           },
+          "referral": {
+            "$ref": "#/components/schemas/ReferralConfig",
+            "default": {
+              "enabled": true,
+              "referrer_coins": 100,
+              "referee_coins": 100
+            }
+          },
+          "notifications": {
+            "$ref": "#/components/schemas/NotificationsConfig",
+            "default": {
+              "channels": []
+            }
+          },
           "mobile": {
             "$ref": "#/components/schemas/MobileConfig"
           },
@@ -8246,7 +8511,7 @@
           "currency_symbol": {
             "type": "string",
             "title": "Currency Symbol",
-            "default": "\u20b9"
+            "default": "₹"
           },
           "episode_price": {
             "type": "integer",
@@ -8262,6 +8527,11 @@
             "type": "integer",
             "title": "Ad Unlocks Per Day",
             "default": 5
+          },
+          "bundle_discount_pct": {
+            "type": "integer",
+            "title": "Bundle Discount Pct",
+            "default": 30
           }
         },
         "additionalProperties": true,
@@ -9536,6 +9806,20 @@
         ],
         "title": "MyListOut"
       },
+      "NotificationsConfig": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Channels",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "NotificationsConfig"
+      },
       "OfferIn": {
         "properties": {
           "title": {
@@ -10231,6 +10515,22 @@
         ],
         "title": "PurchaseStatus"
       },
+      "PushTokenIn": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 10,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "PushTokenIn",
+        "description": "An Expo push token for the device this session belongs to."
+      },
       "QoeRow": {
         "properties": {
           "date": {
@@ -10439,6 +10739,28 @@
           "coins"
         ],
         "title": "QuoteOut"
+      },
+      "ReferralConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "referrer_coins": {
+            "type": "integer",
+            "title": "Referrer Coins",
+            "default": 100
+          },
+          "referee_coins": {
+            "type": "integer",
+            "title": "Referee Coins",
+            "default": 100
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ReferralConfig"
       },
       "RefreshRequest": {
         "properties": {
@@ -10671,12 +10993,12 @@
             "title": "Daily Rewards",
             "default": [
               10,
+              15,
               20,
               30,
               40,
-              50,
               60,
-              70
+              150
             ]
           },
           "signup_bonus": {
@@ -10795,6 +11117,40 @@
             "type": "boolean",
             "title": "Is Adult",
             "default": false
+          },
+          "completion_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Status"
+          },
+          "release_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Note"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           },
           "first_episode_id": {
             "anyOf": [
@@ -10944,6 +11300,40 @@
             "type": "boolean",
             "title": "Is Adult",
             "default": false
+          },
+          "completion_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Status"
+          },
+          "release_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Release Note"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           },
           "first_episode_id": {
             "anyOf": [
@@ -11950,6 +12340,20 @@
               }
             ],
             "title": "Age Confirmed"
+          },
+          "notification_prefs": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Prefs"
           }
         },
         "type": "object",
@@ -12057,6 +12461,18 @@
               }
             ],
             "title": "Age Confirmed At"
+          },
+          "notification_prefs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notification Prefs"
           },
           "created_at": {
             "type": "string",

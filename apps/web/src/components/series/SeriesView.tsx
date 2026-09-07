@@ -18,7 +18,7 @@ import { IconClock, IconCoin, IconFlag, IconHeart, IconLock, IconPlay, IconShare
 import { EpisodeGrid } from "./EpisodeGrid";
 import { highestAccessibleNumber, lockState } from "./lock-state";
 import { ReportDialog } from "./ReportDialog";
-import { UnlockDialog, type UnlockStatus } from "./UnlockDialog";
+import { UnlockDialog, type BundleQuote, type UnlockStatus } from "./UnlockDialog";
 
 /**
  * Result of POST /play for one episode, keyed by `${authStatus}:${episodeId}` so a sign-in/out naturally refetches.
@@ -64,6 +64,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const [grants, setGrants] = useState<Record<string, Grant>>({});
   const [unlockTarget, setUnlockTarget] = useState<EpisodeOut | null>(null);
   const [unlockStatus, setUnlockStatus] = useState<UnlockStatus>({ kind: "idle" });
+  const [bundle, setBundle] = useState<BundleQuote | null>(null);
   const [liked, setLiked] = useState(series.is_liked);
   const [likeCount, setLikeCount] = useState(series.like_count);
   const [favorite, setFavorite] = useState(series.is_favorite);
@@ -205,6 +206,61 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
 
   const markUnlocked = (id: string) =>
     setEpisodes((list) => list.map((e) => (e.id === id ? { ...e, unlocked: true, accessible: true } : e)));
+
+  const markManyUnlocked = (ids: string[]) => {
+    const set = new Set(ids);
+    setEpisodes((list) => list.map((e) => (set.has(e.id) ? { ...e, unlocked: true, accessible: true } : e)));
+  };
+
+  // Price "unlock everything left" as soon as the paywall opens, so the bundle is a visible choice rather than
+  // something the viewer would have to know to ask for.
+  useEffect(() => {
+    if (!unlockTarget || status !== "authenticated") {
+      setBundle(null);
+      return;
+    }
+    let live = true;
+    void (async () => {
+      const { data } = await call(() =>
+        clientApi.GET("/v1/series/{series_id}/bundle", { params: { path: { series_id: series.id } } }),
+      );
+      if (live && data) setBundle(data);
+    })();
+    return () => {
+      live = false;
+    };
+  }, [unlockTarget, status, series.id]);
+
+  const unlockBundle = useCallback(async () => {
+    if (status !== "authenticated") return openAuth();
+    setUnlockStatus({ kind: "bundle-busy" });
+    const { data, error } = await call(() =>
+      clientApi.POST("/v1/series/{series_id}/bundle", { params: { path: { series_id: series.id } } }),
+    );
+    if (data) {
+      setBalance(data.coin_balance);
+      markManyUnlocked(data.episode_ids);
+      const target = unlockTarget;
+      setUnlockTarget(null);
+      setUnlockStatus({ kind: "idle" });
+      track("unlock_bundle", { series_id: series.id, episodes: data.episode_ids.length, spent: data.spent });
+      toast(t("unlock.bundle_success", "{n} episodes unlocked", { n: data.episode_ids.length }), "gold");
+      if (target) {
+        setCurrentId(target.id);
+        syncUrl(target.number);
+        dropGrant(target.id);
+      }
+      return;
+    }
+    if (error.status === 402 || error.code === "insufficient_coins") {
+      setUnlockStatus({ kind: "insufficient", message: error.message });
+    } else if (error.code === "age_gate_required") {
+      setUnlockStatus({ kind: "idle" });
+      setAgeGate({ open: true, retry: "unlock", busy: false, error: null });
+    } else {
+      setUnlockStatus({ kind: "error", message: error.message });
+    }
+  }, [status, series.id, unlockTarget, openAuth, t, toast]);
 
   const unlock = useCallback(async (method: "coins" | "ad") => {
     const ep = unlockTarget;
@@ -500,11 +556,15 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
         episode={unlockTarget}
         balance={balance}
         status={unlockStatus}
+        bundle={bundle}
+        episodeCount={sorted.length}
+        seriesSlug={series.slug}
         onClose={() => {
           setUnlockTarget(null);
           setUnlockStatus({ kind: "idle" });
         }}
         onUnlock={(m) => void unlock(m)}
+        onUnlockBundle={() => void unlockBundle()}
       />
       <AgeGateDialog
         open={ageGate.open}

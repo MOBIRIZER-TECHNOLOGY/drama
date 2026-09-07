@@ -219,3 +219,34 @@ export const Spinner = ({ size = 20, className = "" }: { size?: number; classNam
     <path d="M12 3a9 9 0 1 0 9 9" />
   </svg>
 );
+
+// Bottom-tab icons. Each has a `filled` variant because tint alone is a weak active state on a phone.
+export const IconHome = (p: P & { filled?: boolean }) => {
+  const { filled, ...rest } = p;
+  return (
+    <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
+      <path d="M3.5 10.5 12 3.5l8.5 7v9a1 1 0 0 1-1 1h-15a1 1 0 0 1-1-1z" />
+      {!filled && <path d="M9.5 21v-6h5v6" />}
+    </svg>
+  );
+};
+export const IconShorts = (p: P & { filled?: boolean }) => {
+  const { filled, ...rest } = p;
+  return (
+    <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
+      <rect x="6" y="2.5" width="12" height="19" rx="3" />
+      <path d="M10.5 9.5v5l4-2.5z" fill={filled ? "var(--color-ground, #141013)" : "currentColor"} stroke="none" />
+    </svg>
+  );
+};
+export const IconGrid = (p: P & { filled?: boolean }) => {
+  const { filled, ...rest } = p;
+  return (
+    <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    </svg>
+  );
+};

@@ -13,6 +13,7 @@ import {
 import { track } from "./analytics";
 import { clientApi } from "./client-api";
 import { call, type ApiError } from "./errors";
+import { clearReferral, pendingReferral } from "./referral";
 import { isFirebaseConfigured, getFirebaseAuth } from "./firebase";
 import { tokenStore } from "./token-store";
 import { useLoader } from "./use-loader";
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await getRedirectResult(auth);
       if (!result) return;
       const idToken = await result.user.getIdToken();
+      const referral = pendingReferral();
       const { data } = await call(() =>
         clientApi.POST("/v1/auth/exchange", {
           body: {
@@ -96,12 +98,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             device_name: describeDevice(navigator.userAgent),
             app_version: "web-0.1.0",
             locale: lang,
+            referral_code: referral,
           },
         }),
       );
       if (data) {
         tokenStore.set(data);
+        clearReferral();
         track(data.is_new_user ? "signup" : "login", { method: "google", via: "redirect" });
+        if (data.is_new_user && referral) track("referral_signup", { method: "google" });
         await loadUser();
       }
     } catch {
@@ -124,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const exchange = useCallback(
     async (firebaseIdToken: string, method = "email"): Promise<ApiError | null> => {
+      const referral = pendingReferral();
       const { data, error } = await call(() =>
         clientApi.POST("/v1/auth/exchange", {
           body: {
@@ -133,12 +139,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             device_name: typeof navigator !== "undefined" ? describeDevice(navigator.userAgent) : "Web",
             app_version: "web-0.1.0",
             locale: lang,
+            referral_code: referral,
           },
         }),
       );
       if (error) return error;
       tokenStore.set(data);
+      clearReferral();
       track(data.is_new_user ? "signup" : "login", { method });
+      if (data.is_new_user && referral) track("referral_signup", { method });
       await loadUser();
       setDialogOpen(false);
       return null;

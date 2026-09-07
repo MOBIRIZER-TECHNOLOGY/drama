@@ -1,14 +1,39 @@
+/**
+ * Prices. A whole amount prints without decimals: Indian consumer pricing is "₹99", never "₹99.00", and the
+ * trailing paise read as an import and make the number feel larger than it is.
+ */
 export function formatMoney(amount: number, currency: string, locale: string = "en"): string {
+  const whole = Number.isInteger(amount);
   try {
-    return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: 2 }).format(amount);
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: whole ? 0 : 2,
+      maximumFractionDigits: whole ? 0 : 2,
+    }).format(amount);
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${currency} ${whole ? amount : amount.toFixed(2)}`;
   }
 }
 
+/**
+ * Counts. Compact notation above 10,000 keeps view counts readable.
+ *
+ * Never use this for a coin balance: `formatNumber` rounds, so 12,500 coins renders as "13K" and the app appears
+ * to round the viewer's money up. `formatCoins` below is exact.
+ */
 export function formatNumber(n: number, locale: string = "en"): string {
   try {
     return new Intl.NumberFormat(locale, { notation: n >= 10_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(n);
+  } catch {
+    return String(n);
+  }
+}
+
+/** A coin balance, grouped for the locale and never rounded. Money is always shown exactly. */
+export function formatCoins(n: number, locale: string = "en"): string {
+  try {
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(n);
   } catch {
     return String(n);
   }

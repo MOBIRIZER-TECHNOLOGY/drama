@@ -69,9 +69,9 @@ export function SeriesCard({
   );
 }
 
-export function SeriesCardSkeleton() {
+export function SeriesCardSkeleton({ className = "w-[9.5rem] shrink-0 sm:w-44 md:w-48" }: { className?: string }) {
   return (
-    <div className="w-[9.5rem] shrink-0 sm:w-44 md:w-48">
+    <div className={className}>
       <div className="k-skeleton aspect-[9/16] rounded-md" />
       <div className="k-skeleton mt-2 h-4 w-3/4 rounded-sm" />
       <div className="k-skeleton mt-1.5 h-3 w-1/2 rounded-sm" />

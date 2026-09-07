@@ -10,6 +10,7 @@ import { formatDate, formatRelative } from "@/lib/format";
 import { useToast } from "@/lib/toast";
 import type { SessionOut } from "@/lib/types";
 import { useLoader } from "@/lib/use-loader";
+import { ReferralCard } from "./ReferralCard";
 import { PageTitle, RequireAuth } from "./RequireAuth";
 import { Button } from "./ui/Button";
 import { EmptyState, ErrorState, Field, Skeleton, inputClass } from "./ui/states";
@@ -203,14 +204,12 @@ function ProfileInner() {
               <Button type="submit" loading={saving}>
                 {t("common.save", "Save changes")}
               </Button>
-              {user.referral_code && (
-                <span className="text-xs text-muted">
-                  {t("profile.referral", "Referral code")}: <code className="text-ink2">{user.referral_code}</code>
-                </span>
-              )}
             </div>
           </form>
         </section>
+
+        {/* The code used to sit here as a 12px caption with no link and no stated reward. */}
+        <ReferralCard />
 
         <section className="flex flex-col gap-4">
           <div className="rounded-lg border border-line bg-surface p-5">

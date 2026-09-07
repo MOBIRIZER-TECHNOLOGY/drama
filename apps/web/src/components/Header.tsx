@@ -4,9 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, useEffect, useRef, useState } from "react";
-import { useHref, useT } from "@/lib/app-context";
+import { useApp, useHref, useT } from "@/lib/app-context";
 import { useAuth } from "@/lib/auth-context";
-import { formatNumber } from "@/lib/format";
+import { formatCoins } from "@/lib/format";
 import { stripLang } from "@/lib/languages";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { SearchBox } from "./SearchBox";
@@ -22,7 +22,11 @@ export function Header() {
 function HeaderInner({ pathname }: { pathname: string }) {
   const t = useT();
   const href = useHref();
+  const { config, lang } = useApp();
   const { status, user, balance, openAuth, signOut } = useAuth();
+  // The signup bonus exists in the ledger and was advertised nowhere. Naming it on the one control that
+  // converts anonymous visitors is the cheapest place to spend it.
+  const signupBonus = config?.rewards?.signup_bonus ?? 0;
   const [mobileSearch, setMobileSearch] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -97,11 +101,11 @@ function HeaderInner({ pathname }: { pathname: string }) {
             <div ref={menuRef} className="relative flex items-center gap-2">
               <Link
                 href={href("/wallet")}
-                className="hidden items-center gap-1 rounded-pill border border-gold/40 bg-surface px-2.5 py-1.5 text-sm font-medium text-gold hover:bg-surface2 sm:flex"
+                className="flex items-center gap-1 rounded-pill border border-gold/40 bg-surface px-2.5 py-1.5 text-sm font-medium text-gold hover:bg-surface2"
                 aria-label={t("wallet.balance", "Coin balance")}
               >
                 <IconCoin size={16} />
-                {formatNumber(balance)}
+                {formatCoins(balance, lang)}
               </Link>
               <button
                 type="button"
@@ -159,8 +163,10 @@ function HeaderInner({ pathname }: { pathname: string }) {
                   <LanguageSwitcher compact />
                 </Suspense>
               </div>
-              <Button size="sm" onClick={openAuth}>
-                {t("auth.sign_in", "Sign in")}
+              <Button onClick={openAuth}>
+                {signupBonus > 0
+                  ? t("auth.sign_up_bonus", "Get {n} free coins", { n: signupBonus })
+                  : t("auth.sign_up", "Sign up free")}
               </Button>
             </div>
           )}

@@ -115,6 +115,34 @@ export interface paths {
         patch: operations["update_me_v1_auth_me_patch"];
         trace?: never;
     };
+    "/v1/auth/me/push-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Push Token
+         * @description Attach this device's push token to the current session.
+         *
+         *     The token lives on the session, not the user, so signing out or revoking a device stops delivery to it with
+         *     no extra bookkeeping. The same physical device re-registering on a new session simply writes a new row; the
+         *     old one is either revoked or expires, and `push.tokens_for` de-duplicates whatever overlap remains.
+         */
+        put: operations["set_push_token_v1_auth_me_push_token_put"];
+        post?: never;
+        /**
+         * Clear Push Token
+         * @description Stop delivery to this device without signing out — what a notifications toggle in settings calls.
+         */
+        delete: operations["clear_push_token_v1_auth_me_push_token_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/auth/me/avatar/presign": {
         parameters: {
             query?: never;
@@ -273,6 +301,30 @@ export interface paths {
         put?: never;
         /** Unlock */
         post: operations["unlock_v1_episodes__episode_id__unlock_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/series/{series_id}/bundle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bundle Quote
+         * @description Price every episode the viewer cannot yet watch, as one purchase. Creates nothing.
+         */
+        get: operations["bundle_quote_v1_series__series_id__bundle_get"];
+        put?: never;
+        /**
+         * Unlock Bundle
+         * @description Unlock the rest of the series in one transaction, at the bundle discount.
+         */
+        post: operations["unlock_bundle_v1_series__series_id__bundle_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2277,6 +2329,45 @@ export interface components {
             /** Public Url */
             public_url: string;
         };
+        /**
+         * BundleQuoteOut
+         * @description What "unlock everything left" costs, so the paywall can price the offer before the viewer commits.
+         */
+        BundleQuoteOut: {
+            /**
+             * Series Id
+             * Format: uuid
+             */
+            series_id: string;
+            /** Episode Count */
+            episode_count: number;
+            /** List Price */
+            list_price: number;
+            /** Price */
+            price: number;
+            /** Discount Pct */
+            discount_pct: number;
+            /** Saving */
+            saving: number;
+            /** Affordable */
+            affordable: boolean;
+            /** Coin Balance */
+            coin_balance: number;
+        };
+        /** BundleUnlockOut */
+        BundleUnlockOut: {
+            /**
+             * Series Id
+             * Format: uuid
+             */
+            series_id: string;
+            /** Episode Ids */
+            episode_ids: string[];
+            /** Spent */
+            spent: number;
+            /** Coin Balance */
+            coin_balance: number;
+        };
         /** CategoryIn */
         CategoryIn: {
             /** Slug */
@@ -2470,6 +2561,20 @@ export interface components {
             auth: components["schemas"]["AuthConfig"];
             economy: components["schemas"]["EconomyConfig"];
             rewards: components["schemas"]["RewardsConfig"];
+            /**
+             * @default {
+             *       "enabled": true,
+             *       "referrer_coins": 100,
+             *       "referee_coins": 100
+             *     }
+             */
+            referral: components["schemas"]["ReferralConfig"];
+            /**
+             * @default {
+             *       "channels": []
+             *     }
+             */
+            notifications: components["schemas"]["NotificationsConfig"];
             mobile: components["schemas"]["MobileConfig"];
             /** Languages */
             languages: components["schemas"]["ConfigLanguage"][];
@@ -2603,6 +2708,11 @@ export interface components {
              * @default 5
              */
             ad_unlocks_per_day: number;
+            /**
+             * Bundle Discount Pct
+             * @default 30
+             */
+            bundle_discount_pct: number;
         } & {
             [key: string]: unknown;
         };
@@ -3031,6 +3141,14 @@ export interface components {
             /** History */
             history: components["schemas"]["HistoryItem"][];
         };
+        /** NotificationsConfig */
+        NotificationsConfig: {
+            /**
+             * Channels
+             * @default []
+             */
+            channels: string[];
+        };
         /** OfferIn */
         OfferIn: {
             /** Title */
@@ -3296,6 +3414,14 @@ export interface components {
          * @enum {string}
          */
         PurchaseStatus: "pending" | "paid" | "failed" | "refunded";
+        /**
+         * PushTokenIn
+         * @description An Expo push token for the device this session belongs to.
+         */
+        PushTokenIn: {
+            /** Token */
+            token: string;
+        };
         /** QoeRow */
         QoeRow: {
             /** Date */
@@ -3358,6 +3484,26 @@ export interface components {
             offer_title?: string | null;
             /** Coupon Code */
             coupon_code?: string | null;
+        };
+        /** ReferralConfig */
+        ReferralConfig: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Referrer Coins
+             * @default 100
+             */
+            referrer_coins: number;
+            /**
+             * Referee Coins
+             * @default 100
+             */
+            referee_coins: number;
+        } & {
+            [key: string]: unknown;
         };
         /** RefreshRequest */
         RefreshRequest: {
@@ -3449,12 +3595,12 @@ export interface components {
              * Daily Rewards
              * @default [
              *       10,
+             *       15,
              *       20,
              *       30,
              *       40,
-             *       50,
              *       60,
-             *       70
+             *       150
              *     ]
              */
             daily_rewards: number[];
@@ -3506,6 +3652,12 @@ export interface components {
              * @default false
              */
             is_adult: boolean;
+            /** Completion Status */
+            completion_status?: string | null;
+            /** Release Note */
+            release_note?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
             /** First Episode Id */
             first_episode_id?: string | null;
             progress?: components["schemas"]["ContinueProgress"] | null;
@@ -3550,6 +3702,12 @@ export interface components {
              * @default false
              */
             is_adult: boolean;
+            /** Completion Status */
+            completion_status?: string | null;
+            /** Release Note */
+            release_note?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
             /** First Episode Id */
             first_episode_id?: string | null;
             progress?: components["schemas"]["ContinueProgress"] | null;
@@ -3868,6 +4026,10 @@ export interface components {
             locale?: string | null;
             /** Age Confirmed */
             age_confirmed?: boolean | null;
+            /** Notification Prefs */
+            notification_prefs?: {
+                [key: string]: boolean;
+            } | null;
         };
         /** UserOut */
         UserOut: {
@@ -3901,6 +4063,10 @@ export interface components {
             referral_code: string | null;
             /** Age Confirmed At */
             age_confirmed_at?: string | null;
+            /** Notification Prefs */
+            notification_prefs?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Created At
              * Format: date-time
@@ -4251,6 +4417,59 @@ export interface operations {
             };
         };
     };
+    set_push_token_v1_auth_me_push_token_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PushTokenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_push_token_v1_auth_me_push_token_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+        };
+    };
     avatar_presign_v1_auth_me_avatar_presign_post: {
         parameters: {
             query?: never;
@@ -4507,6 +4726,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnlockOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bundle_quote_v1_series__series_id__bundle_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleQuoteOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlock_bundle_v1_series__series_id__bundle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                series_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BundleUnlockOut"];
                 };
             };
             /** @description Validation Error */
