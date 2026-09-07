@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import func, select
 
 from app.api.deps import DB, AdminRole, require_role
@@ -301,8 +301,14 @@ async def moderation(db: DB) -> list[ModerationItem]:
 
 class ModerateSeriesIn(BaseModel):
     action: str = Field(pattern="^(clear_flags|unpublish|set_rating)$")
-    content_rating: str | None = None
+    content_rating: str | None = Field(default=None, pattern="^(U|UA7|UA13|UA16|A)$")
     note: str | None = None
+
+    @model_validator(mode="after")
+    def _rating_required(self) -> "ModerateSeriesIn":
+        if self.action == "set_rating" and not self.content_rating:
+            raise ValueError("content_rating is required for set_rating")
+        return self
 
 
 @router.post("/moderation/series/{series_id}", response_model=Ok)
@@ -317,7 +323,7 @@ async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB) 
         s_.moderation_flags = []
     elif body.action == "unpublish":
         s_.status = PublishStatus.review
-    elif body.action == "set_rating" and body.content_rating:
+    elif body.action == "set_rating":
         s_.content_rating = body.content_rating
     if body.note is not None:
         s_.moderation_note = body.note

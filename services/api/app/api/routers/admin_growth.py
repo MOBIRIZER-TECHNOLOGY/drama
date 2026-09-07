@@ -154,22 +154,24 @@ async def experiment_results(key: str, db: DB) -> list[VariantResult]:
         ).all()
     )
     pkey = Purchase.variant_map[key].astext
+    paid_where = (Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= since, pkey.is_not(None))
+    # Distinct buyers must be counted per variant, not per (variant, currency): a variant whose buyers
+    # paid in different currencies would otherwise report only its largest currency group.
+    purchasers = dict(
+        (
+            await db.execute(
+                select(pkey, func.count(func.distinct(Purchase.user_id))).where(*paid_where).group_by(pkey)
+            )
+        ).all()
+    )
     prow = await db.execute(
-        select(
-            pkey,
-            func.count(func.distinct(Purchase.user_id)),
-            func.count(),
-            Purchase.currency,
-            func.sum(Purchase.amount),
-        )
-        .where(Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= since, pkey.is_not(None))
+        select(pkey, func.count(), Purchase.currency, func.sum(Purchase.amount))
+        .where(*paid_where)
         .group_by(pkey, Purchase.currency)
     )
-    purchasers: dict[str, int] = {}
     purchases: dict[str, int] = {}
     revenue: dict[str, dict[str, float]] = {}
-    for variant, buyers, count, cur, total in prow.all():
-        purchasers[variant] = max(purchasers.get(variant, 0), buyers)
+    for variant, count, cur, total in prow.all():
         purchases[variant] = purchases.get(variant, 0) + count
         revenue.setdefault(variant, {})[cur] = float(total or 0)
     lkey = CoinLedger.variant_map[key].astext

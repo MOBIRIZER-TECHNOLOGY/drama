@@ -45,6 +45,63 @@ Things the API does not (yet) provide, or where a client had to work around it. 
 - `DELETE /v1/auth/me` returns `Ok` only; the app treats any non-2xx as "could not delete" (401 → "sign in again").
 - Avatar upload: `POST /v1/auth/me/avatar/presign` → PUT to `upload_url` with the picked file's `Content-Type` → `PATCH /v1/auth/me {avatar_url: public_url}`. The presigned PUT must allow the mobile origin-less request (no CORS needed on native, but the bucket must accept the `Content-Type` header used in the signature).
 
+## mobile (tranche 1)
+
+- **Force update**: `config.mobile.min_version_code` is compared against the native build number
+  (`expo-application` `nativeBuildVersion`: Android `versionCode`, iOS `CFBundleVersion`). iOS build numbers may be
+  dotted (`1.0.3`), so the app parses the leading integer; keep iOS `CFBundleVersion` a plain integer (EAS
+  `autoIncrement` does) or the comparison degrades. Builds with no native build number (Expo Go, web) are never
+  blocked. `config.mobile.update_url` is used when set; otherwise the app builds a Play Store URL from the package
+  name, and on iOS falls back to an App Store *search* URL because there is no App Store id anywhere in the API or
+  the config — a `mobile.ios_app_id` (or a platform-aware `update_url`) would remove that guess.
+- **Clear cache**: My > Settings clears the app's own caches — the AsyncStorage `configCache` and
+  `messages:<lang>` bundles, plus `expo-image`'s memory and disk caches — and then re-fetches `/v1/config`.
+  expo-video 57 exposes no cache API on `VideoPlayer` (no `clearCache`, no cache directory), so buffered HLS
+  segments are left to the OS; the row's copy does not promise to free video storage.
+- **Events**: the app batches to `POST /v1/events` every 10 s or 20 events, and flushes on AppState
+  `background`/`inactive` with a `keepalive` fetch (React Native's fetch ignores `keepalive`, so a flush during a
+  kill can still be lost; the batch is re-queued on network failure and sent on next launch only if the process
+  survives — there is no on-disk queue). Batches are capped at the API's 200 events, and the in-memory queue at
+  400. `device` carries `{model, os, os_version, ram_gb, network, app_version, version_code}` from expo-device,
+  expo-constants/expo-application and expo-network. `session_id` is a client-side UUID; the API prefers the
+  server session for signed-in users, so client and server session ids differ for guests.
+- Event names sent: `app_open`, `series_view`, `paywall_view`, `unlock`, `checkout_start`, `checkout_return`,
+  `search`, `share`, `login`, `signup`; QoE: `play_start`, `first_frame` (`ttff_ms` from `play()` to the first
+  `playingChange` true), `rebuffer` (`duration_ms` across a `statusChange` `loading` → `readyToPlay` while
+  playing), `bitrate_switch` (from expo-video's `videoTrackChange`, with `bitrate`/`width`/`height`),
+  `play_error`, `play_complete`, `seek`. `screen_view`, `episode_view`, `unlock_view` and `play_pause` are in the
+  API's `ALLOWED` list but not sent yet.
+- `bitrate_switch` reports `peakBitrate ?? averageBitrate ?? bitrate`; on HLS the values are only as good as the
+  manifest's `BANDWIDTH` attributes, and iOS often reports `null` for the size, so the QoE dashboard should treat
+  those fields as optional.
+- **For You**: the `for_you` home rail renders after Continue Watching. It only appears for signed-in viewers with
+  enough history (`recommend.for_you_ids`), so it is absent for guests by design; the app just skips it.
+- **Offers and coupons**: `GET /v1/wallet/offers` cards show `discount_pct` and a live countdown to `ends_at`.
+  Tapping a card selects it for the next purchase; a typed coupon wins over a selected offer (the API resolves
+  only one — `coupon_code` short-circuits `offer_id`). Checkout is a two-step flow: `POST /v1/purchases/checkout`
+  first, show the returned `amount`/`discount_pct` in a confirmation sheet, then open `checkout_url`. This creates
+  a `Purchase` row per price check, so abandoned confirmations leave `pending` purchases behind — a dry-run/quote
+  endpoint (`POST /v1/purchases/quote`) would avoid that.
+- `OfferOut` has no `pack_id` name or price preview, so a pack-specific offer renders as "Applies to one pack"
+  until the viewer picks that pack. `discount_pct` is nullable in the schema even though the UI has nothing to
+  show without it.
+- Coupon error codes are mapped to friendly copy: `coupon_invalid`, `coupon_exhausted`, `coupon_inactive` /
+  `coupon_expired`, `coupon_region`, `coupon_first_purchase`, `offer_unavailable`, `offer_pack_mismatch`. There is
+  no endpoint to validate a coupon before checkout, so the code is only checked when the viewer picks a pack.
+- **Age gate**: `/play` answers 403 `age_gate_required` and `/unlock` answers 409 `age_gate_required`; both open a
+  confirm sheet that `PATCH`es `/v1/auth/me {age_confirmed: true}` and retries. `UserOut.age_confirmed_at` gates
+  re-asking. Guests never see the sheet: `/play` returns 401 for adult titles without a session, so the app shows
+  its sign-in path first. There is no flag on `SeriesCard`/`SeriesDetail` marking a title as adult
+  (`content_rating` is not exposed), so the app cannot warn before the request — it can only react to the error.
+- **Region**: `expo-localization`'s region code is sent as `country` on `/v1/wallet/packs` and
+  `/v1/purchases/checkout` (upper-cased, `*` when the OS reports none) and as an `X-Katha-Country` header on every
+  request, which is the only way `/v1/wallet/offers` can learn the region (it takes no query or body parameter).
+  The header is trusted only when no CDN geo header is present, so production behaviour follows the edge.
+- **EAS**: `apps/mobile/eas.json` adds `development` (dev client, internal), `preview` (internal, `APP_ENV=preview`)
+  and `production` (store, `autoIncrement`) with `cli.appVersionSource: "remote"`. `eas init` has not been run, so
+  `app.json`'s `extra.eas.projectId` is still empty and builds will fail until someone links the project. Required
+  secrets are listed in `apps/mobile/README.md`.
+
 ## admin
 
 - Several admin list endpoints (`/admin/series`, `/admin/purchases`, `/admin/reports`, `/admin/inbox`, `/admin/reward-tasks`) return arrays without a `total`; only `/admin/users` returns `{items, total}`.
@@ -75,3 +132,97 @@ Things the API does not (yet) provide, or where a client had to work around it. 
 - Age gate: `/play` and unlock return 403 `age_gate_required` for adult-rated series until `PATCH /v1/auth/me {age_confirmed: true}`; `UserOut.age_confirmed_at`.
 - `GET /v1/sitemap` feed; admin: experiments, flags, offers, coupons, moderation queue, QoE and funnel analytics, `POST /v1/admin/auth/forgot` and `/reset`; series editor fields `visible_languages`, `territories`, `window_*`, `moderation_*`; episode `scheduled_at` (drip release via worker cron).
 - Media edge: `GET /v1/media/verify` for nginx `auth_request` (`infra/nginx/media.conf`, compose service `media-edge` on :8080). Set `KATHA_CDN_BASE_URL=http://localhost:8080/media` and `KATHA_CDN_SIGNING_MODE=hmac` to enforce grants locally.
+
+## admin (tranche 1)
+
+Screens added: experiments, feature flags, offers & coupons, moderation queue, dashboard Quality/Funnel
+tabs, series distribution + moderation fields, episode drip scheduling, admin password reset, ad placements.
+
+- **`/v1/admin/ad-placements` does not exist.** The ads screen (`/ads`) is built against a local typed stub
+  (`apps/admin/src/lib/ad-placements.ts`, in-memory, lost on reload) and is hidden from the sidebar via
+  `hidden: true` in `lib/nav.ts`. Needed to close it: `GET /v1/admin/ad-placements`,
+  `POST /v1/admin/ad-placements`, `PUT /v1/admin/ad-placements/{id}`, `DELETE /v1/admin/ad-placements/{id}`
+  with `{name, slot, provider, unit_id, platforms[], reward_coins, frequency_cap_sec, is_active, sort_order}`.
+  Proposed slots `home_rail | player_pre | player_mid | unlock_rewarded | paywall`, providers
+  `admob | meta | house`. The apps also need the active placements on `GET /v1/config` for the
+  `rewarded_ads` flow to supply an `ad_event_id`.
+- `ExperimentOut.variants` and `.allocation` are typed `dict` (`{[key: string]: unknown}`), while
+  `ExperimentIn` is `dict[str, dict]` / `dict[str, int]`. The admin guards allocation values with a
+  `typeof === "number"` check when rendering. Typing the Out model like the In model would remove the guard.
+- `PUT /v1/admin/experiments/{key}` rejects a changed variant *set* once started (409 `running`) but
+  accepts changed allocations. The dialog locks variant names and the Add/Remove buttons after start;
+  there is no API signal for "editable" beyond `started_at`, so this rule is duplicated client-side.
+- Restarting an ended experiment reuses `POST /experiments/{key}/start`, which clears `ended_at`. There is
+  no separate "resume" and no warning that results then span both runs — the admin labels the button
+  "Restart" and says so in the confirm dialog.
+- `GET /v1/admin/experiments/{key}/results` has no date-range parameter: it always counts from
+  `started_at` (or the year 2000 for a draft). No way to compare two windows of a long-running test.
+- `VariantResult.purchasers` is computed per (variant, currency) and then `max()`-ed across currencies, so
+  for a variant with buyers in several currencies it is a lower bound, not the true distinct count. Shown
+  as-is; a single `count(distinct user_id)` per variant would be exact.
+- Feature flag keys cannot be renamed: `PUT /v1/admin/flags/{key}` upserts, so renaming would silently
+  create a second flag. The dialog disables the key when editing and says to delete and recreate.
+- `FlagIn.rules` is an untyped `dict`. The admin offers a JSON editor with the shape from the router
+  comment (`platforms`, `countries`, `min_app_version`, `percentage`) as a hint only — nothing validates
+  those keys, so a typo silently targets nobody. A typed `FlagRules` model would catch it server-side.
+- `OfferIn.eligibility` is an untyped `dict` too. The admin gives helpers for `countries` (ISO-2 chips) and
+  `inactive_days` (number), passes anything else through a JSON editor, and defaults `first_purchase: true`
+  for the `first_purchase` kind. The API validates none of this.
+- No `DELETE /v1/admin/offers/{id}`: offers can only be deactivated (`is_active: false`). The list shows
+  Activate/Deactivate instead of a delete action.
+- `OfferOut` has no `created_at`/`updated_at`, so the list cannot show when an offer was last changed even
+  though `GET /offers` orders by `created_at desc`.
+- Coupon codes are globally unique (409 `code_taken`) but the error does not say which offer holds the
+  code, so the admin can only report "code exists".
+- `CouponOut` has no per-coupon redemption list or timestamps — only `used`. No way to see who redeemed
+  what from the admin.
+- `GET /v1/admin/moderation` returns open reports plus flagged series with no pagination and a hard cap of
+  200 each; the page loads all of it and filters client-side. A busy queue would silently truncate.
+- `ModerationItem.id` is the report id for reports and the *series* id for flagged series, so the two kinds
+  share an id space. The admin keys rows by `${kind}:${id}` to avoid a React key collision.
+- `POST /v1/admin/moderation/series/{id}` with `action: "set_rating"` silently no-ops when
+  `content_rating` is missing (the router's `elif` requires both). The admin always sends a rating for that
+  action; an explicit 422 would be safer.
+- `moderate_series` has no "resolve/dismiss" for a flagged series other than `clear_flags`, and no audit
+  trail: who cleared which flag and when is not recorded anywhere the admin can read back.
+- `ModerateSeriesIn.content_rating` is a free-form `str | None` (the column is `String(8)`); there is no
+  enum. The admin offers U / UA7 / UA13 / UA16 / A from a local list (`lib/ratings.ts`) that duplicates
+  `settings.adult_ratings` (`["A", "UA16"]`). Exposing the rating vocabulary on `/v1/config` would remove
+  the duplication.
+- `GET /v1/admin/analytics/qoe` returns `date` as a plain string and one row per (day, platform) with no
+  totals; the admin computes play-weighted p50/p95/rebuffer/error aggregates client-side. Rows only exist
+  where a `first_frame` event landed, so a day with rebuffers but no starts is invisible.
+- QoE percentiles read `props.ttff_ms` off `AnalyticsEvent`; there is no server-side validation that the
+  apps send it. A platform that omits `ttff_ms` shows `null` p50/p95 while still counting plays.
+- `FunnelOut.steps` is `list[dict]`, so the admin re-asserts `{name, users}` locally. The step list is
+  hard-coded server-side (`app_open` … `checkout_start`, plus `paid`) with no way to add a step or break the
+  funnel down by platform, country or experiment variant.
+- Funnel steps are counted independently (distinct users per event in range), not as a true sequential
+  funnel, so a later step can exceed an earlier one. The admin says so on the page and shows
+  "% of previous" as informational only.
+- `POST /v1/admin/auth/forgot` and `/reset` return an untyped `dict` (`{ok: true}`) rather than `Ok`. The
+  reset link's base comes from the server's `admin_base_url` setting, so a deployment whose admin runs on a
+  different origin sends links to the wrong host — the admin cannot detect or correct this.
+- `POST /v1/admin/auth/reset` raises `Unauthorized` (401) for a weak password as well as for a bad token.
+  The admin's global 401 handler would normally bounce to `/login`, so `/reset` and `/forgot` are
+  registered as public paths in `proxy.ts` and the page renders the message inline instead. A 422 for
+  validation would be cleaner.
+- The reset flow does not sign the admin in or revoke existing sessions: after a successful reset the page
+  redirects to `/login`, and any other live session with the old token keeps working until it expires.
+- `SeriesIn.territories` and `visible_languages` are free-form `list[str]` with no validation; the admin
+  enforces ISO-3166 alpha-2 for territories and offers language checkboxes from `GET /v1/admin/languages`.
+- `window_starts_at` / `window_ends_at` are not validated as an ordered pair server-side; the series form
+  rejects an end before the start locally.
+- `moderation_flags` is writable through `PUT /v1/admin/series/{id}`, so "clear flags" in the series editor
+  is a plain field edit while the moderation queue uses the dedicated action endpoint. Two paths to the
+  same state, with no audit on either.
+- `EpisodeIn.scheduled_at` has no server-side rule tying it to a status: a `published` episode can carry a
+  future `scheduled_at` and a `draft` one is never picked up by the worker. The episode dialog blocks the
+  first case and warns on the second, but the API accepts both.
+- `AdminEpisodeOut.scheduled_at` gives no signal about whether the drip worker is running or when it last
+  ran, so a "scheduled" badge cannot distinguish "waiting" from "worker is down".
+- `GET /v1/admin/ai/series/{id}/transcript` returns the transcript as one blob with no per-episode
+  boundaries; the metadata panel truncates it to the 4000-character seed limit from the start of episode 1.
+- `POST /v1/admin/ai/reembed-all` returns a single `JobOut` for the whole catalogue with no progress or
+  item count, so the admin can only report "queued" — `GET /v1/admin/ai/jobs/{id}` gives status but no
+  "N of M series done".

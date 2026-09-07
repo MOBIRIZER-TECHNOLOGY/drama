@@ -9359,7 +9359,8 @@
           "content_rating": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^(U|UA7|UA13|UA16|A)$"
               },
               {
                 "type": "null"
