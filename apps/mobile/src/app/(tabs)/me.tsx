@@ -6,6 +6,7 @@ import * as WebBrowser from "expo-web-browser";
 import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
+import { NotificationSettings } from "@/components/notification-settings";
 import { Button, Card, Divider, ListRow, Pill, Screen, Text, Toast } from "@/components/ui";
 import { useT } from "@/hooks/use-translations";
 import { api } from "@/lib/api";
@@ -216,6 +217,14 @@ export default function MeScreen() {
         <Card style={{ padding: 0 }}>
           <ListRow title={t("me.language")} subtitle={language ? (language.native_name ?? language.name) : lang} onPress={() => router.push("/language")} />
           <Divider />
+          {/* The retention loop exists now, so the viewer gets a switch for it — and per-channel control, since
+              an app that can only be silenced entirely gets silenced entirely. */}
+          {signedIn ? (
+            <>
+              <NotificationSettings />
+              <Divider />
+            </>
+          ) : null}
           <ListRow
             title={busy === "cache" ? "Clearing…" : t("me.clear_cache")}
             subtitle="Frees space used by saved settings, translations and images"

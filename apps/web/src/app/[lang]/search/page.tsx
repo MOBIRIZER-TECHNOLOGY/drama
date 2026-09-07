@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Beacon } from "@/components/Beacon";
 import { SeriesCard } from "@/components/SeriesCard";
 import { EmptyState, ErrorState } from "@/components/ui/states";
-import { fetchTranslations, searchSeries } from "@/lib/server-data";
+import { SearchSuggestions } from "@/components/SearchSuggestions";
+import { fetchCategories, fetchTranslations, searchSeries } from "@/lib/server-data";
 
 export const metadata: Metadata = { title: "Search", robots: { index: false } };
 
@@ -10,13 +11,13 @@ export default async function SearchPage({ params, searchParams }: PageProps<"/[
   const { lang } = await params;
   const sp = await searchParams;
   const q = (Array.isArray(sp.q) ? sp.q[0] : sp.q)?.trim() ?? "";
-  const messages = await fetchTranslations(lang);
+  const [messages, categories] = await Promise.all([fetchTranslations(lang), fetchCategories()]);
   const t = (key: string, fallback: string) => messages[key] || fallback;
   const result = q ? await searchSeries(q, lang) : null;
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-8">
-      {q && <Beacon key={q} name="search" props={{ q, results: result?.ok ? result.data.length : null, surface: "page" }} />}
+      {q && <Beacon key={q} name="search" remember={q} props={{ q, results: result?.ok ? result.data.length : null, surface: "page" }} />}
       <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">
         {q ? (
           <>
@@ -28,7 +29,8 @@ export default async function SearchPage({ params, searchParams }: PageProps<"/[
       </h1>
       <div className="mt-6">
         {!q ? (
-          <EmptyState title={t("search.empty_title", "Type something to search")} message={t("search.empty_message", "Try a title, a genre or a mood.")} />
+          // "Type something to search" was a blank wall on the highest-intent screen in the product.
+          <SearchSuggestions categories={categories.slice(0, 12)} />
         ) : !result?.ok ? (
           <ErrorState message={t("search.error", "Search is unavailable right now.")} retryLabel={t("common.retry", "Try again")} />
         ) : result.data.length === 0 ? (
