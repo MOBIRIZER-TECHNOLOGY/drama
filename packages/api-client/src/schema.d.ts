@@ -273,6 +273,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/browse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Browse
+         * @description Every category with its top series, in one request.
+         *
+         *     The browse page used to fetch the catalogue and then make one more request per category — 1 + N round trips
+         *     on every revalidation, which is most of its time to first byte. Grouping happens here instead, over a single
+         *     set of queries, and the shape matches `/home` so the client renders it with the same rail component.
+         *
+         *     An uncategorised rail is appended when there is anything in it, so nothing in the catalogue is unreachable.
+         */
+        get: operations["browse_v1_browse_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/series/{id_or_slug}": {
         parameters: {
             query?: never;
@@ -1868,7 +1894,18 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Funnel */
+        /**
+         * Funnel
+         * @description Sequenced acquisition funnel.
+         *
+         *     This used to count each step independently, which meant a viewer could appear at `unlock` without ever
+         *     appearing at `app_open`, and every "% of previous" was arithmetic across unrelated populations. The screen
+         *     said so in a caveat, which is not a fix: numbers that read as a funnel get presented as one.
+         *
+         *     Identity is the user id where there is one and the session id otherwise, so a guest's journey survives up to
+         *     the point they sign in. `paid` is drawn from purchases rather than events, because money is recorded by the
+         *     payment webhook and is true regardless of whether a client analytics beacon ever arrived.
+         */
         get: operations["funnel_v1_admin_analytics_funnel_get"];
         put?: never;
         post?: never;
@@ -4891,6 +4928,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryOut"][];
+                };
+            };
+        };
+    };
+    browse_v1_browse_get: {
+        parameters: {
+            query?: {
+                lang?: string;
+                per_category?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HomeOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

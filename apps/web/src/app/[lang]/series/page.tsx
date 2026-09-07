@@ -5,13 +5,10 @@ import { Rail } from "@/components/Rail";
 import { SeriesCard } from "@/components/SeriesCard";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { localeHref } from "@/lib/languages";
-import { fetchCategories, fetchLanguages, fetchSeriesList, fetchTranslations } from "@/lib/server-data";
-import type { SeriesCard as SeriesCardT } from "@/lib/types";
+import { fetchBrowse, fetchCategories, fetchLanguages, fetchTranslations } from "@/lib/server-data";
 
 /** Catalogue pages are cached per language and refreshed in the background every minute. */
 export const revalidate = 60;
-
-const PER_CATEGORY = 12;
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/series">): Promise<Metadata> {
   const { lang } = await params;
@@ -32,27 +29,17 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/series">):
 
 export default async function BrowsePage({ params }: PageProps<"/[lang]/series">) {
   const { lang } = await params;
-  const [categories, messages, all] = await Promise.all([
+  // One request. This used to fetch the catalogue and then make another call per category — 1 + N round trips
+  // on every revalidation, which was most of the page's time to first byte. The API groups it now.
+  const [categories, messages, browse] = await Promise.all([
     fetchCategories(),
     fetchTranslations(lang),
-    fetchSeriesList({ lang, limit: 100 }),
+    fetchBrowse(lang),
   ]);
   const t = (key: string, fallback: string) => messages[key] || fallback;
 
-  // One request per category keeps the grouping honest (a series can sit in several categories).
-  const groups = await Promise.all(
-    categories.map(async (c) => ({
-      category: c,
-      result: await fetchSeriesList({ lang, category: c.slug, limit: PER_CATEGORY }),
-    })),
-  );
-  const filled = groups.filter((g) => g.result.ok && g.result.data.length > 0) as {
-    category: (typeof categories)[number];
-    result: { ok: true; data: SeriesCardT[] };
-  }[];
-
-  const uncategorised = all.ok ? all.data.filter((s) => s.categories.length === 0) : [];
-  const failed = !all.ok && filled.length === 0;
+  const rails = browse.ok ? browse.data.rails.filter((r) => r.items.length > 0) : [];
+  const failed = !browse.ok;
 
   return (
     <div className="mx-auto max-w-[1400px] py-6 sm:py-8">
@@ -78,7 +65,7 @@ export default async function BrowsePage({ params }: PageProps<"/[lang]/series">
             retryLabel={t("common.retry", "Try again")}
           />
         </div>
-      ) : filled.length === 0 && uncategorised.length === 0 ? (
+      ) : rails.length === 0 ? (
         <div className="mx-auto mt-10 max-w-lg px-4">
           <EmptyState
             title={t("browse.empty_title", "Nothing published yet")}
@@ -87,29 +74,28 @@ export default async function BrowsePage({ params }: PageProps<"/[lang]/series">
         </div>
       ) : (
         <div className="mt-8 flex flex-col gap-10">
-          {filled.map(({ category, result }) => (
-            <Rail
-              key={category.id}
-              id={`category-${category.slug}`}
-              title={category.name}
-              action={
-                <Link href={localeHref(lang, `/category/${category.slug}`)} className="text-sm font-medium text-accent hover:underline">
-                  {t("browse.see_all", "See all")}
-                </Link>
-              }
-            >
-              {result.data.map((s) => (
-                <SeriesCard key={s.id} series={s} lang={lang} episodesLabel={t("series.eps", "eps")} freeLabel={t("series.free", "Free")} />
-              ))}
-            </Rail>
-          ))}
-          {uncategorised.length > 0 && (
-            <Rail title={t("browse.more", "More on Katha")}>
-              {uncategorised.map((s) => (
-                <SeriesCard key={s.id} series={s} lang={lang} episodesLabel={t("series.eps", "eps")} freeLabel={t("series.free", "Free")} />
-              ))}
-            </Rail>
-          )}
+          {rails.map((rail) => {
+            // Rail keys are "category:<slug>" or "uncategorised"; only a real category gets a See all link.
+            const slug = rail.key.startsWith("category:") ? rail.key.slice("category:".length) : null;
+            return (
+              <Rail
+                key={rail.key}
+                id={slug ? `category-${slug}` : rail.key}
+                title={rail.title}
+                action={
+                  slug ? (
+                    <Link href={localeHref(lang, `/category/${slug}`)} className="text-sm font-medium text-accent hover:underline">
+                      {t("browse.see_all", "See all")}
+                    </Link>
+                  ) : undefined
+                }
+              >
+                {rail.items.map((s) => (
+                  <SeriesCard key={s.id} series={s} lang={lang} episodesLabel={t("series.eps", "eps")} freeLabel={t("series.free", "Free")} />
+                ))}
+              </Rail>
+            );
+          })}
         </div>
       )}
     </div>

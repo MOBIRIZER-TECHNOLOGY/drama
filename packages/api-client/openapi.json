@@ -683,6 +683,63 @@
         }
       }
     },
+    "/v1/browse": {
+      "get": {
+        "tags": [
+          "catalog"
+        ],
+        "summary": "Browse",
+        "description": "Every category with its top series, in one request.\n\nThe browse page used to fetch the catalogue and then make one more request per category — 1 + N round trips\non every revalidation, which is most of its time to first byte. Grouping happens here instead, over a single\nset of queries, and the shape matches `/home` so the client renders it with the same rail component.\n\nAn uncategorised rail is appended when there is anything in it, so nothing in the catalogue is unreachable.",
+        "operationId": "browse_v1_browse_get",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 10,
+              "default": "en",
+              "title": "Lang"
+            }
+          },
+          {
+            "name": "per_category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 40,
+              "minimum": 1,
+              "default": 12,
+              "title": "Per Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HomeOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/series/{id_or_slug}": {
       "get": {
         "tags": [
@@ -6172,6 +6229,7 @@
           "admin"
         ],
         "summary": "Funnel",
+        "description": "Sequenced acquisition funnel.\n\nThis used to count each step independently, which meant a viewer could appear at `unlock` without ever\nappearing at `app_open`, and every \"% of previous\" was arithmetic across unrelated populations. The screen\nsaid so in a caveat, which is not a fix: numbers that read as a funnel get presented as one.\n\nIdentity is the user id where there is one and the session id otherwise, so a guest's journey survives up to\nthe point they sign in. `paid` is drawn from purchases rather than events, because money is recorded by the\npayment webhook and is true regardless of whether a client analytics beacon ever arrived.",
         "operationId": "funnel_v1_admin_analytics_funnel_get",
         "security": [
           {

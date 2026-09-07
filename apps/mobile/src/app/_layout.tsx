@@ -12,6 +12,7 @@ import { PushRouter } from "@/components/push-router";
 import { startAnalytics } from "@/lib/analytics";
 import { AuthProvider } from "@/providers/auth";
 import { ConfigProvider, useConfig } from "@/providers/config";
+import { ToastProvider } from "@/providers/toast";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 WebBrowser.maybeCompleteAuthSession();
@@ -80,8 +81,11 @@ export default function RootLayout() {
           <ConfigProvider>
             <AuthProvider>
               <PlayerPoolProvider>
-                <StatusBar style="light" />
-                <RootNavigator />
+                {/* Above the navigator, so a message survives the screen that raised it. */}
+                <ToastProvider>
+                  <StatusBar style="light" />
+                  <RootNavigator />
+                </ToastProvider>
               </PlayerPoolProvider>
             </AuthProvider>
           </ConfigProvider>

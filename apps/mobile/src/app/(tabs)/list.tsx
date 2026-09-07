@@ -9,6 +9,7 @@ import { SeriesCard } from "@/components/series-card";
 import { Button, EmptyState, ErrorState, Loading, Screen, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
+import { useToast } from "@/providers/toast";
 import { api } from "@/lib/api";
 import { errorMessage, unwrap } from "@/lib/errors";
 import { formatDate, formatTime } from "@/lib/format";
@@ -23,6 +24,7 @@ const COLUMNS = 3;
 
 export default function MyListScreen() {
   const t = useT();
+  const toast = useToast();
   const { width: viewport } = useWindowDimensions();
   const cardWidth = Math.floor((viewport - spacing.lg * 2 - spacing.md * (COLUMNS - 1)) / COLUMNS);
   const router = useRouter();
@@ -30,7 +32,6 @@ export default function MyListScreen() {
   const { status, requireAuth } = useAuth();
   const signedIn = status === "signed_in";
   const [tab, setTab] = useState<Tab>("favorites");
-  const [actionError, setActionError] = useState<string | null>(null);
   const list = useQuery(async () => unwrap(await api.GET("/v1/me/list", { params: { query: { lang } } })), [lang], { enabled: signedIn });
 
   const refetchList = list.refetch;
@@ -52,11 +53,11 @@ export default function MyListScreen() {
         const out = unwrap(await api.POST("/v1/series/{series_id}/favorite", { params: { path: { series_id: series.id } } }));
         if (out.active) await list.refetch({ silent: true });
       } catch (e) {
-        setActionError(errorMessage(e));
+        toast(errorMessage(e), "error");
         await list.refetch({ silent: true });
       }
     },
-    [list],
+    [list, toast],
   );
 
   const removeHistory = useCallback(
@@ -65,11 +66,11 @@ export default function MyListScreen() {
       try {
         unwrap(await api.DELETE("/v1/me/history", { params: { query: seriesId ? { series_id: seriesId } : {} } }));
       } catch (e) {
-        setActionError(errorMessage(e));
+        toast(errorMessage(e), "error");
         await list.refetch({ silent: true });
       }
     },
-    [list],
+    [list, toast],
   );
 
   /**
@@ -118,11 +119,6 @@ export default function MyListScreen() {
           ) : null
         }
       />
-      {actionError ? (
-        <Text variant="caption" color={colors.danger} style={styles.error}>
-          {actionError}
-        </Text>
-      ) : null}
       {list.loading ? (
         <Loading />
       ) : list.error && !list.data ? (

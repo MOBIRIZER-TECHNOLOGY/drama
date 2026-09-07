@@ -93,6 +93,12 @@ export const fetchHome = cache(
   (lang: string): Promise<Loaded<HomeOut>> => load(() => api.GET("/v1/home", { params: { query: { lang } }, signal: timeoutSignal() })),
 );
 
+/** Every category with its top series, in one request. Replaces 1 + N calls on the browse page. */
+export const fetchBrowse = cache(
+  (lang: string): Promise<Loaded<HomeOut>> =>
+    load(() => api.GET("/v1/browse", { params: { query: { lang } }, signal: timeoutSignal() })),
+);
+
 /** The vertical feed's first page. Episode-level and paginated; the client continues from `next_cursor`. */
 export const fetchShorts = cache(
   (lang: string): Promise<Loaded<ShortsOut>> =>

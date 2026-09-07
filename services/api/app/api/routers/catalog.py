@@ -350,6 +350,55 @@ async def list_categories(db: DB) -> list[CategoryOut]:
     return [CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in rows.all()]
 
 
+BROWSE_SERIES_CAP = 400
+
+
+@router.get("/browse", response_model=HomeOut)
+async def browse(
+    db: DB,
+    country: Annotated[str | None, Depends(client_country)],
+    lang: Lang = "en",
+    per_category: Annotated[int, Query(ge=1, le=40)] = 12,
+) -> HomeOut:
+    """Every category with its top series, in one request.
+
+    The browse page used to fetch the catalogue and then make one more request per category — 1 + N round trips
+    on every revalidation, which is most of its time to first byte. Grouping happens here instead, over a single
+    set of queries, and the shape matches `/home` so the client renders it with the same rail component.
+
+    An uncategorised rail is appended when there is anything in it, so nothing in the catalogue is unreachable.
+    """
+    series = list(
+        (
+            await db.scalars(
+                _published_series(lang, country)
+                .order_by(Series.is_featured.desc(), Series.sort_weight.desc(), Series.view_count.desc(), Series.id)
+                .limit(BROWSE_SERIES_CAP)
+            )
+        ).all()
+    )
+    if not series:
+        return HomeOut(rails=[])
+
+    counts = await _episode_counts(db, [s.id for s in series])
+    firsts = await _first_episode_ids(db, [s.id for s in series])
+
+    def card(s: Series) -> SeriesCard:
+        return _card(s, lang, counts.get(s.id, 0), first_episode_id=firsts.get(s.id))
+
+    categories = list((await db.scalars(select(Category).order_by(Category.sort_order, Category.name))).all())
+    rails: list[HomeRail] = []
+    for category in categories:
+        items = [card(s) for s in series if any(c.id == category.id for c in s.categories)][:per_category]
+        if items:
+            rails.append(HomeRail(key=f"category:{category.slug}", title=category.name, items=items))
+
+    loose = [card(s) for s in series if not s.categories][:per_category]
+    if loose:
+        rails.append(HomeRail(key="uncategorised", title="More on Katha", items=loose))
+    return HomeOut(rails=rails)
+
+
 async def _load_series(
     db: AsyncSession, id_or_slug: str, lang: str | None = None, country: str | None = None
 ) -> Series:
