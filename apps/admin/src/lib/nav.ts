@@ -37,6 +37,8 @@ export const NAV: NavItem[] = [
   { href: "/inbox", label: "Inbox", icon: "inbox", roles: ["owner", "support"], section: "Support" },
   { href: "/settings", label: "Settings", icon: "settings", roles: ["owner", "finance"], section: "System" },
   { href: "/accounts", label: "Admin Accounts", icon: "shield", roles: ["owner"], section: "System" },
+  // Owner-only: the log names admins and the accounts they acted on, which is more than support needs to see.
+  { href: "/audit", label: "Audit Log", icon: "shield", roles: ["owner"], section: "System" },
 ];
 
 /** Items listed in the sidebar for a role (hidden routes are omitted but still reachable). */

@@ -22,6 +22,7 @@ from app.schemas.admin import (
 )
 from app.schemas.common import Ok
 from app.schemas.wallet import LedgerRow
+from app.services import audit
 from app.services import config as config_svc
 from app.services import ledger as ledger_svc
 
@@ -54,11 +55,21 @@ async def get_user(user_id: uuid.UUID, db: DB) -> AdminUserOut:
 
 
 @router.put("/users/{user_id}/status", response_model=AdminUserOut)
-async def set_status(user_id: uuid.UUID, body: UserStatusIn, db: DB) -> AdminUserOut:
+async def set_status(user_id: uuid.UUID, body: UserStatusIn, db: DB, admin: CurrentAdmin) -> AdminUserOut:
     u = await db.get(User, user_id)
     if u is None:
         raise NotFound("User")
+    previous = u.status
     u.status = body.status
+    audit.record(
+        db,
+        admin=admin,
+        action="user.status",
+        target_type="user",
+        target_id=u.id,
+        before={"status": previous.value},
+        after={"status": body.status.value},
+    )
     if body.status != UserStatus.active:
         now = datetime.now(UTC)
         for s in (await db.scalars(select(Session).where(Session.user_id == u.id, Session.revoked_at.is_(None)))).all():
@@ -79,6 +90,15 @@ async def adjust_coins(user_id: uuid.UUID, body: CoinAdjustIn, db: DB, admin: Cu
         created_by=str(admin.id),
         variant_map=(await config_svc.variant_map(db, user_id)) or None,
     )
+    audit.record(
+        db,
+        admin=admin,
+        action="user.coins",
+        target_type="user",
+        target_id=user_id,
+        note=body.note,
+        after={"delta": body.delta},
+    )
     await db.commit()
     u = await db.get(User, user_id)
     return AdminUserOut.model_validate(u)
@@ -97,6 +117,14 @@ async def grant_vip(user_id: uuid.UUID, body: VipGrantIn, db: DB, admin: Current
     )
     starts = current.ends_at if current else now
     db.add(VipMembership(user_id=user_id, starts_at=starts, ends_at=starts + timedelta(days=body.days), source="admin"))
+    audit.record(
+        db,
+        admin=admin,
+        action="user.vip_grant",
+        target_type="user",
+        target_id=user_id,
+        after={"days": body.days, "ends_at": (starts + timedelta(days=body.days)).isoformat()},
+    )
     await db.commit()
     return Ok()
 
@@ -108,10 +136,18 @@ async def user_ledger(user_id: uuid.UUID, db: DB, limit: int = Query(100, le=500
 
 
 @router.delete("/users/{user_id}", response_model=Ok, dependencies=[require_role(AdminRole.owner)])
-async def delete_user(user_id: uuid.UUID, db: DB) -> Ok:
+async def delete_user(user_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
     u = await db.get(User, user_id)
     if u is None:
         raise NotFound("User")
+    audit.record(
+        db,
+        admin=admin,
+        action="user.delete",
+        target_type="user",
+        target_id=u.id,
+        before={"public_id": u.public_id, "email": u.email},
+    )
     # Soft delete: keeps the ledger and purchases for finance; personal fields are scrubbed.
     u.status = UserStatus.deleted
     u.email = None

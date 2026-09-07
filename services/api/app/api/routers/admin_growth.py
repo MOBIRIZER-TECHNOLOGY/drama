@@ -9,13 +9,14 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.types import Date, Float
 
-from app.api.deps import DB, AdminRole, require_role
+from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
 from app.models.engagement import AnalyticsEvent
 from app.models.identity import User
 from app.models.ops import Experiment, ExperimentAssignment, FeatureFlag
 from app.models.wallet import CoinLedger, Coupon, EpisodeUnlock, Offer, Purchase, PurchaseStatus
 from app.schemas.common import Ok
+from app.services import audit
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.finance, AdminRole.editor)])
 
@@ -227,22 +228,36 @@ async def flags(db: DB) -> list[FlagOut]:
 
 
 @router.put("/flags/{key}", response_model=FlagOut)
-async def put_flag(key: str, body: FlagIn, db: DB) -> FlagOut:
+async def put_flag(key: str, body: FlagIn, db: DB, admin: CurrentAdmin) -> FlagOut:
     f = await db.get(FeatureFlag, key)
+    before = {"enabled": f.enabled, "rules": f.rules} if f is not None else None
     if f is None:
         f = FeatureFlag(key=key, enabled=body.enabled, rules=body.rules, updated_at=datetime.now(UTC))
         db.add(f)
     else:
         f.enabled, f.rules, f.updated_at = body.enabled, body.rules, datetime.now(UTC)
+    # A flag is a production kill switch. After an incident, "who turned this on" has to be answerable.
+    audit.record(
+        db,
+        admin=admin,
+        action="flag.set",
+        target_type="flag",
+        target_id=key,
+        before=before,
+        after={"enabled": f.enabled, "rules": f.rules},
+    )
     await db.commit()
     return FlagOut(key=f.key, enabled=f.enabled, rules=f.rules, updated_at=f.updated_at)
 
 
 @router.delete("/flags/{key}", response_model=Ok)
-async def delete_flag(key: str, db: DB) -> Ok:
+async def delete_flag(key: str, db: DB, admin: CurrentAdmin) -> Ok:
     f = await db.get(FeatureFlag, key)
     if f is None:
         raise NotFound("Flag")
+    audit.record(
+        db, admin=admin, action="flag.delete", target_type="flag", target_id=key, before={"enabled": f.enabled}
+    )
     await db.delete(f)
     await db.commit()
     return Ok()

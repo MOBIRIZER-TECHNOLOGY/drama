@@ -1,5 +1,6 @@
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, model_validator
@@ -24,7 +25,7 @@ from app.schemas.admin import (
     TranslationsIn,
 )
 from app.schemas.common import Ok
-from app.services import jobs
+from app.services import audit, jobs
 from app.services.html import sanitize_body_html
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.editor, AdminRole.support)])
@@ -329,3 +330,34 @@ async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB) 
         s_.moderation_note = body.note
     await db.commit()
     return Ok()
+
+
+class AuditRow(BaseModel):
+    id: uuid.UUID
+    admin_email: str | None
+    action: str
+    target_type: str | None
+    target_id: str | None
+    note: str | None
+    before: dict | None
+    after: dict | None
+    created_at: datetime
+
+
+@router.get("/audit", response_model=list[AuditRow], dependencies=[require_role(AdminRole.owner)])
+async def audit_log(
+    db: DB,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    action: Annotated[str | None, Query(max_length=64)] = None,
+    target_type: Annotated[str | None, Query(max_length=40)] = None,
+    target_id: Annotated[str | None, Query(max_length=64)] = None,
+) -> list[AuditRow]:
+    """Who did what, most recent first.
+
+    Owner-only: the log names admins and the accounts they acted on, which is more than a support role needs.
+    """
+    rows = await audit.recent(
+        db, limit=limit, offset=offset, action=action, target_type=target_type, target_id=target_id
+    )
+    return [AuditRow.model_validate(r, from_attributes=True) for r in rows]

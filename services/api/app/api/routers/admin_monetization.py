@@ -19,6 +19,7 @@ from app.schemas.admin import (
     SettingsIn,
 )
 from app.schemas.common import Ok
+from app.services import audit
 from app.services import config as config_svc
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.finance, AdminRole.editor)])
@@ -175,8 +176,19 @@ async def put_settings_ns(namespace: str, body: SettingsIn, db: DB, admin: Curre
     if row is None:
         row = Setting(namespace=namespace, data={})
         db.add(row)
+    previous = dict(row.data)
     row.data = {**row.data, **body.data}
     row.updated_at = datetime.now(UTC)
     row.updated_by = admin.id
+    # Economy settings move revenue directly. Without a record, a bad save has no "what was it before".
+    audit.record(
+        db,
+        admin=admin,
+        action="settings.save",
+        target_type="setting",
+        target_id=namespace,
+        before=previous,
+        after=dict(row.data),
+    )
     await db.commit()
     return await config_svc.namespace(db, namespace)

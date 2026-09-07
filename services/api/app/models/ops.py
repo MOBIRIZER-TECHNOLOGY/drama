@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,6 +18,36 @@ class Setting(Base):
     data: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"))
+
+
+class AuditLog(UUIDPrimaryKey, Base):
+    """Who did what, to what, and why.
+
+    Nothing in the console recorded a privilege change, a ban, a cleared moderation flag, a price edit or a
+    settings save — so after an incident nobody could say who flipped `rewarded_ads`, and a takedown dispute had
+    no record of the decision. The coin ledger was the only thing in the product that remembered anything.
+
+    Append-only by convention: rows are written, never updated. `before`/`after` hold only the fields that
+    changed, so a settings save does not archive the whole namespace on every keystroke.
+    """
+
+    __tablename__ = "audit_log"
+    __table_args__ = (
+        Index("ix_audit_created", "created_at"),
+        Index("ix_audit_target", "target_type", "target_id"),
+    )
+
+    admin_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("admin_users.id"))
+    # Denormalised so the row still reads after the account is deleted, which is exactly when it matters.
+    admin_email: Mapped[str | None] = mapped_column(String(320))
+    action: Mapped[str] = mapped_column(String(64), nullable=False)  # user.ban | flag.toggle | settings.save
+    target_type: Mapped[str | None] = mapped_column(String(40))  # user | series | flag | setting | offer
+    target_id: Mapped[str | None] = mapped_column(String(64))
+    note: Mapped[str | None] = mapped_column(Text)  # the operator's own reason, where the action asks for one
+    before: Mapped[dict | None] = mapped_column(JSONB)
+    after: Mapped[dict | None] = mapped_column(JSONB)
+    ip: Mapped[str | None] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class Language(Base):
