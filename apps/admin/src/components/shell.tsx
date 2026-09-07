@@ -1,5 +1,6 @@
 "use client";
 
+import { CommandPalette } from "@/components/command-palette";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
@@ -108,10 +109,13 @@ export function Shell({ children }: { children: ReactNode }) {
           </button>
           <span className="font-display text-lg font-semibold">Katha Admin</span>
         </header>
-        <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
+        <main id="main" className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:px-8">
           {allowed ? children : <LoadingState label="Redirecting…" />}
         </main>
       </div>
+
+      {/* Ctrl/Cmd+K from anywhere in the console. */}
+      <CommandPalette role={admin.role} />
     </div>
   );
 }

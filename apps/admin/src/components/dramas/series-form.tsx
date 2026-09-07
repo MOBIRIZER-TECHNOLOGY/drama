@@ -10,6 +10,7 @@ import { useQuery } from "@/lib/use-query";
 import { AiMetadataPanel } from "@/components/dramas/ai-metadata-panel";
 import { ImageUpload } from "@/components/image-upload";
 import { useToast } from "@/components/toast";
+import { useSaveShortcut, useUnsavedChanges } from "@/lib/editing";
 import { Badge, Button, Card, ChipInput, Field, Input, LoadingState, Select, TabPanel, Tabs, Textarea, Toggle } from "@/components/ui";
 
 type SeriesIn = Schemas["SeriesIn"];
@@ -166,6 +167,10 @@ export function SeriesForm({
   const categories = useQuery("categories", () => call(api.GET("/v1/admin/categories")));
 
   const dirty = JSON.stringify(form) !== baseline;
+  // Ten minutes of typing used to be discarded by a tab close, a sidebar link, or the 8-hour token expiring.
+  useUnsavedChanges(dirty && !saving);
+  // An editor saves this form dozens of times a day; the browser's own Save Page dialog is never what they want.
+  useSaveShortcut(() => formRef.current?.requestSubmit(), dirty && !saving);
   useEffect(() => {
     onDirtyChange?.(dirty);
   }, [dirty, onDirtyChange]);
@@ -625,11 +630,11 @@ export function SeriesForm({
             {error}
           </p>
         )}
-        <div className="flex flex-col gap-2">
+        <div className="sticky bottom-4 flex flex-col gap-2 rounded-lg border border-line bg-surface p-3">
           <Button type="submit" variant="primary" loading={saving}>
             {initial ? "Save changes" : "Create series"}
           </Button>
-          {initial && dirty && <p className="text-xs text-muted">Unsaved changes.</p>}
+          {initial && dirty && <p className="text-xs text-muted">Unsaved changes · ⌘/Ctrl+S</p>}
           {!initial && <p className="text-xs text-muted">Episodes can be added after the series is created.</p>}
         </div>
       </aside>

@@ -18,6 +18,7 @@ import {
 import { ImageUpload } from "@/components/image-upload";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
+import { BulkIngestDialog } from "./bulk-ingest";
 import {
   Badge,
   Button,
@@ -52,6 +53,7 @@ export function EpisodesPanel({
   const toast = useToast();
   const [editing, setEditing] = useState<Episode | "new" | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [ingestOpen, setIngestOpen] = useState(false);
   const [deleting, setDeleting] = useState<Episode | null>(null);
   const [busy, setBusy] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
@@ -141,6 +143,9 @@ export function EpisodesPanel({
         <div className="flex gap-2">
           <Button size="sm" onClick={() => setBulkOpen(true)}>
             Add N episodes
+          </Button>
+          <Button size="sm" onClick={() => setIngestOpen(true)}>
+            <Icon name="plus" size={14} /> Ingest season
           </Button>
           <Button size="sm" variant="primary" onClick={() => setEditing("new")}>
             <Icon name="plus" size={14} /> Add episode
@@ -252,6 +257,14 @@ export function EpisodesPanel({
           setBulkOpen(false);
           onChanged();
         }}
+      />
+
+      <BulkIngestDialog
+        open={ingestOpen}
+        seriesId={seriesId}
+        existingNumbers={episodes.map((e) => e.number)}
+        onClose={() => setIngestOpen(false)}
+        onDone={onChanged}
       />
 
       <ConfirmDialog

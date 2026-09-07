@@ -7,7 +7,9 @@ import {
   useContext,
   useEffect,
   useId,
+  useMemo,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -384,9 +386,21 @@ export function InlineError({ message, onRetry }: { message: string; onRetry?: (
 
 /* ---------- tables ---------- */
 
-export function Table({ children, minWidth = 640 }: { children: ReactNode; minWidth?: number }) {
+/**
+ * Scroll container plus table. `maxHeight` turns on a sticky header: past a couple of screens of rows an
+ * operator otherwise has to scroll back up to remember which column they are reading.
+ */
+export function Table({
+  children,
+  minWidth = 640,
+  maxHeight,
+}: {
+  children: ReactNode;
+  minWidth?: number;
+  maxHeight?: number | string;
+}) {
   return (
-    <div className="scroll-x">
+    <div className="scroll-x" style={maxHeight ? { maxHeight, overflowY: "auto" } : undefined}>
       <table className="w-full border-collapse text-sm" style={{ minWidth }}>
         {children}
       </table>
@@ -394,14 +408,133 @@ export function Table({ children, minWidth = 640 }: { children: ReactNode; minWi
   );
 }
 
-export function Th({ children, className = "" }: { children?: ReactNode; className?: string }) {
+export type SortDirection = "asc" | "desc";
+export type SortState<K extends string = string> = { key: K; direction: SortDirection };
+
+/**
+ * Column header. Pass `sortKey` plus the current `sort` and an `onSort` handler to make it sortable; the header
+ * then renders as a button, reports `aria-sort`, and toggles direction on repeat clicks.
+ *
+ * Sorting was absent from every table in the console, which made "which series is dying" — a daily question —
+ * answerable only by reading every page.
+ */
+export function Th<K extends string = string>({
+  children,
+  className = "",
+  sortKey,
+  sort,
+  onSort,
+  sticky,
+}: {
+  children?: ReactNode;
+  className?: string;
+  sortKey?: K;
+  sort?: SortState<K> | null;
+  onSort?: (next: SortState<K>) => void;
+  /** Set on every header of a table rendered with `maxHeight`. */
+  sticky?: boolean;
+}) {
+  const base = `border-b border-line bg-surface-2/60 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted ${
+    sticky ? "sticky top-0 z-10" : ""
+  } ${className}`;
+  const active = sortKey && sort?.key === sortKey ? sort.direction : null;
+
+  if (!sortKey || !onSort) {
+    return (
+      <th scope="col" className={base}>
+        {children}
+      </th>
+    );
+  }
   return (
-    <th
-      scope="col"
-      className={`border-b border-line bg-surface-2/60 px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wide text-muted ${className}`}
-    >
-      {children}
+    <th scope="col" className={base} aria-sort={active === "asc" ? "ascending" : active === "desc" ? "descending" : "none"}>
+      <button
+        type="button"
+        onClick={() => onSort({ key: sortKey, direction: active === "asc" ? "desc" : "asc" })}
+        className="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 uppercase tracking-wide hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        {children}
+        <span aria-hidden className={active ? "text-accent" : "text-line"}>
+          {active === "asc" ? "\u2191" : active === "desc" ? "\u2193" : "\u2195"}
+        </span>
+      </button>
     </th>
+  );
+}
+
+/** Checkbox cell for row selection. Used with `useSelection` and `<BulkBar>`. */
+export function SelectCell({
+  checked,
+  onChange,
+  label,
+  header,
+  indeterminate,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  header?: boolean;
+  indeterminate?: boolean;
+}) {
+  const input = (
+    <input
+      type="checkbox"
+      aria-label={label}
+      checked={checked}
+      ref={(el) => {
+        if (el) el.indeterminate = !!indeterminate && !checked;
+      }}
+      onChange={(e) => onChange(e.target.checked)}
+      className="h-4 w-4 cursor-pointer accent-accent"
+      onClick={(e) => e.stopPropagation()}
+    />
+  );
+  return header ? (
+    <Th className="w-10">{input}</Th>
+  ) : (
+    <Td className="w-10">{input}</Td>
+  );
+}
+
+/**
+ * Selection state for a table. Keyed by row id, and pruned against the rows currently on screen so a
+ * selection can never act on something the operator can no longer see.
+ */
+export function useSelection<T extends { id: string }>(rows: T[]) {
+  const [ids, setIds] = useState<Set<string>>(() => new Set());
+  const visible = useMemo(() => rows.map((r) => r.id), [rows]);
+  const selected = useMemo(() => visible.filter((id) => ids.has(id)), [visible, ids]);
+  const allSelected = visible.length > 0 && selected.length === visible.length;
+
+  return {
+    selected,
+    count: selected.length,
+    has: (id: string) => ids.has(id),
+    toggle: (id: string, next: boolean) =>
+      setIds((prev) => {
+        const out = new Set(prev);
+        if (next) out.add(id);
+        else out.delete(id);
+        return out;
+      }),
+    toggleAll: (next: boolean) => setIds(next ? new Set(visible) : new Set()),
+    clear: () => setIds(new Set()),
+    allSelected,
+    someSelected: selected.length > 0 && !allSelected,
+  };
+}
+
+/** Action bar that appears once rows are selected. Sticky, so it stays reachable on a long table. */
+export function BulkBar({ count, onClear, children }: { count: number; onClear: () => void; children: ReactNode }) {
+  if (count === 0) return null;
+  return (
+    <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-3 border-t border-line bg-surface px-4 py-3 shadow-[0_-4px_12px_rgba(27,20,24,0.06)]">
+      <span className="text-sm font-medium text-ink">{count} selected</span>
+      <div className="flex flex-wrap items-center gap-2">{children}</div>
+      <button type="button" onClick={onClear} className="ms-auto text-sm text-muted underline-offset-4 hover:text-ink hover:underline">
+        Clear
+      </button>
+    </div>
   );
 }
 
@@ -413,9 +546,15 @@ export function Td({ children, className = "", title }: { children?: ReactNode; 
   );
 }
 
+const PAGE_SIZES = [20, 50, 100];
+
 /**
- * Previous/Next pager. Pages fetch `limit + 1` rows and pass `hasNext` from the extra row,
- * so there is no "guess" when a page happens to be exactly full.
+ * Pager. Pages fetch `limit + 1` rows and pass `hasNext` from the extra row, so there is no "guess" when a page
+ * happens to be exactly full.
+ *
+ * When a `total` is known this also renders page numbers plus first/last, because prev/next alone means reaching
+ * series 400 of 500 costs twenty clicks. `onLimitChange` adds a page-size control: sizes were hardcoded per
+ * screen with no way for an operator to ask for more rows.
  */
 export function Pagination({
   offset,
@@ -424,6 +563,7 @@ export function Pagination({
   hasNext,
   total,
   onChange,
+  onLimitChange,
 }: {
   offset: number;
   limit: number;
@@ -431,22 +571,70 @@ export function Pagination({
   hasNext: boolean;
   total?: number;
   onChange: (offset: number) => void;
+  onLimitChange?: (limit: number) => void;
 }) {
   const from = count === 0 ? 0 : offset + 1;
   const to = offset + count;
+  const page = Math.floor(offset / limit) + 1;
+  const pageCount = total != null ? Math.max(1, Math.ceil(total / limit)) : null;
+
+  // A window of five pages around the current one, so a 40-page list stays a single row of controls.
+  const pages: number[] = [];
+  if (pageCount) {
+    const start = Math.max(1, Math.min(page - 2, pageCount - 4));
+    for (let p = start; p < start + 5 && p <= pageCount; p += 1) pages.push(p);
+  }
+
   return (
-    <nav aria-label="Pagination" className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-muted">
+    <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm text-muted">
       <span>
         {count === 0 ? "No rows on this page" : `${from}–${to}`}
         {total != null ? ` of ${total}` : ""}
+        {pageCount ? ` · page ${page} of ${pageCount}` : ""}
       </span>
-      <div className="flex gap-2">
+
+      <div className="flex flex-wrap items-center gap-2">
+        {onLimitChange && (
+          <label className="flex items-center gap-1.5">
+            <span className="sr-only">Rows per page</span>
+            <select
+              value={limit}
+              onChange={(e) => onLimitChange(Number(e.target.value))}
+              className="h-8 rounded-md border border-line bg-surface px-2 text-sm text-ink"
+            >
+              {PAGE_SIZES.map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        <Button size="sm" disabled={offset === 0} onClick={() => onChange(0)}>
+          First
+        </Button>
         <Button size="sm" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - limit))}>
           Previous
         </Button>
+        {pages.map((p) => (
+          <Button
+            key={p}
+            size="sm"
+            variant={p === page ? "primary" : undefined}
+            aria-current={p === page ? "page" : undefined}
+            onClick={() => onChange((p - 1) * limit)}
+          >
+            {p}
+          </Button>
+        ))}
         <Button size="sm" disabled={!hasNext} onClick={() => onChange(offset + limit)}>
           Next
         </Button>
+        {pageCount && (
+          <Button size="sm" disabled={page >= pageCount} onClick={() => onChange((pageCount - 1) * limit)}>
+            Last
+          </Button>
+        )}
       </div>
     </nav>
   );
