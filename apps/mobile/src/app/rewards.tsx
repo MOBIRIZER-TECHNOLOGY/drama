@@ -1,5 +1,7 @@
 import { colors, radii, spacing } from "@katha/tokens";
 import * as Haptics from "expo-haptics";
+import { track } from "@/lib/analytics";
+import { ensureRegistered, hasAskedForPush } from "@/lib/push";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -35,7 +37,14 @@ export default function RewardsScreen() {
       setBalance(out.coin_balance);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
       setMessage({ tone: "success", text: `+${out.coins} coins for day ${out.streak_day}` });
+      track("checkin", { streak_day: out.streak_day, coins: out.coins });
       await checkin.refetch({ silent: true });
+      // The one moment a viewer will accept a notification prompt: they have just started a streak and have a
+      // reason to be reminded about it. Asking at launch instead gets declined on sight, permanently.
+      if (!(await hasAskedForPush())) {
+        const granted = await ensureRegistered();
+        track("notification_permission", { granted, source: "checkin" });
+      }
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       setMessage({ tone: "error", text: errorMessage(e) });

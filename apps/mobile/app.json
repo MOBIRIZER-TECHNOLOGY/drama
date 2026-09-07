@@ -83,7 +83,23 @@
             "./assets/fonts/IBMPlexSans-Regular.ttf",
             "./assets/fonts/IBMPlexSans-Medium.ttf",
             "./assets/fonts/IBMPlexSans-SemiBold.ttf",
-            "./assets/fonts/IBMPlexSans-Bold.ttf"
+            "./assets/fonts/IBMPlexSans-Bold.ttf",
+            "./assets/fonts/NotoSansDevanagari_400Regular.ttf",
+            "./assets/fonts/NotoSansDevanagari_500Medium.ttf",
+            "./assets/fonts/NotoSansDevanagari_600SemiBold.ttf",
+            "./assets/fonts/NotoSansDevanagari_700Bold.ttf",
+            "./assets/fonts/NotoSansTamil_400Regular.ttf",
+            "./assets/fonts/NotoSansTamil_500Medium.ttf",
+            "./assets/fonts/NotoSansTamil_600SemiBold.ttf",
+            "./assets/fonts/NotoSansTamil_700Bold.ttf",
+            "./assets/fonts/NotoSansTelugu_400Regular.ttf",
+            "./assets/fonts/NotoSansTelugu_500Medium.ttf",
+            "./assets/fonts/NotoSansTelugu_600SemiBold.ttf",
+            "./assets/fonts/NotoSansTelugu_700Bold.ttf",
+            "./assets/fonts/NotoSansBengali_400Regular.ttf",
+            "./assets/fonts/NotoSansBengali_500Medium.ttf",
+            "./assets/fonts/NotoSansBengali_600SemiBold.ttf",
+            "./assets/fonts/NotoSansBengali_700Bold.ttf"
           ]
         }
       ]

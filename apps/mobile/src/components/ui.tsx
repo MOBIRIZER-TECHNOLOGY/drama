@@ -1,5 +1,5 @@
 import { colors, radii, spacing } from "@katha/tokens";
-import { useEffect, type PropsWithChildren, type ReactNode } from "react";
+import { useEffect, useMemo, type PropsWithChildren, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -16,6 +16,8 @@ import {
   type ViewStyle,
 } from "react-native";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
+import { fontsFor, leadingFor, scriptFor, trackingFor } from "../lib/typography";
+import { useConfig } from "../providers/config";
 
 export { colors, radii, spacing };
 
@@ -24,6 +26,10 @@ type TextVariant = "display" | "title" | "heading" | "body" | "caption" | "label
 /**
  * Font families registered by the expo-font config plugin (assets/fonts, named after the files). Static weights
  * are selected by family name; `fontWeight` is not set so Android does not synthesise a second bold.
+ *
+ * These are the Latin faces. `useTextStyles` swaps in the right Noto face for an Indic script — see
+ * lib/typography.ts. Import `fonts` directly only where the string is guaranteed Latin (numerals, a logo);
+ * everything that renders viewer-facing copy should go through the `Text` component.
  */
 export const fonts = {
   displaySemiBold: "BricolageGrotesque-SemiBold",
@@ -34,17 +40,49 @@ export const fonts = {
   bold: "IBMPlexSans-Bold",
 } as const;
 
-const textStyles: Record<TextVariant, TextStyle> = {
-  display: { fontFamily: fonts.displayBold, fontSize: 30, lineHeight: 36, color: colors.ink, letterSpacing: -0.5 },
-  title: { fontFamily: fonts.displaySemiBold, fontSize: 22, lineHeight: 28, color: colors.ink },
-  heading: { fontFamily: fonts.semiBold, fontSize: 17, lineHeight: 22, color: colors.ink },
-  body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 21, color: colors.ink2 },
-  caption: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, color: colors.muted },
-  label: { fontFamily: fonts.semiBold, fontSize: 13, lineHeight: 18, color: colors.ink },
+/** Latin metrics. Size stays constant across scripts; leading is scaled so Indic marks are not clipped. */
+const METRICS: Record<TextVariant, { size: number; leading: number; tracking: number; color: string; weight: keyof ReturnType<typeof fontsFor> }> = {
+  display: { size: 30, leading: 36, tracking: -0.5, color: colors.ink, weight: "displayBold" },
+  title: { size: 22, leading: 28, tracking: 0, color: colors.ink, weight: "displaySemiBold" },
+  heading: { size: 17, leading: 22, tracking: 0, color: colors.ink, weight: "semiBold" },
+  body: { size: 15, leading: 21, tracking: 0, color: colors.ink2, weight: "regular" },
+  caption: { size: 12, leading: 16, tracking: 0, color: colors.muted, weight: "medium" },
+  label: { size: 13, leading: 18, tracking: 0, color: colors.ink, weight: "semiBold" },
 };
 
+function buildTextStyles(lang: string): Record<TextVariant, TextStyle> {
+  const script = scriptFor(lang);
+  const family = fontsFor(script);
+  const leading = leadingFor(script);
+  const out = {} as Record<TextVariant, TextStyle>;
+  for (const [variant, m] of Object.entries(METRICS) as [TextVariant, (typeof METRICS)[TextVariant]][]) {
+    out[variant] = {
+      fontFamily: family[m.weight],
+      fontSize: m.size,
+      lineHeight: Math.round(m.leading * leading),
+      color: m.color,
+      letterSpacing: trackingFor(script, m.tracking),
+    };
+  }
+  return out;
+}
+
+export function useTextStyles(): Record<TextVariant, TextStyle> {
+  const { lang } = useConfig();
+  return useMemo(() => buildTextStyles(lang), [lang]);
+}
+
 export function Text({ variant = "body", style, color, ...rest }: TextProps & { variant?: TextVariant; color?: string }) {
-  return <RNText {...rest} style={[textStyles[variant], color ? { color } : null, style]} />;
+  const styles = useTextStyles();
+  return (
+    <RNText
+      // Chrome is laid out at fixed heights, so an unbounded OS font scale clips it. 1.3 keeps large-text
+      // settings working without breaking 42px round buttons and 56px episode cells.
+      maxFontSizeMultiplier={1.3}
+      {...rest}
+      style={[styles[variant], color ? { color } : null, style]}
+    />
+  );
 }
 
 export function Screen({

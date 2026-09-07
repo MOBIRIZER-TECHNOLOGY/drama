@@ -86,10 +86,24 @@ export function ConfigProvider({ children }: PropsWithChildren) {
         setConfig(current);
       }
       setOnboarded(storedOnboarded);
+      setLangState(storedLang ?? deviceLanguage(current));
+
+      if (cached) {
+        // Release the splash on the cached config and refresh in the background. Awaiting the network here put
+        // a /v1/config round trip — up to the 8s timeout — in front of the first frame on every launch, before
+        // auth and /home had even started. A returning viewer now sees posters immediately.
+        setReady(true);
+        void reloadConfig();
+        return;
+      }
+
+      // First launch: there is nothing to render yet, so the request is worth waiting for.
       const fresh = await reloadConfig();
       if (cancelled) return;
-      if (fresh) current = fresh;
-      setLangState(storedLang ?? deviceLanguage(current));
+      if (fresh) {
+        current = fresh;
+        if (!storedLang) setLangState(deviceLanguage(current));
+      }
       setReady(true);
     })();
     return () => {

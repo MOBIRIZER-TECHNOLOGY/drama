@@ -7,6 +7,9 @@ const KEYS = {
   muted: "katha.shorts_muted",
   subtitles: "katha.subtitles",
   configCache: "katha.config_cache",
+  pushToken: "katha.push_token",
+  pushAsked: "katha.push_asked",
+  pendingRoute: "katha.pending_route",
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

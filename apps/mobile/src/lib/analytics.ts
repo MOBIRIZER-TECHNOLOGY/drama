@@ -26,7 +26,35 @@ export type ProductEvent =
   | "search"
   | "share"
   | "signup"
-  | "login";
+  | "login"
+  // Acquisition and activation: without these the install-to-first-play funnel cannot be measured.
+  | "install"
+  | "onboarding_start"
+  | "onboarding_complete"
+  | "first_play"
+  | "first_paywall"
+  | "deep_link_open"
+  | "referral_share"
+  | "referral_signup"
+  | "unlock_bundle"
+  | "paywall_dismiss"
+  // Merchandising: which rail and which position earned the tap.
+  | "rail_impression"
+  | "card_click"
+  | "shorts_swipe"
+  | "shorts_watch_depth"
+  | "shorts_exit"
+  // Retention.
+  | "checkin"
+  | "task_claim"
+  | "notification_open"
+  | "notification_permission"
+  | "series_complete"
+  | "favorite_add"
+  | "favorite_remove"
+  // Health: client failures are invisible in server logs.
+  | "client_error"
+  | "offline";
 export type QoeEvent = "play_start" | "first_frame" | "rebuffer" | "bitrate_switch" | "play_error" | "play_complete" | "play_pause" | "seek";
 export type EventName = ProductEvent | QoeEvent;
 

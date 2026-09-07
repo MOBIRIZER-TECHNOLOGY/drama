@@ -17,12 +17,19 @@ export default function OnboardingScreen() {
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState(lang);
+  const selectedName = config.languages.find((l) => l.code === selected)?.native_name ?? selected.toUpperCase();
   const listRef = useRef<FlatList<Page>>(null);
 
   const goTo = useCallback((i: number) => {
     listRef.current?.scrollToIndex({ index: i, animated: true });
     setPage(i);
   }, []);
+
+  const skip = useCallback(async () => {
+    await setLang(selected);
+    await completeOnboarding();
+    router.replace("/(tabs)");
+  }, [selected, setLang, completeOnboarding, router]);
 
   const next = useCallback(async () => {
     if (page === 0) await setLang(selected);
@@ -50,7 +57,7 @@ export default function OnboardingScreen() {
             {item.key === "language" ? (
               <View style={styles.page}>
                 <Text variant="display">{t("onboarding.language")}</Text>
-                <Text variant="body">Stories in the language you love. You can change this any time in settings.</Text>
+                <Text variant="body">{t("onboarding.language_help")}</Text>
                 <View style={styles.langGrid}>
                   {config.languages.map((l) => {
                     const active = l.code === selected;
@@ -80,20 +87,16 @@ export default function OnboardingScreen() {
                 <View style={styles.hero}>
                   <Icon name="shorts" size={48} color={colors.accent} />
                 </View>
-                <Text variant="display">Swipe through bite-size drama</Text>
-                <Text variant="body">
-                  Every series is cut into one-minute vertical episodes. Swipe up for the next one, and pick up exactly where you left off.
-                </Text>
+                <Text variant="display">{t("onboarding.feed_title")}</Text>
+                <Text variant="body">{t("onboarding.feed_body")}</Text>
               </View>
             ) : (
               <View style={styles.page}>
                 <View style={styles.hero}>
                   <Icon name="coin" size={48} />
                 </View>
-                <Text variant="display">Free episodes, then coins</Text>
-                <Text variant="body">
-                  The first episodes of every series are free. Unlock the rest with coins: check in daily, complete tasks, or top up.
-                </Text>
+                <Text variant="display">{t("onboarding.coins_title")}</Text>
+                <Text variant="body">{t("onboarding.coins_body")}</Text>
               </View>
             )}
           </View>
@@ -105,7 +108,22 @@ export default function OnboardingScreen() {
             <View key={p.key} style={[styles.dot, i === page && styles.dotActive]} />
           ))}
         </View>
-        <Button title={page === PAGES.length - 1 ? t("onboarding.start") : t("onboarding.continue")} onPress={next} />
+        <Button
+          title={
+            page === PAGES.length - 1
+              ? t("onboarding.start")
+              : page === 0
+                ? // Naming the language on the button confirms the choice in the language just chosen.
+                  t("onboarding.continue_in", { lang: selectedName })
+                : t("onboarding.continue")
+          }
+          onPress={next}
+        />
+        <Pressable onPress={skip} accessibilityRole="button" style={styles.skip} hitSlop={12}>
+          <Text variant="label" color={colors.muted}>
+            {t("onboarding.skip")}
+          </Text>
+        </Pressable>
       </View>
     </Screen>
   );
@@ -135,7 +153,8 @@ const styles = StyleSheet.create({
     minWidth: 120,
   },
   langChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, gap: spacing.lg },
+  footer: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, gap: spacing.md },
+  skip: { alignSelf: "center", paddingVertical: spacing.sm },
   dots: { flexDirection: "row", justifyContent: "center", gap: 6 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.line },
   dotActive: { backgroundColor: colors.accent, width: 18 },

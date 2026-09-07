@@ -8,6 +8,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ForceUpdateScreen, needsForceUpdate } from "@/components/force-update";
 import { PlayerPoolProvider } from "@/components/player/player-pool";
+import { PushRouter } from "@/components/push-router";
 import { startAnalytics } from "@/lib/analytics";
 import { AuthProvider } from "@/providers/auth";
 import { ConfigProvider, useConfig } from "@/providers/config";
@@ -46,7 +47,10 @@ function RootNavigator() {
   if (needsForceUpdate(config)) return <ForceUpdateScreen config={config} />;
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
+    <>
+      {/* Inside the navigator, and only once onboarding is done, so a tap never races the onboarding guard. */}
+      <PushRouter enabled={onboarded} />
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.ground } }}>
       <Stack.Protected guard={!onboarded}>
         <Stack.Screen name="onboarding" options={{ gestureEnabled: false }} />
       </Stack.Protected>
@@ -63,7 +67,8 @@ function RootNavigator() {
         <Stack.Screen name="auth" options={{ presentation: "modal" }} />
         <Stack.Screen name="search" options={{ presentation: "modal" }} />
       </Stack.Protected>
-    </Stack>
+      </Stack>
+    </>
   );
 }
 
