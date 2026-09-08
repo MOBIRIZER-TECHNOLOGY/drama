@@ -38,6 +38,14 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [busy, setBusy] = useState<Busy>(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Per-field problems, checked here rather than by the server.
+   *
+   * A typo in an email address came back as "Invalid credentials" after a round trip, which reads as "your
+   * password is wrong" and sends people to the reset flow for a mistake they could have seen immediately.
+   * Shown only after a field has been left, so nothing is red while it is still being typed.
+   */
+  const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
   const [appleAvailable, setAppleAvailable] = useState(false);
   // Whether this modal itself signed the user in; only then may it navigate to `returnTo`.
   const signedInHere = useRef(false);
@@ -85,17 +93,30 @@ export default function AuthScreen() {
     [succeed],
   );
 
+  // Deliberately permissive: the only addresses worth rejecting here are ones that cannot be an address at
+  // all. Anything stricter rejects real people, and the server verifies for real anyway.
+  const emailProblem = !email.trim()
+    ? t("auth.email_required")
+    : !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+      ? t("auth.email_invalid")
+      : null;
+  // Length is only enforced on sign-up: an existing account may predate any rule we have today, and telling
+  // someone their real password is too short is the worst possible time to be wrong.
+  const passwordProblem = !password
+    ? t("auth.password_required")
+    : mode === "sign_up" && password.length < 8
+      ? t("auth.password_short")
+      : null;
+
   const submitEmail = useCallback(() => {
-    if (!email.trim() || !password) {
-      setError("Enter your email and password");
-      return;
-    }
+    setTouched({ email: true, password: true });
+    if (emailProblem || passwordProblem) return;
     void run("email", async () => {
       if (mode === "sign_in") await signInWithEmail(email, password);
       else await signUpWithEmail(email, password, name);
       return true;
     });
-  }, [email, password, name, mode, run, signInWithEmail, signUpWithEmail]);
+  }, [email, password, name, mode, run, signInWithEmail, signUpWithEmail, emailProblem, passwordProblem]);
 
   const startGoogle = useCallback(() => {
     void run("google", async () => {
@@ -156,28 +177,46 @@ export default function AuthScreen() {
           {emailEnabled ? (
             <View style={styles.form}>
               {mode === "sign_up" ? (
-                <TextInput placeholder="Display name (optional)" value={name} onChangeText={setName} autoCapitalize="words" textContentType="name" />
+                <TextInput placeholder={t("auth.name_label")} value={name} onChangeText={setName} autoCapitalize="words" textContentType="name" />
               ) : null}
               <TextInput
-                placeholder="Email"
+                placeholder={t("auth.email_label")}
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(v) => {
+                  setEmail(v);
+                  setError(null);
+                }}
+                onBlur={() => setTouched((s) => ({ ...s, email: true }))}
                 autoCapitalize="none"
                 autoCorrect={false}
                 keyboardType="email-address"
                 textContentType="emailAddress"
                 autoComplete="email"
               />
+              {touched.email && emailProblem ? (
+                <Text variant="caption" color={colors.danger}>
+                  {emailProblem}
+                </Text>
+              ) : null}
               <TextInput
-                placeholder="Password"
+                placeholder={t("auth.password_label")}
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(v) => {
+                  setPassword(v);
+                  setError(null);
+                }}
+                onBlur={() => setTouched((s) => ({ ...s, password: true }))}
                 secureTextEntry
                 textContentType={mode === "sign_up" ? "newPassword" : "password"}
                 autoComplete={mode === "sign_up" ? "new-password" : "password"}
                 onSubmitEditing={submitEmail}
                 returnKeyType="go"
               />
+              {touched.password && passwordProblem ? (
+                <Text variant="caption" color={colors.danger}>
+                  {passwordProblem}
+                </Text>
+              ) : null}
               {error ? (
                 <Text variant="caption" color={colors.danger}>
                   {error}
@@ -193,6 +232,7 @@ export default function AuthScreen() {
                 onPress={() => {
                   setMode((m) => (m === "sign_in" ? "sign_up" : "sign_in"));
                   setError(null);
+                  setTouched({});
                 }}
                 accessibilityRole="button"
                 style={styles.switch}

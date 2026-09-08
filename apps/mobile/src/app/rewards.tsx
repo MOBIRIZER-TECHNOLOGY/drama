@@ -2,6 +2,7 @@ import { colors, radii, spacing } from "@katha/tokens";
 import * as Haptics from "expo-haptics";
 import { ReferralCard } from "@/components/referral-card";
 import { track } from "@/lib/analytics";
+import * as checkinBadge from "@/lib/checkin-badge";
 import { ensureRegistered, hasAskedForPush } from "@/lib/push";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
@@ -37,8 +38,9 @@ export default function RewardsScreen() {
       const out = unwrap(await api.POST("/v1/rewards/checkin"));
       setBalance(out.coin_balance);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      setMessage({ tone: "success", text: `+${out.coins} coins for day ${out.streak_day}` });
+      setMessage({ tone: "success", text: t("rewards.checkin_claimed", { n: out.coins, d: out.streak_day }) });
       track("checkin", { streak_day: out.streak_day, coins: out.coins });
+      checkinBadge.markClaimed();
       await checkin.refetch({ silent: true });
       // The one moment a viewer will accept a notification prompt: they have just started a streak and have a
       // reason to be reminded about it. Asking at launch instead gets declined on sight, permanently.
@@ -52,7 +54,7 @@ export default function RewardsScreen() {
     } finally {
       setCheckingIn(false);
     }
-  }, [checkin, setBalance]);
+  }, [checkin, setBalance, t]);
 
   const claim = useCallback(
     async (task: RewardTask) => {
@@ -80,7 +82,7 @@ export default function RewardsScreen() {
 
   const header = (
     <View style={styles.header}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
         <Icon name="back" size={30} />
       </Pressable>
       <Text variant="title">{t("rewards.title")}</Text>
@@ -93,8 +95,8 @@ export default function RewardsScreen() {
       <Screen>
         {header}
         <EmptyState
-          title="Sign in to earn coins"
-          body="Daily check-ins and tasks add coins to your account."
+          title={t("rewards.signin_title")}
+          body={t("rewards.signin_body")}
           action={<Button title={t("common.sign_in")} onPress={() => requireAuth()} disabled={status === "loading"} />}
         />
       </Screen>
@@ -109,7 +111,7 @@ export default function RewardsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={checkin.refreshing || tasks.refreshing} onRefresh={onRefresh} tintColor={colors.accent} />}
       >
-        {rewardsDisabled ? <EmptyState title="Rewards are paused" body="Check back later." /> : null}
+        {rewardsDisabled ? <EmptyState title={t("rewards.paused")} body={t("rewards.paused_hint")} /> : null}
 
         {message ? (
           <Text variant="body" color={message.tone === "success" ? colors.success : colors.danger} style={{ textAlign: "center" }}>
@@ -175,7 +177,11 @@ export default function RewardsScreen() {
                 })}
               </View>
               <Button
-                title={checkin.data.checked_in_today ? "Checked in today" : t("rewards.claim")}
+                title={
+                  checkin.data.checked_in_today
+                    ? t("rewards.checked_in", { d: checkin.data.next_streak_day })
+                    : t("rewards.claim")
+                }
                 onPress={doCheckin}
                 loading={checkingIn}
                 disabled={checkin.data.checked_in_today || rewardsDisabled}
@@ -185,7 +191,7 @@ export default function RewardsScreen() {
         </Card>
 
         <Text variant="heading" style={styles.sectionTitle}>
-          Tasks
+          {t("rewards.tasks")}
         </Text>
         {tasks.loading ? (
           <View style={{ gap: spacing.md }}>
@@ -195,7 +201,7 @@ export default function RewardsScreen() {
         ) : tasks.error && !tasks.data ? (
           <ErrorState message={tasks.error} onRetry={() => tasks.refetch({ silent: false })} retryLabel={t("common.retry")} />
         ) : (tasks.data?.length ?? 0) === 0 ? (
-          <EmptyState title="No tasks right now" body="New ways to earn coins show up here." />
+          <EmptyState title={t("rewards.no_tasks")} body={t("rewards.no_tasks_hint")} />
         ) : (
           tasks.data?.map((task) => <TaskCard key={task.id} task={task} onClaim={() => claim(task)} disabled={rewardsDisabled} />)
         )}
@@ -265,7 +271,7 @@ function TaskCard({ task, onClaim, disabled }: { task: RewardTask; onClaim: () =
       <View style={{ flex: 1, gap: 2 }}>
         <View style={styles.taskHead}>
           <Text variant="label">{task.title}</Text>
-          <Pill label={task.frequency === "daily" ? "Daily" : "Once"} />
+          <Pill label={task.frequency === "daily" ? t("rewards.daily") : t("rewards.once")} />
         </View>
         {task.description ? <Text variant="caption">{task.description}</Text> : null}
         <View style={styles.taskCoins}>
@@ -279,7 +285,7 @@ function TaskCard({ task, onClaim, disabled }: { task: RewardTask; onClaim: () =
         <Pill label={t("rewards.claimed")} tone="success" />
       ) : isAd ? (
         // Phase 2: rewarded ads need the ad SDK to produce an ad_event_id.
-        <Button title="Soon" variant="ghost" small disabled />
+        <Button title={t("rewards.ad_soon")} variant="ghost" small disabled />
       ) : ready ? (
         <Button title={t("rewards.claim")} small onPress={doClaim} loading={claiming} disabled={disabled} />
       ) : started === null ? (

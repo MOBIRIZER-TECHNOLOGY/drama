@@ -7,7 +7,7 @@ import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { NotificationSettings } from "@/components/notification-settings";
-import { Button, Card, Divider, ListRow, Pill, Screen, Text, Toast } from "@/components/ui";
+import { Button, Card, Divider, ListRow, Pill, Screen, Skeleton, Text, Toast } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
 import { api } from "@/lib/api";
@@ -94,30 +94,30 @@ export default function MeScreen() {
       await clearCaches();
       await Promise.all([Image.clearMemoryCache(), Image.clearDiskCache()]);
       await reloadConfig();
-      setToast("Cache cleared");
+      setToast(t("me.cache_cleared"));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch {
-      setToast("Could not clear the cache");
+      setToast(t("me.cache_failed"));
     } finally {
       setBusy(null);
     }
-  }, [reloadConfig]);
+  }, [reloadConfig, t]);
 
   const deleteAccount = useCallback(() => {
     Alert.alert(
       t("me.delete_account"),
-      "This permanently deletes your account, coins, purchases and history. This cannot be undone.",
+      t("me.delete_warning"),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
-          text: "Delete",
+          text: t("common.delete"),
           style: "destructive",
           onPress: async () => {
             setBusy("delete");
             setNotice(null);
             try {
               const { response } = await api.DELETE("/v1/auth/me");
-              if (!response.ok) throw new Error(response.status === 401 ? "Please sign in again first." : "Could not delete the account.");
+              if (!response.ok) throw new Error(response.status === 401 ? t("me.reauth") : t("me.delete_failed"));
               await signOut();
             } catch (e) {
               setNotice({ tone: "error", text: errorMessage(e) });
@@ -139,30 +139,43 @@ export default function MeScreen() {
             onPress={signedIn ? changeAvatar : undefined}
             disabled={!signedIn || busy !== null}
             accessibilityRole={signedIn ? "button" : undefined}
-            accessibilityLabel="Change profile picture"
+            accessibilityLabel={t("me.change_avatar")}
             style={styles.avatar}
           >
             {user?.avatar_url ? <Image source={user.avatar_url} style={StyleSheet.absoluteFill} contentFit="cover" /> : <Icon name="me" size={28} color={colors.muted} />}
             {signedIn ? (
               <View style={styles.avatarBadge}>
                 <Text variant="caption" color={colors.accentInk} style={{ fontSize: 10, lineHeight: 12 }}>
-                  {busy === "avatar" ? "…" : "Edit"}
+                  {busy === "avatar" ? "…" : t("common.edit")}
                 </Text>
               </View>
             ) : null}
           </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
-            {signedIn && user ? (
+            {status === "loading" ? (
+              // Resolving the session used to flash "Guest" and then the real name — a signed-in viewer being
+              // told for half a second that they are not.
+              <>
+                <Skeleton height={22} width="60%" />
+                <Skeleton height={14} width="40%" />
+              </>
+            ) : signedIn && user ? (
               <>
                 <Text variant="title" numberOfLines={1}>
-                  {user.display_name ?? user.email ?? "Katha viewer"}
+                  {user.display_name ?? user.email ?? t("me.default_name")}
                 </Text>
-                <Text variant="caption">ID {user.public_id}</Text>
-                {user.is_vip ? <Pill label={user.vip_ends_at ? `VIP until ${formatDate(user.vip_ends_at)}` : "VIP"} tone="gold" style={{ marginTop: 4 }} /> : null}
+                <Text variant="caption">{t("me.id", { n: user.public_id })}</Text>
+                {user.is_vip ? (
+                  <Pill
+                    label={user.vip_ends_at ? t("wallet.vip_until", { date: formatDate(user.vip_ends_at) }) : "VIP"}
+                    tone="gold"
+                    style={{ marginTop: 4 }}
+                  />
+                ) : null}
               </>
             ) : (
               <>
-                <Text variant="title">Guest</Text>
+                <Text variant="title">{t("common.guest")}</Text>
                 <Text variant="caption">{t("me.guest_title")}</Text>
               </>
             )}
@@ -234,13 +247,13 @@ export default function MeScreen() {
           <Divider />
           <ListRow
             title={t("wallet.ledger")}
-            subtitle="Coins earned and spent"
+            subtitle={t("me.ledger_subtitle")}
             onPress={() => {
               if (requireAuth()) router.push("/wallet/ledger");
             }}
           />
           <Divider />
-          <ListRow title={t("list.history")} subtitle="Continue where you left off" onPress={() => router.push("/(tabs)/list")} />
+          <ListRow title={t("list.history")} subtitle={t("me.history_subtitle")} onPress={() => router.push("/(tabs)/list")} />
         </Card>
 
         <Text variant="caption" style={styles.sectionLabel}>
@@ -258,8 +271,8 @@ export default function MeScreen() {
             </>
           ) : null}
           <ListRow
-            title={busy === "cache" ? "Clearing…" : t("me.clear_cache")}
-            subtitle="Frees space used by saved settings, translations and images"
+            title={busy === "cache" ? t("me.clearing") : t("me.clear_cache")}
+            subtitle={t("me.cache_subtitle")}
             onPress={() => void clearCache()}
             disabled={busy !== null}
           />
@@ -270,7 +283,7 @@ export default function MeScreen() {
           {config.mobile.rate_us_url ? (
             <>
               <Divider />
-              <ListRow title="Rate Katha" onPress={() => openUrl(config.mobile.rate_us_url, "rate")} />
+              <ListRow title={t("me.rate")} onPress={() => openUrl(config.mobile.rate_us_url, "rate")} />
             </>
           ) : null}
         </Card>
@@ -278,8 +291,8 @@ export default function MeScreen() {
         {signedIn ? (
           <Card style={{ padding: 0 }}>
             <ListRow
-              title={busy === "delete" ? "Deleting…" : t("me.delete_account")}
-              subtitle="Removes your profile, coins and history"
+              title={busy === "delete" ? t("me.deleting") : t("me.delete_account")}
+              subtitle={t("me.delete_subtitle")}
               onPress={deleteAccount}
               disabled={busy !== null}
               destructive
@@ -287,7 +300,7 @@ export default function MeScreen() {
             <Divider />
             <Pressable onPress={onSignOut} disabled={busy !== null} accessibilityRole="button" style={({ pressed }) => [styles.signOut, pressed && { opacity: 0.7 }]}>
               <Text variant="label" color={colors.danger}>
-                {busy === "signout" ? "Signing out…" : t("me.sign_out")}
+                {busy === "signout" ? t("me.signing_out") : t("me.sign_out")}
               </Text>
             </Pressable>
           </Card>

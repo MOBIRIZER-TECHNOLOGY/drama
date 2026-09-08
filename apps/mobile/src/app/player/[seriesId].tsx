@@ -11,7 +11,7 @@ import { EpisodePage, SPEEDS, type LoadError, type Speed } from "@/components/pl
 import { safePlayerCall, usePlayerPool } from "@/components/player/player-pool";
 import { nextTrackLang, selectTrack, useSubtitlePreference } from "@/components/player/subtitles";
 import { UnlockSheet, unlockEpisode, useAutoUnlock } from "@/components/unlock-sheet";
-import { ErrorState, Loading, Screen, Text } from "@/components/ui";
+import { Button, ErrorState, Loading, Screen, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useSeriesActions } from "@/hooks/use-series-actions";
 import { useT } from "@/hooks/use-translations";
@@ -20,6 +20,7 @@ import { api } from "@/lib/api";
 import { unwrap } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import { grantIsFresh, requestPlay, type Grant } from "@/lib/play";
+import { getBool, setBool } from "@/lib/storage";
 import type { Episode, SeriesDetail } from "@/lib/types";
 import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
@@ -54,6 +55,9 @@ export default function PlayerRoute() {
 
 type UnlockTarget = { episode: Episode; index: number; reason: "swiped" | "ended" };
 
+/** Seconds between an episode ending and the next one starting on its own. */
+const AUTO_ADVANCE_SEC = 4;
+
 function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber: number }) {
   const t = useT();
   const router = useRouter();
@@ -81,6 +85,10 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [endedLast, setEndedLast] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  /** The episode an ended one will roll into, and the seconds left before it does. */
+  const [pendingNext, setPendingNext] = useState<{ index: number; number: number } | null>(null);
+  const [secondsLeft, setSecondsLeft] = useState(AUTO_ADVANCE_SEC);
+  const [coach, setCoach] = useState(false);
   const pagerRef = useRef<PagerView>(null);
   const inflight = useRef(new Set<string>());
   const grantsRef = useRef(grants);
@@ -90,6 +98,15 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
 
   const total = episodes.length;
   const current = episodes[index];
+  /**
+   * The paywall used to arrive with no warning: a viewer met it by hitting it, mid-cliffhanger, which reads as
+   * a trap rather than a price. Saying it one episode early turns the same moment into a decision.
+   */
+  const nextEpisode = episodes[index + 1];
+  const foreshadow =
+    current && (current.is_free || current.accessible) && nextEpisode && !(nextEpisode.accessible || nextEpisode.is_free)
+      ? nextEpisode.price
+      : null;
   const currentLocked = Boolean(current) && !(current.accessible || current.is_free);
   // A swipe onto a locked page shows the unlock sheet for it; "ended" sheets are explicit state.
   const sheet = useMemo<UnlockTarget | null>(
@@ -194,7 +211,48 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
     pagerRef.current?.setPage(i);
     setIndex(i);
     setEndedLast(false);
+    setPendingNext(null);
   }, []);
+
+  /**
+   * A first-run coach for the two gestures that are not visible anywhere on screen.
+   *
+   * Vertical swiping between episodes and hold-for-2x were discoverable only by accident; a viewer who never
+   * found them watched one episode and left. Shown once ever, dismissed by tapping anywhere on it.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void getBool("playerCoached").then((seen) => {
+      if (!cancelled && !seen) setCoach(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const dismissCoach = useCallback(() => {
+    setCoach(false);
+    void setBool("playerCoached", true);
+  }, []);
+
+  /**
+   * Counts the auto-advance down in the open rather than jumping.
+   *
+   * Ending one episode and instantly being somewhere else removes the choice to stop, which is the moment a
+   * viewer most often wants it. The chip advances on its own, and either button resolves it immediately.
+   */
+  useEffect(() => {
+    if (!pendingNext) return;
+    const target = pendingNext.index;
+    // The interval only drives the label; the timeout is what actually advances, so a dropped tick cannot
+    // strand the viewer on a finished episode.
+    const tick = setInterval(() => setSecondsLeft((s) => Math.max(0, s - 1)), 1000);
+    const advance = setTimeout(() => goTo(target), AUTO_ADVANCE_SEC * 1000);
+    return () => {
+      clearInterval(tick);
+      clearTimeout(advance);
+    };
+  }, [pendingNext, goTo]);
 
   const onEnded = useCallback(async () => {
     const nextIndex = index + 1;
@@ -204,7 +262,8 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
     }
     const next = episodes[nextIndex];
     if (next.accessible || next.is_free) {
-      goTo(nextIndex);
+      setSecondsLeft(AUTO_ADVANCE_SEC);
+      setPendingNext({ index: nextIndex, number: next.number });
       return;
     }
     if (signedIn && autoUnlock && balance >= next.price) {
@@ -222,6 +281,8 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
     setIndex(e.nativeEvent.position);
     setUnlockTarget(null);
     setEndedLast(false);
+    // A deliberate swipe outranks a pending auto-advance.
+    setPendingNext(null);
   }, []);
 
   const onEpisodePick = useCallback(
@@ -284,6 +345,17 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
         </Pressable>
       </View>
 
+      {foreshadow !== null ? (
+        <View style={[styles.foreshadow, { top: insets.top + 64 }]} pointerEvents="none">
+          <View style={styles.foreshadowChip}>
+            <Icon name="coin" size={12} />
+            <Text variant="caption" color={colors.ink}>
+              {t("player.next_costs", { n: foreshadow })}
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
       <View style={[styles.rail, { bottom: insets.bottom + 132 }]} pointerEvents="box-none">
         <RailButton
           icon={actions.liked ? "heart-filled" : "heart"}
@@ -305,7 +377,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
       </View>
       </>
     ),
-    [insets.top, insets.bottom, router, series.title, series.slug, current?.number, total, t, actions],
+    [insets.top, insets.bottom, router, series.title, series.slug, current?.number, total, t, actions, foreshadow],
   );
 
   if (total === 0) {
@@ -372,6 +444,35 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
           );
         })}
       </PagerView>
+
+      {pendingNext && !sheet ? (
+        <View style={[styles.nextWrap, { bottom: insets.bottom + spacing.xl }]} pointerEvents="box-none">
+          <View style={styles.nextChip}>
+            <Text variant="caption" color={colors.ink}>
+              {t("player.next_in", { n: pendingNext.number, s: Math.max(0, secondsLeft) })}
+            </Text>
+            <View style={styles.nextButtons}>
+              <Button title={t("player.play_now")} small onPress={() => goTo(pendingNext.index)} />
+              <Button title={t("player.stay")} variant="secondary" small onPress={() => setPendingNext(null)} />
+            </View>
+          </View>
+        </View>
+      ) : null}
+
+      {coach ? (
+        <Pressable style={styles.coach} onPress={dismissCoach} accessibilityRole="button" accessibilityLabel={t("player.coach_got_it")}>
+          <View style={styles.coachBody}>
+            <Icon name="swipe-up" size={30} />
+            <Text variant="heading" color={colors.ink}>
+              {t("player.coach_swipe")}
+            </Text>
+            <Text variant="caption" color={colors.ink}>
+              {t("player.coach_tap")}
+            </Text>
+            <Button title={t("player.coach_got_it")} small onPress={dismissCoach} />
+          </View>
+        </Pressable>
+      ) : null}
 
       {sheet ? (
         <View style={[styles.sheetWrap, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
@@ -478,4 +579,27 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  foreshadow: { position: "absolute", left: 0, right: 0, alignItems: "center" },
+  foreshadowChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  nextWrap: { position: "absolute", left: 0, right: 0, alignItems: "center" },
+  nextChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(0,0,0,0.72)",
+  },
+  nextButtons: { flexDirection: "row", gap: spacing.sm },
+  coach: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.72)", alignItems: "center", justifyContent: "center" },
+  coachBody: { alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.xl },
 });

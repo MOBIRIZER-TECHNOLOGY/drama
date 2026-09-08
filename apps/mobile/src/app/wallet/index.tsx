@@ -30,9 +30,10 @@ export default function WalletScreen() {
   const {
     purchase_id: returnedPurchaseId,
     need: needParam,
+    pack: packParam,
     series: seriesParam,
     episode: episodeParam,
-  } = useLocalSearchParams<{ purchase_id?: string; need?: string; series?: string; episode?: string }>();
+  } = useLocalSearchParams<{ purchase_id?: string; need?: string; series?: string; episode?: string; pack?: string }>();
   // The paywall sends how short the viewer is and where they were, so a top-up can end where it started rather
   // than dropping them on the wallet with no way back to the episode they wanted.
   const needCoins = Number(needParam ?? 0) || 0;
@@ -71,13 +72,13 @@ export default function WalletScreen() {
       if (result.status === "paid") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         track("checkout_return", { status: "paid", coins: result.purchase.coins_granted });
-        setMessage({ tone: "success", text: `${result.purchase.coins_granted} coins added to your wallet.` });
+        setMessage({ tone: "success", text: t("wallet.coins_added", { n: result.purchase.coins_granted }) });
         await refetchWallet({ silent: true });
         await refetchOffers({ silent: true });
         await refreshUser();
       } else if (result.status === "pending") {
         track("checkout_return", { status: "pending" });
-        setMessage({ tone: "info", text: "Payment is still being confirmed. Your coins will appear shortly; pull to refresh." });
+        setMessage({ tone: "info", text: t("wallet.payment_pending") });
       } else if (result.status === "failed") {
         track("checkout_return", { status: "failed" });
         setMessage({ tone: "error", text: "Payment did not go through. You have not been charged." });
@@ -86,7 +87,7 @@ export default function WalletScreen() {
         setMessage(null);
       }
     },
-    [refetchWallet, refetchOffers, refreshUser],
+    [refetchWallet, refetchOffers, refreshUser, t],
   );
 
   /** Price the purchase server-side first: the viewer sees the discounted amount before the browser opens. */
@@ -160,7 +161,7 @@ export default function WalletScreen() {
         if (controller.signal.aborted) return;
         if (result.status === "paid") {
           track("checkout_return", { status: "paid", coins: result.purchase.coins_granted, deep_link: true });
-          setMessage({ tone: "success", text: `${result.purchase.coins_granted} coins added to your wallet.` });
+          setMessage({ tone: "success", text: t("wallet.coins_added", { n: result.purchase.coins_granted }) });
           await refetchWallet({ silent: true });
           await refreshUser();
         } else if (result.status === "pending") {
@@ -169,7 +170,7 @@ export default function WalletScreen() {
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [returnedPurchaseId, status, refetchWallet, refreshUser]);
+  }, [returnedPurchaseId, status, refetchWallet, refreshUser, t]);
 
   if (status !== "signed_in") {
     return (
@@ -220,7 +221,12 @@ export default function WalletScreen() {
             <Icon name="coin" size={22} />
             {wallet.loading ? <Skeleton width={80} height={32} /> : <Text variant="display">{wallet.data?.coin_balance ?? "—"}</Text>}
           </View>
-          {wallet.data?.is_vip ? <Pill label={wallet.data.vip_ends_at ? `VIP until ${formatDate(wallet.data.vip_ends_at)}` : "VIP"} tone="gold" /> : null}
+          {wallet.data?.is_vip ? (
+            <Pill
+              label={wallet.data.vip_ends_at ? t("wallet.vip_until", { date: formatDate(wallet.data.vip_ends_at) }) : "VIP"}
+              tone="gold"
+            />
+          ) : null}
           {wallet.error ? (
             <Text variant="caption" color={colors.danger}>
               {wallet.error}
@@ -306,6 +312,7 @@ export default function WalletScreen() {
                 busy={buying === pack.id}
                 disabled={buying !== null || pending !== null || !stripeEnabled}
                 discountPct={selectedOffer && (!selectedOffer.pack_id || selectedOffer.pack_id === pack.id) ? selectedOffer.discount_pct : null}
+                highlighted={packParam === pack.id}
                 episodePrice={config.economy.episode_price}
                 onBuy={() => buy(pack)}
               />
@@ -350,7 +357,7 @@ export default function WalletScreen() {
               </View>
             </View>
             {pending.session.discountPct ? <Pill label={`${pending.session.discountPct}% off applied`} tone="success" /> : null}
-            <Button title="Continue to payment" onPress={confirm} loading={buying === pending.pack.id} />
+            <Button title={t("wallet.continue_to_payment")} onPress={confirm} loading={buying === pending.pack.id} />
             <Button
               title={t("common.cancel")}
               variant="ghost"
@@ -416,8 +423,11 @@ function PackCard({
   disabled,
   discountPct,
   episodePrice,
+  highlighted,
   onBuy,
 }: {
+  /** The pack the paywall quoted on the way here; arriving to hunt for it again is the leak this closes. */
+  highlighted?: boolean;
   pack: Pack;
   currency: string;
   symbol?: string;
@@ -431,7 +441,7 @@ function PackCard({
   const t = useT();
   const price = pack.price ? formatMoney(pack.price.amount, pack.price.currency, pack.price.currency === currency ? symbol : undefined) : null;
   return (
-    <Card style={[styles.pack, pack.kind === "vip" && styles.packVip, Boolean(discountPct) && styles.packOffer]}>
+    <Card style={[styles.pack, pack.kind === "vip" && styles.packVip, Boolean(discountPct) && styles.packOffer, highlighted && styles.packPicked]}>
       {pack.badge ? <Pill label={pack.badge} tone="accent" style={styles.packBadge} /> : null}
       <View style={styles.packHead}>
         {pack.kind === "vip" ? (
@@ -439,7 +449,7 @@ function PackCard({
             <Text variant="title" color={colors.gold}>
               VIP
             </Text>
-            <Text variant="caption">{pack.duration_days ? `${pack.duration_days} days` : pack.name}</Text>
+            <Text variant="caption">{pack.duration_days ? t("wallet.vip_days", { n: pack.duration_days }) : pack.name}</Text>
           </>
         ) : (
           <>
@@ -450,7 +460,7 @@ function PackCard({
             </View>
             {pack.bonus_coins > 0 ? (
               <Text variant="caption" color={colors.success}>
-                +{Math.round((pack.bonus_coins / Math.max(1, pack.coins)) * 100)}% extra
+                {t("wallet.bonus_pct", { pct: Math.round((pack.bonus_coins / Math.max(1, pack.coins)) * 100) })}
               </Text>
             ) : null}
           </>
@@ -463,14 +473,35 @@ function PackCard({
       {pack.kind !== "vip" && episodePrice > 0 ? (
         <Text variant="caption" color={colors.ink2}>
           {t("wallet.equivalent", { n: Math.floor((pack.coins + pack.bonus_coins) / episodePrice) })}
+          {pack.price
+            ? ` · ${t("wallet.per_episode", {
+                price: formatMoney(
+                  Math.round((pack.price.amount / Math.max(1, Math.floor((pack.coins + pack.bonus_coins) / episodePrice))) * 100) / 100,
+                  pack.price.currency,
+                  pack.price.currency === currency ? symbol : undefined,
+                ),
+              })}`
+            : ""}
         </Text>
       ) : null}
       {discountPct ? (
         <Text variant="caption" color={colors.success}>
-          {discountPct}% off applied
+          {t("wallet.discount_applied", { pct: discountPct })}
         </Text>
       ) : null}
-      <Button title={price ?? "Unavailable"} variant={pack.kind === "vip" ? "gold" : "primary"} small loading={busy} disabled={disabled || !price} onPress={onBuy} style={styles.packBtn} />
+      <Button
+        title={
+          price
+            ? t(pack.kind === "vip" ? "wallet.buy_vip_cta" : "wallet.buy_cta", { price })
+            : t("wallet.pack_unavailable")
+        }
+        variant={pack.kind === "vip" ? "gold" : "primary"}
+        small
+        loading={busy}
+        disabled={disabled || !price}
+        onPress={onBuy}
+        style={styles.packBtn}
+      />
     </Card>
   );
 }
@@ -495,6 +526,7 @@ const styles = StyleSheet.create({
   packBadge: { position: "absolute", top: -8, right: spacing.sm },
   packHead: { gap: 2 },
   packCoins: { flexDirection: "row", alignItems: "center", gap: 6 },
+  packPicked: { borderColor: colors.gold, borderWidth: 2 },
   packBtn: { marginTop: spacing.sm },
   footnote: { textAlign: "center" },
   confirmWrap: { ...StyleSheet.absoluteFill, justifyContent: "flex-end" } as const,

@@ -23,6 +23,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
+import { useT } from "@/hooks/use-translations";
 import { SafeAreaView, type Edge } from "react-native-safe-area-context";
 import { fontsFor, leadingFor, scriptFor, trackingFor } from "../lib/typography";
 import { useConfig } from "../providers/config";
@@ -223,23 +224,63 @@ export function EmptyState({ title, body, action }: { title: string; body?: stri
   );
 }
 
-export function ErrorState({ message, onRetry, retryLabel = "Retry" }: { message: string; onRetry?: () => void; retryLabel?: string }) {
+/**
+ * The error surface bypassed `useT()` entirely, so an app localised everywhere else answered a Hindi viewer in
+ * English at the one moment they most need to understand what happened. Callers may still pass their own retry
+ * label; the default now comes from the catalogue.
+ */
+export function ErrorState({ message, onRetry, retryLabel }: { message: string; onRetry?: () => void; retryLabel?: string }) {
+  const t = useT();
   return (
     <View style={styles.center}>
       <Text variant="heading" style={styles.centerText}>
-        Something went wrong
+        {t("common.error")}
       </Text>
       <Text variant="body" style={styles.centerText}>
         {message}
       </Text>
       {onRetry ? (
         <View style={styles.centerAction}>
-          <Button title={retryLabel} variant="secondary" onPress={onRetry} small />
+          <Button title={retryLabel ?? t("common.retry")} variant="secondary" onPress={onRetry} small />
         </View>
       ) : null}
     </View>
   );
 }
+
+/**
+ * Skeletons shaped like the thing that is coming.
+ *
+ * Home and the series screen resolved in place while My List, Shorts, Search and the ledger centred a spinner,
+ * so half the app appeared to load in a different way from the other half — and a spinner on a slow connection
+ * is indistinguishable from a screen that failed. These are the two shapes those lists actually take.
+ */
+export function SkeletonRows({ count = 6, height = 56 }: { count?: number; height?: number }) {
+  return (
+    <View style={skeletonStyles.rows} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} height={height} />
+      ))}
+    </View>
+  );
+}
+
+/** A poster wall, at the 9:16 the catalogue actually uses. */
+export function SkeletonGrid({ count = 6, columns = 3 }: { count?: number; columns?: number }) {
+  const width = `${Math.floor(100 / columns) - 3}%` as `${number}%`;
+  return (
+    <View style={skeletonStyles.grid} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} width={width} height={180} />
+      ))}
+    </View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  rows: { gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+});
 
 /**
  * Loading placeholder.

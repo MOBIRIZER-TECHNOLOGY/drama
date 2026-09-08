@@ -11,8 +11,9 @@ import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
 import { api } from "@/lib/api";
 import { errorCode, errorMessage, RequestError, unwrap } from "@/lib/errors";
+import { formatMoney } from "@/lib/format";
 import { getBool, setBool } from "@/lib/storage";
-import type { Episode } from "@/lib/types";
+import type { Episode, Pack } from "@/lib/types";
 import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
 
@@ -86,6 +87,8 @@ export function UnlockSheet({
   const [error, setError] = useState<string | null>(null);
   const [needsTopUp, setNeedsTopUp] = useState(false);
   const [bundle, setBundle] = useState<Bundle | null>(null);
+  /** The cheapest pack that actually covers the shortfall, so the paywall can name a price. */
+  const [topUpPack, setTopUpPack] = useState<Pack | null>(null);
   /** Adult title: the sheet swaps to the age confirmation, then retries the unlock it was asked for. */
   const [ageGateFor, setAgeGateFor] = useState<"coins" | "ad" | null>(null);
   const rewardedAds = config.flags.rewarded_ads === true;
@@ -103,6 +106,36 @@ export function UnlockSheet({
     // Announced once per episode; the balance is captured for the funnel, not as a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episode.id]);
+
+  /**
+   * Price the top-up in the sheet.
+   *
+   * Short of coins, the viewer was handed a button that said "Top Up" and dropped into the wallet to work out
+   * for themselves which of three packs was big enough — at the exact moment their attention was on a
+   * cliffhanger. Naming the smallest pack that covers the gap, and what it costs, turns that into one decision
+   * made where the decision arises.
+   */
+  useEffect(() => {
+    if (!signedIn || enough) return;
+    let live = true;
+    void (async () => {
+      try {
+        const packs = unwrap(await api.GET("/v1/wallet/packs"));
+        const shortfall = episode.price - balance;
+        const fits = packs
+          .filter((p) => p.kind !== "vip" && p.price && p.coins + p.bonus_coins >= shortfall)
+          .sort((a, b) => (a.price?.amount ?? 0) - (b.price?.amount ?? 0));
+        // Nothing covers it in one purchase: fall back to the plain button rather than naming a pack that
+        // would leave the viewer still short after paying.
+        if (live) setTopUpPack(fits[0] ?? null);
+      } catch {
+        // A price we cannot fetch is simply not shown; the plain top-up button still works.
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, [signedIn, enough, episode.price, balance]);
 
   // Price the rest of the series so the bundle can be offered rather than merely existing on the server.
   useEffect(() => {
@@ -179,9 +212,18 @@ export function UnlockSheet({
   }, [seriesId, signedIn, promptSignIn, setBalance, onUnlocked]);
 
   const topUp = useCallback(() => {
-    // Carry the episode through, so the wallet can hand the viewer back rather than stranding them.
-    router.push({ pathname: "/wallet", params: { need: String(Math.max(0, episode.price - balance)), episode: episode.id, series: seriesId } });
-  }, [router, episode.price, episode.id, balance, seriesId]);
+    // Carry the episode and the chosen pack through, so the wallet hands the viewer back rather than
+    // stranding them, and opens on the pack the sheet just quoted.
+    router.push({
+      pathname: "/wallet",
+      params: {
+        need: String(Math.max(0, episode.price - balance)),
+        episode: episode.id,
+        series: seriesId,
+        ...(topUpPack ? { pack: topUpPack.id } : {}),
+      },
+    });
+  }, [router, episode.price, episode.id, balance, seriesId, topUpPack]);
 
   if (ageGateFor) {
     return (
@@ -239,8 +281,21 @@ export function UnlockSheet({
         </>
       ) : needsTopUp || !enough ? (
         <Button
-          title={t("player.top_up")}
-          subtitle={t("player.unlock_need", { n: episode.price - balance })}
+          title={
+            topUpPack && topUpPack.price
+              ? t("player.topup_exact", {
+                  coins: topUpPack.coins + topUpPack.bonus_coins,
+                  price: formatMoney(topUpPack.price.amount, topUpPack.price.currency),
+                })
+              : t("player.top_up")
+          }
+          subtitle={
+            topUpPack
+              ? episodesCovered(topUpPack, balance, episode.price) > 1
+                ? t("player.topup_covers", { n: episodesCovered(topUpPack, balance, episode.price) - 1 })
+                : t("player.topup_covers_one")
+              : t("player.unlock_need", { n: episode.price - balance })
+          }
           variant="gold"
           onPress={topUp}
           left={<Icon name="coin" size={14} />}
@@ -348,3 +403,14 @@ const styles = StyleSheet.create({
   centred: { textAlign: "center" },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
 });
+
+/**
+ * How many episodes this pack buys, counting the coins already in the wallet.
+ *
+ * "Unlocks this and 10 more" is the number that justifies the price; "550 coins" is not, because nobody knows
+ * what a coin is worth at the moment they are asked.
+ */
+function episodesCovered(pack: Pack, balance: number, episodePrice: number): number {
+  if (episodePrice <= 0) return 1;
+  return Math.floor((balance + pack.coins + pack.bonus_coins) / episodePrice);
+}

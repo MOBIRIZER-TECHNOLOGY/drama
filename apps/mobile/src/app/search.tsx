@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { SeriesCard } from "@/components/series-card";
-import { EmptyState, ErrorState, Loading, Screen, Text, TextInput } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Screen, SkeletonRows, Text, TextInput } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
@@ -26,9 +26,19 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+  /**
+   * Narrowing a result set.
+   *
+   * The grid was all-or-nothing: forty titles in no particular shape, and the only way to narrow them was a
+   * better query. "Is it finished" and "how long is it" are the two questions this audience asks of a
+   * short-drama catalogue, and neither could be asked. Filtering happens server-side so the whole catalogue
+   * is searched, not the forty rows that happened to load.
+   */
+  const [status, setStatus] = useState<"completed" | "ongoing" | null>(null);
+  const [length, setLength] = useState<"short" | "medium" | "long" | null>(null);
   const [recent, setRecent] = useState<string[]>([]);
   // Genre chips come from the catalogue, so the empty state offers somewhere to go rather than an instruction.
-  const categoriesQuery = useQuery(async () => unwrap(await api.GET("/v1/categories")), []);
+  const categoriesQuery = useQuery(async () => unwrap(await api.GET("/v1/categories", { params: { query: { lang } } })), [lang]);
   const categories = categoriesQuery.data ?? [];
   const { width: viewport } = useWindowDimensions();
   // Derived rather than a fixed 104px, which overflowed its gutters at 320dp and left dead space at 430dp.
@@ -60,7 +70,11 @@ export default function SearchScreen() {
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const data = unwrap(await api.GET("/v1/series", { params: { query: { lang, q: query, limit: 40 } } }));
+        const data = unwrap(
+          await api.GET("/v1/series", {
+            params: { query: { lang, q: query, limit: 40, status: status ?? undefined, length: length ?? undefined } },
+          }),
+        );
         if (!cancelled) {
           setResult({ query, items: data });
           setError(null);
@@ -80,10 +94,11 @@ export default function SearchScreen() {
     // `remember` is stable and deliberately not a dependency: including it would re-run the search when the
     // recent list changes, which is exactly what running the search causes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, query, lang, attempt]);
+  }, [active, query, lang, attempt, status, length]);
 
   // Only show results that belong to the current query; anything else is stale.
   const results = active && result?.query === query ? result.items : null;
+  const narrowed = status !== null || length !== null;
 
   return (
     <Screen edges={["top", "bottom", "left", "right"]}>
@@ -112,8 +127,31 @@ export default function SearchScreen() {
           </Text>
         </Pressable>
       </View>
+      {active ? (
+        <View style={styles.facets}>
+          {([
+            ["completed", () => setStatus((v) => (v === "completed" ? null : "completed")), status === "completed"],
+            ["ongoing", () => setStatus((v) => (v === "ongoing" ? null : "ongoing")), status === "ongoing"],
+            ["short", () => setLength((v) => (v === "short" ? null : "short")), length === "short"],
+            ["medium", () => setLength((v) => (v === "medium" ? null : "medium")), length === "medium"],
+            ["long", () => setLength((v) => (v === "long" ? null : "long")), length === "long"],
+          ] as const).map(([key, toggle, on]) => (
+            <Pressable
+              key={key}
+              onPress={toggle}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={[styles.facet, on && styles.facetOn]}
+            >
+              <Text variant="caption" color={on ? colors.accentInk : colors.ink2}>
+                {t(`search.${key}` as "search.completed")}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
       {active && loading && !results ? (
-        <Loading />
+        <SkeletonRows count={6} height={72} />
       ) : active && error && !results ? (
         <ErrorState message={error} onRetry={() => setAttempt((a) => a + 1)} retryLabel={t("common.retry")} />
       ) : results === null ? (
@@ -155,7 +193,25 @@ export default function SearchScreen() {
           </View>
         </View>
       ) : results.length === 0 ? (
-        <EmptyState title={t("search.no_matches")} body={t("search.no_matches_body", { q: query })} />
+        <EmptyState
+          title={t("search.no_matches")}
+          // Two different dead ends. Telling someone to try a different term when the problem is a filter they
+          // set themselves sends them the wrong way.
+          body={narrowed ? t("search.no_results_filtered") : t("search.no_matches_body", { q: query })}
+          action={
+            narrowed ? (
+              <Button
+                title={t("search.clear_filters")}
+                variant="secondary"
+                small
+                onPress={() => {
+                  setStatus(null);
+                  setLength(null);
+                }}
+              />
+            ) : undefined
+          }
+        />
       ) : (
         <FlashList
           data={results}
@@ -186,6 +242,9 @@ const styles = StyleSheet.create({
   count: { paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, color: colors.muted },
   suggestions: { paddingHorizontal: spacing.lg, gap: spacing.md },
   suggestionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: spacing.md },
+  facets: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, paddingHorizontal: spacing.md, paddingBottom: spacing.sm },
+  facet: { paddingHorizontal: spacing.md, paddingVertical: 6, borderRadius: radii.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  facetOn: { backgroundColor: colors.accent, borderColor: colors.accent },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   chip: {
     paddingHorizontal: spacing.md,

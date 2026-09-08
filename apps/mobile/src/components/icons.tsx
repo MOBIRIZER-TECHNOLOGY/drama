@@ -28,7 +28,8 @@ export type IconName =
   | "check"
   | "gift"
   | "download"
-  | "chevron";
+  | "chevron"
+  | "swipe-up";
 
 const glyphs: Record<Exclude<IconName, "coin">, React.ComponentProps<typeof Ionicons>["name"]> = {
   home: "home-outline",
@@ -55,6 +56,7 @@ const glyphs: Record<Exclude<IconName, "coin">, React.ComponentProps<typeof Ioni
   gift: "gift-outline",
   download: "cloud-download-outline",
   chevron: "chevron-forward",
+  "swipe-up": "chevron-up-outline",
 };
 
 export function Icon({ name, size = 20, color = colors.ink, style }: { name: IconName; size?: number; color?: ColorValue; style?: StyleProp<ViewStyle> }) {

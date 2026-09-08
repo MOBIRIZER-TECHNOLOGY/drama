@@ -6,7 +6,7 @@ import { useCallback, useRef, useState } from "react";
 import { Alert, Pressable, RefreshControl, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { SeriesCard } from "@/components/series-card";
-import { Button, EmptyState, ErrorState, Loading, Screen, Text } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Screen, SkeletonGrid, SkeletonRows, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
 import { useToast } from "@/providers/toast";
@@ -120,7 +120,11 @@ export default function MyListScreen() {
         }
       />
       {list.loading ? (
-        <Loading />
+        tab === "favorites" ? (
+          <SkeletonGrid count={9} />
+        ) : (
+          <SkeletonRows count={7} height={72} />
+        )
       ) : list.error && !list.data ? (
         <ErrorState message={list.error} onRetry={() => list.refetch({ silent: false })} retryLabel={t("common.retry")} />
       ) : tab === "favorites" ? (

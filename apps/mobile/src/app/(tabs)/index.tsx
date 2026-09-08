@@ -76,14 +76,14 @@ export default function HomeScreen() {
       {configError ? (
         <View style={styles.banner}>
           <Text variant="caption" color={colors.ink} style={{ flex: 1 }}>
-            {configError}. Showing the last saved settings.
+            {t("home.config_stale", { error: configError })}
           </Text>
           <Pressable onPress={() => void reloadConfig()} accessibilityRole="button" hitSlop={8}>
             <Text variant="caption" color={colors.accent}>
               {t("common.retry")}
             </Text>
           </Pressable>
-          <Pressable onPress={dismissConfigError} accessibilityRole="button" accessibilityLabel="Dismiss" hitSlop={8}>
+          <Pressable onPress={dismissConfigError} accessibilityRole="button" accessibilityLabel={t("common.dismiss")} hitSlop={8}>
             <Icon name="close" size={16} />
           </Pressable>
         </View>
@@ -118,6 +118,7 @@ export default function HomeScreen() {
 
 /** The `continue` rail carries `progress` per card; open the player at that episode. */
 function ContinueRail({ title, items }: { title: string; items: SeriesCardModel[] }) {
+  const t = useT();
   const router = useRouter();
   return (
     <View>
@@ -136,7 +137,7 @@ function ContinueRail({ title, items }: { title: string; items: SeriesCardModel[
             <SeriesCard
               series={item}
               width={CARD_WIDTH}
-              subtitle={`Episode ${episodeNumber}`}
+              subtitle={t("series.episode_n", { n: episodeNumber })}
               progress={p ? (p.duration_sec ? Math.min(1, p.position_sec / p.duration_sec) : 0) : undefined}
               onPress={() => router.push({ pathname: "/player/[seriesId]", params: { seriesId: item.id, episode: String(episodeNumber) } })}
             />

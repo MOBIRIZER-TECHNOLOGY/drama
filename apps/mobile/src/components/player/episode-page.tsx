@@ -11,6 +11,7 @@ import { SeekBar } from "@/components/player/seek-bar";
 import { applyEmbeddedTrack, findCueIndex, useSubtitleCues, type Cue } from "@/components/player/subtitles";
 import { Button, Text } from "@/components/ui";
 import { track } from "@/lib/analytics";
+import { getBool, setBool } from "@/lib/storage";
 import type { Grant } from "@/lib/play";
 import { putProgress } from "@/lib/play";
 import type { SubtitleTrackOut } from "@/lib/types";
@@ -196,6 +197,13 @@ export const EpisodePage = memo(function EpisodePage({
         if (!q.firstFrameSent && q.startedAt > 0) {
           q.firstFrameSent = true;
           track("first_frame", { ...beacon(), ttff_ms: Date.now() - q.startedAt });
+          // The install-to-first-frame funnel could not be measured: `first_play` was declared in the client's
+          // event union and never emitted. Fired once per device, on the frame the viewer actually sees.
+          void getBool("firstPlayed").then((seen) => {
+            if (seen) return;
+            void setBool("firstPlayed", true);
+            track("first_play", { ...beacon(), ttff_ms: Date.now() - q.startedAt });
+          });
         }
         if (q.stalledAt > 0) {
           track("rebuffer", { ...beacon(), duration_ms: Date.now() - q.stalledAt });

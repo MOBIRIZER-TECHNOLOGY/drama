@@ -11,6 +11,8 @@ const KEYS = {
   pushAsked: "katha.push_asked",
   pendingRoute: "katha.pending_route",
   recentSearches: "katha.recent_searches",
+  playerCoached: "katha.player_coached",
+  firstPlayed: "katha.first_played",
 } as const;
 
 export type StorageKey = keyof typeof KEYS;

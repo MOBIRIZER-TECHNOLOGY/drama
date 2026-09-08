@@ -41,6 +41,8 @@ export const defaultConfig: RemoteConfig = {
   rewards: { enabled: true, daily_rewards: [10, 15, 20, 30, 40, 60, 150], signup_bonus: 100 },
   referral: { enabled: true, referrer_coins: 100, referee_coins: 100 },
   notifications: { channels: [] },
+  // No placements until the server says otherwise: a cached or failed config must never turn ads on.
+  ads: { enabled: false, placements: [] },
   mobile: { min_version_code: 1, force_update: false, update_url: null, privacy_policy_url: null, terms_url: null, rate_us_url: null },
   languages: [{ code: "en", name: "English", native_name: "English", rtl: false }],
   flags: {},
@@ -59,6 +61,7 @@ export function normalizeConfig(raw: RemoteConfig): RemoteConfig {
     rewards: { ...defaultConfig.rewards, ...raw.rewards },
     referral: { ...defaultConfig.referral, ...raw.referral },
     notifications: { channels: raw.notifications?.channels ?? [] },
+    ads: { enabled: raw.ads?.enabled ?? false, placements: raw.ads?.placements ?? [] },
     mobile: { ...defaultConfig.mobile, ...raw.mobile },
     languages: raw.languages?.length ? raw.languages : defaultConfig.languages,
     flags: raw.flags ?? {},

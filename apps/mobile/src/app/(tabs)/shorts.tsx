@@ -9,7 +9,7 @@ import { Icon } from "@/components/icons";
 import { EpisodePage, type LoadError } from "@/components/player/episode-page";
 import { usePlayerPool } from "@/components/player/player-pool";
 import { UnlockSheet, useAutoUnlock } from "@/components/unlock-sheet";
-import { Button, EmptyState, ErrorState, Loading, Text } from "@/components/ui";
+import { Button, EmptyState, ErrorState, Skeleton, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useSeriesActions } from "@/hooks/use-series-actions";
 import { useT } from "@/hooks/use-translations";
@@ -198,7 +198,14 @@ export default function ShortsScreen() {
   const current = items[index] ?? null;
   const unlockFor = current && !current.accessible ? current : null;
 
-  if (first.loading || status === "loading") return <Loading />;
+  if (first.loading || status === "loading") {
+    // The feed is one full-bleed frame at a time; a centred spinner on black read as a failed video.
+    return (
+      <View style={{ flex: 1, backgroundColor: "#000" }}>
+        <Skeleton height={0} radius={0} style={{ flex: 1, height: undefined }} />
+      </View>
+    );
+  }
   if (first.error && !first.data)
     return <ErrorState message={first.error} onRetry={() => first.refetch({ silent: false })} retryLabel={t("common.retry")} />;
   if (items.length === 0) return <EmptyState title={t("home.empty")} />;

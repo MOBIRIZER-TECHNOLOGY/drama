@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { EpisodeGrid, type EpisodeLockState } from "@/components/episode-grid";
 import { Icon } from "@/components/icons";
 import { Rail } from "@/components/rail";
-import { Button, ErrorState, Loading, Pill, Screen, SectionHeader, Text } from "@/components/ui";
+import { Button, ErrorState, Pill, Screen, SectionHeader, Skeleton, Text } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
 import { useSeriesActions } from "@/hooks/use-series-actions";
 import { useT } from "@/hooks/use-translations";
@@ -27,7 +27,7 @@ export default function SeriesScreen() {
     [id, lang, status],
   );
 
-  if (series.loading) return <Loading />;
+  if (series.loading) return <SeriesSkeleton />;
   if (series.error || !series.data) {
     return (
       <Screen>
@@ -37,6 +37,42 @@ export default function SeriesScreen() {
     );
   }
   return <SeriesBody series={series.data} />;
+}
+
+/**
+ * Matches the loaded layout rather than centring a spinner.
+ *
+ * A spinner on a cold open told the viewer nothing and then shifted every element once the data landed. The
+ * blocks below sit where the cover, title, buttons and episode grid will be, so the screen resolves in place.
+ */
+function SeriesSkeleton() {
+  return (
+    <Screen edges={["top", "left", "right"]}>
+      <BackBar />
+      <View style={styles.hero}>
+        <Skeleton width={120} height={213} radius={radii.md} />
+        <View style={styles.heroText}>
+          <Skeleton height={26} width="80%" />
+          <Skeleton height={14} width="45%" />
+          <Skeleton height={14} width="60%" />
+          <View style={styles.actions}>
+            <Skeleton height={22} width={44} />
+            <Skeleton height={22} width={44} />
+          </View>
+        </View>
+      </View>
+      <View style={styles.skeletonBody}>
+        <Skeleton height={14} />
+        <Skeleton height={14} width="90%" />
+        <Skeleton height={48} radius={radii.md} />
+        <View style={styles.skeletonGrid}>
+          {Array.from({ length: 12 }).map((_, i) => (
+            <Skeleton key={i} height={52} width={52} radius={radii.sm} />
+          ))}
+        </View>
+      </View>
+    </Screen>
+  );
 }
 
 function BackBar({ right }: { right?: React.ReactNode }) {
@@ -65,6 +101,15 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
   }, [series.id, series.slug, series.episode_count, series.is_premium, status]);
 
   const continueNumber = series.continue_episode_number ?? 1;
+  const resuming = continueNumber > 1;
+
+  // What the rest of the series costs, said before a viewer taps a locked tile and finds out.
+  const locked = series.episodes.filter((e) => !e.is_free && !e.accessible);
+  const lockedPrice = locked.reduce((sum, e) => sum + (e.price ?? 0), 0);
+  const unitPrice = locked.length > 0 ? Math.round(lockedPrice / locked.length) : 0;
+  const firstLocked = locked[0]?.number;
+  // Free episodes still ahead of where this viewer left off; null until they have actually started.
+  const freeLeft = resuming ? Math.max(0, series.free_episodes - (continueNumber - 1)) || null : null;
 
   const play = useCallback(
     (episodeNumber: number) => {
@@ -134,11 +179,15 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
 
         <View style={styles.playRow}>
           <Button
-            title={continueNumber > 1 ? `${t("common.play")} · Episode ${continueNumber}` : t("common.play")}
+            title={resuming ? t("series.continue") : t("common.play")}
+            subtitle={resuming ? t("series.episode_n", { n: continueNumber }) : undefined}
             onPress={() => play(continueNumber)}
             left={<Icon name="play" size={14} color={colors.accentInk} />}
             style={{ flex: 1 }}
           />
+          {/* Restarting was only reachable by scrolling to episode 1 in the grid, which a returning viewer
+              rarely thinks to do — and a shared link that resumes mid-series is the common way in. */}
+          {resuming ? <Button title={t("series.start_over")} variant="secondary" onPress={() => play(1)} /> : null}
         </View>
 
         {actions.error ? (
@@ -148,6 +197,31 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
         ) : null}
 
         <SectionHeader title={t("series.episodes")} right={<Text variant="caption">{series.episodes.length}</Text>} />
+        {/* The price belongs above the grid: finding it by tapping a padlock is finding it too late. */}
+        {locked.length > 0 ? (
+          <View style={styles.priceRow}>
+            <Text variant="caption">{t("series.locked_summary", { n: locked.length, price: unitPrice })}</Text>
+            {firstLocked ? (
+              <Pressable onPress={() => play(firstLocked)} accessibilityRole="button" hitSlop={8}>
+                <Text variant="caption" color={colors.accent}>
+                  {t("series.unlock_all", { price: lockedPrice })}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : series.free_episodes > 0 && series.episode_count > series.free_episodes ? (
+          <View style={styles.priceRow}>
+            {/* Counting down is the point: "3 free left" is a reason to keep going and a warning about the
+                wall; "first 5 are free" stops being information the moment the viewer starts watching. */}
+            <Text variant="caption">
+              {freeLeft === null
+                ? t("series.free_first", { n: series.free_episodes })
+                : freeLeft === 1
+                  ? t("series.free_left_one")
+                  : t("series.free_left", { n: freeLeft })}
+            </Text>
+          </View>
+        ) : null}
         {series.episodes.length === 0 ? (
           <Text variant="caption" style={styles.notice}>
             No episodes published yet.
@@ -178,6 +252,16 @@ const styles = StyleSheet.create({
   actions: { flexDirection: "row", gap: spacing.xl, marginTop: spacing.sm },
   action: { alignItems: "center", gap: 2 },
   synopsis: { paddingHorizontal: spacing.lg, marginTop: spacing.lg },
-  playRow: { flexDirection: "row", paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  playRow: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg, marginTop: spacing.lg },
+  priceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  skeletonBody: { paddingHorizontal: spacing.lg, marginTop: spacing.lg, gap: spacing.sm },
+  skeletonGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
   notice: { paddingHorizontal: spacing.lg, marginTop: spacing.sm },
 });
