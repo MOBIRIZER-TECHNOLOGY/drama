@@ -11,6 +11,9 @@ import uuid
 from datetime import datetime
 from urllib.parse import urlencode
 
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.hkdf import HKDF
+
 from app.core.config import get_settings
 
 
@@ -31,3 +34,59 @@ def verify_hls_signature(path: str, exp: int, user_id: str, sig: str) -> bool:
         base64.urlsafe_b64encode(hmac.new(s.signing_key.encode(), msg, hashlib.sha256).digest()).decode().rstrip("=")
     )
     return hmac.compare_digest(expected, sig)
+
+
+# ---- AES-128 HLS content keys ----------------------------------------------
+#
+# Signed URLs decide who may *start* a stream; they do nothing once bytes are out. Anyone holding an unexpired
+# URL, or anything sitting between the CDN and the player, gets the episode. For a catalogue where episode
+# three costs coins, that is the whole product sitting in plain `.ts` files.
+#
+# The key is derived from one master secret and the asset id rather than generated and stored. A database dump
+# then carries no content keys at all, restoring an old backup cannot resurrect a retired key, and rotating the
+# master rotates the entire catalogue in one move. HKDF because it is the right tool and leaves nothing to
+# argue about; the label pins the purpose so the same secret cannot collide with another use later.
+
+CONTENT_KEY_LABEL = b"katha:hls:aes128:v1:"
+CONTENT_IV_LABEL = b"katha:hls:aes128-iv:v1:"
+CONTENT_KEY_BYTES = 16  # AES-128, which is what HLS METHOD=AES-128 means.
+
+
+def content_key(asset_id: uuid.UUID) -> bytes:
+    """The AES-128 key for one video asset. Deterministic: the same asset always derives the same key."""
+    hkdf = HKDF(
+        algorithm=hashes.SHA256(),
+        length=CONTENT_KEY_BYTES,
+        salt=None,
+        info=CONTENT_KEY_LABEL + asset_id.bytes,
+    )
+    return hkdf.derive(get_settings().content_key_secret.encode())
+
+
+def content_iv(asset_id: uuid.UUID) -> bytes:
+    """The AES-CBC IV for one asset, derived like the key and from the same secret.
+
+    HLS carries one IV per playlist. Left unset, ffmpeg writes zeros into the playlist, and then every segment
+    of every rendition is encrypted under the same key and the same IV, so their identical opening bytes
+    encrypt identically. Deriving it costs nothing and stores nothing, exactly like the key.
+    """
+    hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=None, info=CONTENT_IV_LABEL + asset_id.bytes)
+    return hkdf.derive(get_settings().content_key_secret.encode())
+
+
+def sign_path(path: str, *, user_id: uuid.UUID, expires: datetime) -> str:
+    """Query string authorising one path for one viewer until one moment. The signature is the capability.
+
+    A key request arrives from the video player, which sends no session header of its own, so authorisation
+    has to travel in the URL. The signature covers the path, which is what stops a key URL for a free episode
+    being edited into a key URL for a paid one.
+    """
+    exp = int(expires.timestamp())
+    p = f"/{path.lstrip('/')}"
+    msg = f"{p}:{exp}:{user_id}".encode()
+    sig = (
+        base64.urlsafe_b64encode(hmac.new(get_settings().signing_key.encode(), msg, hashlib.sha256).digest())
+        .decode()
+        .rstrip("=")
+    )
+    return urlencode({"exp": exp, "uid": str(user_id), "sig": sig})

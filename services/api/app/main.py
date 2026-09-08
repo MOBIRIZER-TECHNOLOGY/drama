@@ -28,6 +28,7 @@ from app.api.routers import (
     media,
     purchases,
     rewards,
+    stream,
     uploads,
     wallet,
 )
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
         events.router,
         media.router,
         ads.router,
+        stream.router,
     ):
         app.include_router(r, prefix=api)
     telemetry.init("api", app=app, engine=engine)

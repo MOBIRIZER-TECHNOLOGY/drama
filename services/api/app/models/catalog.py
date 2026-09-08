@@ -14,6 +14,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -113,6 +114,9 @@ class VideoAsset(UUIDPrimaryKey, TimestampMixin, Base):
     checksum: Mapped[str | None] = mapped_column(String(64))
     size_bytes: Mapped[int | None] = mapped_column(BigInteger)
     error: Mapped[str | None] = mapped_column(Text)
+    # Packaged with AES-128. Encrypted assets are played through the API's manifest routes, which mint a
+    # per-viewer key URL; unencrypted ones keep the direct signed CDN link.
+    is_encrypted: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, server_default=text("false"))
 
 
 class Episode(UUIDPrimaryKey, TimestampMixin, Base):

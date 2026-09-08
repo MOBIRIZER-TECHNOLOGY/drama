@@ -40,7 +40,7 @@ from app.schemas.catalog import (
 from app.services import access as access_svc
 from app.services import config as config_svc
 from app.services import recommend
-from app.services.media import sign_hls_url
+from app.services.media import sign_hls_url, sign_path
 from app.services.storage import public_url
 
 log = structlog.get_logger()
@@ -774,8 +774,17 @@ async def play(episode_id: uuid.UUID, ctx: OptionalUser, db: DB) -> PlayOut:
     ttl = get_settings().play_token_ttl_seconds
     expires = datetime.now(UTC) + timedelta(seconds=ttl)
     hls_url = None
-    if episode.video_asset and episode.video_asset.hls_master_key:
-        hls_url = sign_hls_url(episode.video_asset.hls_master_key, user_id=signer_id, expires=expires)
+    asset = episode.video_asset
+    if asset and asset.hls_master_key:
+        if asset.is_encrypted:
+            # Encrypted assets are played through the manifest routes rather than straight off the CDN: the
+            # key URL inside the manifest has to be minted for this viewer and this moment, which a static
+            # file on a CDN cannot be. Segments still come from the CDN; only the manifests pass through here.
+            path = f"/v1/stream/{asset.id}/master.m3u8"
+            query = sign_path(path, user_id=signer_id, expires=expires)
+            hls_url = f"{get_settings().api_base_url.rstrip('/')}{path}?{query}"
+        else:
+            hls_url = sign_hls_url(asset.hls_master_key, user_id=signer_id, expires=expires)
     if hls_url is None and not episode.embed_html:
         raise Conflict("Episode video is still being prepared", code="asset_not_ready")
 

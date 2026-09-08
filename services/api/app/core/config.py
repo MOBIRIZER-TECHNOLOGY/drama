@@ -38,8 +38,15 @@ class Settings(BaseSettings):
     play_token_ttl_seconds: int = 900
     # How the edge validates playback URLs: none (dev only), hmac (nginx/verifier using media_signing_key),
     # cloudfront, bunny. Production refuses to boot with none.
+    # Where this service reads manifests from, which is not where viewers read segments from. `cdn_base_url`
+    # is the public edge; this is the origin behind it. They differ in production (edge vs bucket) and they
+    # differ in development too, where the emulator's view of the host is not the host's view of itself.
+    media_origin_url: str | None = None
     cdn_signing_mode: Literal["none", "hmac", "cloudfront", "bunny"] = "none"
     media_signing_key: str | None = None  # falls back to jwt_secret outside production
+    # Master secret for AES-128 HLS content keys. Per-asset keys are derived from it, never stored, so a
+    # database dump carries no content keys and rotating this rotates every asset at once.
+    media_encryption_key: str | None = None
 
     stripe_secret_key: str | None = None
     stripe_webhook_secret: str | None = None
@@ -66,6 +73,9 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_starttls: bool = False
     smtp_from: str = "Katha <no-reply@katha.app>"
+    # Where this API is reachable from a viewer's device. It goes inside HLS manifests as the key URL, so it
+    # has to be the public address rather than whatever the process happens to bind to.
+    api_base_url: str = "http://localhost:8000"
     admin_base_url: str = "http://localhost:3001"
     site_base_url: str = "http://localhost:3000"
 
@@ -134,6 +144,10 @@ class Settings(BaseSettings):
                 problems.append("KATHA_CDN_SIGNING_MODE must not be 'none'")
             if not self.media_signing_key:
                 problems.append("KATHA_MEDIA_SIGNING_KEY must be set")
+            # Falling back to the JWT secret is tolerable for URL signatures in development. For content keys
+            # it would mean one leaked value decrypts the catalogue and forges sessions, so production says no.
+            if not self.media_encryption_key:
+                problems.append("KATHA_MEDIA_ENCRYPTION_KEY must be set")
             if self.stripe_secret_key and not self.stripe_webhook_secret:
                 problems.append("KATHA_STRIPE_WEBHOOK_SECRET is required when Stripe is enabled")
             if self.razorpay_key_id and not self.razorpay_webhook_secret:
@@ -145,6 +159,16 @@ class Settings(BaseSettings):
     @property
     def signing_key(self) -> str:
         return self.media_signing_key or self.jwt_secret
+
+    @property
+    def origin_url(self) -> str:
+        """Origin for server-side manifest reads; falls back to the public CDN when they are the same host."""
+        return self.media_origin_url or self.cdn_base_url
+
+    @property
+    def content_key_secret(self) -> str:
+        """Master secret the per-asset AES keys are derived from. Distinct from `signing_key` on purpose."""
+        return self.media_encryption_key or self.jwt_secret
 
 
 @lru_cache
