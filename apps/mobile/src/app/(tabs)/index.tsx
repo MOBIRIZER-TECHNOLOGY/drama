@@ -69,6 +69,27 @@ export default function HomeScreen() {
 
   const onRefresh = useCallback(() => void refetchHome({ silent: true }), [refetchHome]);
 
+  /**
+   * "View all" for a rail.
+   *
+   * A rail shows four or five titles and then runs off the edge of the screen; without this the rest of a
+   * genre is invisible. The reference gives every section the same affordance.
+   */
+  const viewAll = useCallback(
+    (rail: HomeRail) => (
+      <Pressable
+        onPress={() => router.push({ pathname: "/rail/[key]", params: { key: rail.key, title: rail.title } })}
+        accessibilityRole="button"
+        hitSlop={8}
+      >
+        <Text variant="label" color={colors.accent}>
+          {t("home.view_all")}
+        </Text>
+      </Pressable>
+    ),
+    [router, t],
+  );
+
   return (
     <Screen>
       <View style={styles.header}>
@@ -123,7 +144,7 @@ export default function HomeScreen() {
         <FlashList<HomeRail>
           data={rails.rest}
           keyExtractor={(r) => r.key}
-          renderItem={({ item }) => <Rail title={item.title} items={item.items} />}
+          renderItem={({ item }) => <Rail title={item.title} items={item.items} right={viewAll(item)} />}
           ListHeaderComponent={
             <View>
               {rails.featured ? <FeaturedSlider items={rails.featured.items} /> : null}
@@ -148,8 +169,8 @@ export default function HomeScreen() {
                   ))}
                 </ScrollView>
               ) : null}
-              {rails.cont && rails.cont.items.length > 0 ? <ContinueRail title={rails.cont.title || t("home.continue_watching")} items={rails.cont.items} /> : null}
-              {rails.forYou ? <Rail title={rails.forYou.title || t("home.for_you")} items={rails.forYou.items} /> : null}
+              {rails.cont && rails.cont.items.length > 0 ? <ContinueRail title={rails.cont.title || t("home.continue_watching")} items={rails.cont.items} right={viewAll(rails.cont)} /> : null}
+              {rails.forYou ? <Rail title={rails.forYou.title || t("home.for_you")} items={rails.forYou.items} right={viewAll(rails.forYou)} /> : null}
             </View>
           }
           contentContainerStyle={styles.list}
@@ -162,12 +183,12 @@ export default function HomeScreen() {
 }
 
 /** The `continue` rail carries `progress` per card; open the player at that episode. */
-function ContinueRail({ title, items }: { title: string; items: SeriesCardModel[] }) {
+function ContinueRail({ title, items, right }: { title: string; items: SeriesCardModel[]; right?: React.ReactNode }) {
   const t = useT();
   const router = useRouter();
   return (
     <View>
-      <SectionHeader title={title} />
+      <SectionHeader title={title} right={right} />
       <FlashList
         horizontal
         data={items}

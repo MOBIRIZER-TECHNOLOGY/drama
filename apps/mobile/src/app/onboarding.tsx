@@ -13,18 +13,17 @@ import type { SeriesCard } from "@/lib/types";
 import { useConfig } from "@/providers/config";
 
 /**
- * Two pages, not three.
+ * Three pages, matching the reference: pick a language, then what the product is, then what the coins are for.
  *
- * The old flow spent its first thirty seconds explaining the product: a language picker, then a card saying
- * "swipe through bite-size drama", then a card explaining coins — to someone who had not yet seen a single
- * frame. It also disabled swiping on the pager that was busy teaching swiping.
+ * The pager itself stays swipeable. The reference disables swiping on the screen that exists to teach
+ * swiping, which is worth not copying.
  *
- * Now: pick a language, then meet three real covers in that language with one button into the first episode.
- * The coin explanation moved to where it belongs — the paywall, which foreshadows a price one episode ahead
- * rather than arriving as a surprise.
+ * The last page keeps our own ending rather than the reference's static card: three real covers in the
+ * language just chosen, and a button into the first episode. Same position in the flow, same "get started"
+ * role, but it ends inside the catalogue instead of on another illustration.
  */
 type Page = { key: string };
-const PAGES: Page[] = [{ key: "language" }, { key: "start" }];
+const PAGES: Page[] = [{ key: "language" }, { key: "discover" }, { key: "start" }];
 
 export default function OnboardingScreen() {
   const t = useT();
@@ -105,8 +104,13 @@ export default function OnboardingScreen() {
   const next = useCallback(async () => {
     if (page === 0) {
       await setLang(selected);
+      // Fetched now rather than on the last page, so the covers are already there when it arrives.
       void loadPicks(selected);
       goTo(1);
+      return;
+    }
+    if (page < PAGES.length - 1) {
+      goTo(page + 1);
       return;
     }
     // Straight into the first episode of the first pick: the fastest honest path from install to a frame.
@@ -168,6 +172,14 @@ export default function OnboardingScreen() {
                   })}
                 </View>
               </View>
+            ) : item.key === "discover" ? (
+              <View style={styles.page}>
+                <View style={styles.hero}>
+                  <Icon name="shorts" size={56} color={colors.accent} />
+                </View>
+                <Text variant="display">{t("onboarding.discover_title")}</Text>
+                <Text variant="body">{t("onboarding.discover_body")}</Text>
+              </View>
             ) : (
               <View style={styles.page}>
                 <View style={styles.posters}>
@@ -207,16 +219,18 @@ export default function OnboardingScreen() {
             page === 0
               ? // Naming the language on the button confirms the choice in the language just chosen.
                 t("onboarding.continue_in", { lang: selectedName })
-              : firstPick
-                ? t("onboarding.watch_now")
-                : t("onboarding.start")
+              : page === 1
+                ? t("onboarding.next")
+                : firstPick
+                  ? t("onboarding.watch_now")
+                  : t("onboarding.start")
           }
           onPress={next}
-          left={page === 1 && firstPick ? <Icon name="play" size={14} color={colors.accentInk} /> : undefined}
+          left={page === PAGES.length - 1 && firstPick ? <Icon name="play" size={14} color={colors.accentInk} /> : undefined}
         />
         <Pressable onPress={skip} accessibilityRole="button" style={styles.skip} hitSlop={12}>
           <Text variant="label" color={colors.muted}>
-            {page === 1 && firstPick ? t("onboarding.browse_instead") : t("onboarding.skip")}
+            {page === PAGES.length - 1 && firstPick ? t("onboarding.browse_instead") : t("onboarding.skip")}
           </Text>
         </Pressable>
       </View>

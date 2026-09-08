@@ -8,6 +8,7 @@ export const en: Record<string, string> = {
   "tabs.list": "My List",
   "tabs.me": "Me",
   "home.continue_watching": "Continue Watching",
+  "home.view_all": "View all",
   "home.for_you": "For You",
   "home.search": "Search series",
   "search.recent": "Recent searches",
@@ -203,6 +204,9 @@ export const en: Record<string, string> = {
   "onboarding.start": "Start watching",
   "onboarding.start_body": "Free to watch. Swipe up in the player for the next episode.",
   "onboarding.watch_now": "Watch now",
+  "onboarding.next": "Next",
+  "onboarding.discover_title": "Discover short dramas",
+  "onboarding.discover_body": "Exclusive series in bite-size episodes, with new ones added every day.",
   "onboarding.browse_instead": "Browse everything",
   // Paywall. The highest-intent screen in the product was hardcoded English inside an otherwise localised app.
   "player.unlock_need": "You need {n} coins to unlock this episode.",
