@@ -1,5 +1,4 @@
 import { colors, spacing } from "@katha/tokens";
-import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Crypto from "expo-crypto";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
@@ -8,19 +7,13 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View
 import { Icon } from "@/components/icons";
 import { Button, Divider, Screen, Text, TextInput } from "@/components/ui";
 import { useT } from "@/hooks/use-translations";
-import { firebaseConfigured, googleClientIds, googleConfigured } from "@/lib/firebase";
+import { firebaseConfigured } from "@/lib/firebase";
+import { googleIdToken, googleSignInAvailable } from "@/lib/google-signin";
 import { firebaseErrorMessage, useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
 
 type Mode = "sign_in" | "sign_up";
 type Busy = "email" | "google" | "apple" | null;
-
-let googleConfiguredOnce = false;
-function configureGoogle() {
-  if (googleConfiguredOnce || !googleConfigured) return;
-  GoogleSignin.configure({ webClientId: googleClientIds.webClientId, iosClientId: googleClientIds.iosClientId });
-  googleConfiguredOnce = true;
-}
 
 function randomNonce(): string {
   return Array.from(Crypto.getRandomBytes(16), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -120,12 +113,9 @@ export default function AuthScreen() {
 
   const startGoogle = useCallback(() => {
     void run("google", async () => {
-      configureGoogle();
-      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const result = await GoogleSignin.signIn();
-      if (result.type !== "success") return false;
-      const idToken = result.data.idToken;
-      if (!idToken) throw new Error("Google did not return an ID token");
+      const idToken = await googleIdToken();
+      // Null means the sheet was dismissed. Nothing went wrong, so nothing is reported.
+      if (!idToken) return false;
       await signInWithGoogleIdToken(idToken);
       return true;
     });
@@ -152,7 +142,7 @@ export default function AuthScreen() {
   }, [run, signInWithApple]);
 
   const emailEnabled = config.auth.email !== false;
-  const googleEnabled = config.auth.google !== false && googleConfigured;
+  const googleEnabled = config.auth.google !== false && googleSignInAvailable();
   const appleEnabled = Platform.OS === "ios" && config.auth.apple !== false && appleAvailable;
   const phoneEnabled = config.auth.phone !== false;
 

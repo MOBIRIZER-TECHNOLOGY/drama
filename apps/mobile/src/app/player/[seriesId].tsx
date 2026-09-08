@@ -115,6 +115,8 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
   );
 
   const currentGrant = current ? grants[current.id] : undefined;
+  /** The episode in view failed to load, so the screen is showing its error rather than a video. */
+  const currentError = current ? (errors[current.id] ?? null) : null;
   const subtitleTracks = useMemo(() => currentGrant?.subtitles ?? [], [currentGrant]);
   const subtitleTrack = useMemo(() => selectTrack(subtitleTracks, subtitlePref), [subtitleTracks, subtitlePref]);
   const cycleSubtitles = useCallback(() => chooseSubtitles(nextTrackLang(subtitleTracks, subtitleTrack)), [chooseSubtitles, subtitleTracks, subtitleTrack]);
@@ -219,6 +221,12 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
    *
    * Vertical swiping between episodes and hold-for-2x were discoverable only by accident; a viewer who never
    * found them watched one episode and left. Shown once ever, dismissed by tapping anywhere on it.
+   *
+   * It is armed here but only drawn once the episode in view is actually playing. It used to appear the
+   * moment the screen mounted, so an episode that failed to load put a full-screen overlay on top of its own
+   * error message and its Try again button: two stacked blocks of text, neither readable, and no way to
+   * recover except going back. Nothing to coach until there is something on screen to coach about, and the
+   * "seen" flag is only written on dismissal, so a viewer who meets an error first is still coached later.
    */
   useEffect(() => {
     let cancelled = false;
@@ -459,7 +467,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
         </View>
       ) : null}
 
-      {coach ? (
+      {coach && !currentError ? (
         <Pressable style={styles.coach} onPress={dismissCoach} accessibilityRole="button" accessibilityLabel={t("player.coach_got_it")}>
           <View style={styles.coachBody}>
             <Icon name="swipe-up" size={30} />

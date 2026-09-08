@@ -10,6 +10,7 @@ import { ForceUpdateScreen, needsForceUpdate } from "@/components/force-update";
 import { PlayerPoolProvider } from "@/components/player/player-pool";
 import { PushRouter } from "@/components/push-router";
 import { startAnalytics } from "@/lib/analytics";
+import { installNotificationHandler } from "@/lib/push";
 import { AuthProvider } from "@/providers/auth";
 import { ConfigProvider, useConfig } from "@/providers/config";
 import { ToastProvider } from "@/providers/toast";
@@ -41,6 +42,12 @@ function RootNavigator() {
     if (!ready) return;
     return startAnalytics();
   }, [ready]);
+
+  // How a notification is presented while the app is open. Installed here rather than on import so that a
+  // build without a working notifications module loses push, not the entire navigator.
+  useEffect(() => {
+    installNotificationHandler();
+  }, []);
 
   if (!ready) return null;
 

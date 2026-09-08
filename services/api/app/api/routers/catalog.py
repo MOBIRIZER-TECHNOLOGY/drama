@@ -5,8 +5,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -41,6 +43,7 @@ from app.services import recommend
 from app.services.media import sign_hls_url
 from app.services.storage import public_url
 
+log = structlog.get_logger()
 router = APIRouter(tags=["catalog"])
 GUEST_ID = uuid.UUID(int=0)  # signs playback URLs for anonymous viewers of free episodes
 
@@ -128,26 +131,54 @@ async def _first_episode_ids(db: AsyncSession, series_ids: list[uuid.UUID]) -> d
     return {sid: eid for sid, eid in rows.all()}
 
 
+async def _embedding_neighbours(db: AsyncSession, series: Series, *, limit: int) -> list[Series]:
+    """Nearest neighbours by embedding, or [] when the vector side is unavailable.
+
+    Everything here depends on pgvector: the extension, the `embeddings` table and the distance operator. Any
+    of those can be missing on an environment that has not run the vector migration, and the failure arrives as
+    a database error rather than an empty result. This is the "more like this" strip; the caller is the series
+    page. Letting it raise took the episode list, the synopsis and the play button down with it, so a broken
+    recommendation is reported and swallowed rather than served as a 500.
+
+    The queries run inside a SAVEPOINT because Postgres refuses every further statement on a transaction that
+    has already failed, and the caller keeps using this session for the category fallback. A savepoint is what
+    makes the failure local: rolling the whole transaction back would work for the connection but expire every
+    loaded object, so the next read of `series.categories` would lazily re-query and fail again, in a place
+    with no handler for it.
+    """
+    series_id = series.id
+    try:
+        async with db.begin_nested():
+            own = await db.scalar(select(Embedding).where(Embedding.series_id == series_id).limit(1))
+            if own is None:
+                return []
+            neighbour_ids = (
+                await db.scalars(
+                    select(Embedding.series_id)
+                    .join(Series, Series.id == Embedding.series_id)
+                    .where(
+                        Embedding.model == own.model,
+                        Embedding.series_id != series_id,
+                        Series.status == PublishStatus.published,
+                    )
+                    .order_by(Embedding.vector.cosine_distance(own.vector))
+                    .limit(limit)
+                )
+            ).all()
+    except SQLAlchemyError as exc:
+        log.warning("similar.embeddings_unavailable", series_id=str(series_id), error=str(exc))
+        return []
+    if not neighbour_ids:
+        return []
+    rows = {s.id: s for s in (await db.scalars(_published_series().where(Series.id.in_(neighbour_ids)))).all()}
+    return [rows[i] for i in neighbour_ids if i in rows]
+
+
 async def _similar_series(db: AsyncSession, series: Series, *, limit: int) -> list[Series]:
     """Nearest neighbours by embedding when the series has one; otherwise shared category."""
-    own = await db.scalar(select(Embedding).where(Embedding.series_id == series.id).limit(1))
-    if own is not None:
-        neighbour_ids = (
-            await db.scalars(
-                select(Embedding.series_id)
-                .join(Series, Series.id == Embedding.series_id)
-                .where(
-                    Embedding.model == own.model,
-                    Embedding.series_id != series.id,
-                    Series.status == PublishStatus.published,
-                )
-                .order_by(Embedding.vector.cosine_distance(own.vector))
-                .limit(limit)
-            )
-        ).all()
-        if neighbour_ids:
-            rows = {s.id: s for s in (await db.scalars(_published_series().where(Series.id.in_(neighbour_ids)))).all()}
-            return [rows[i] for i in neighbour_ids if i in rows]
+    neighbours = await _embedding_neighbours(db, series, limit=limit)
+    if neighbours:
+        return neighbours
     if not series.categories:
         return []
     cat_ids = [c.id for c in series.categories]

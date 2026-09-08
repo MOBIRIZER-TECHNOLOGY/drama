@@ -1,6 +1,7 @@
+import { isRunningInExpoGo } from "expo";
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
+import type * as ExpoNotifications from "expo-notifications";
 import { Platform } from "react-native";
 import { api } from "./api";
 import { getJson, setJson } from "./storage";
@@ -24,24 +25,90 @@ import { getJson, setJson } from "./storage";
 const TOKEN_KEY = "pushToken";
 const ASKED_KEY = "pushAsked";
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
-});
+/**
+ * expo-notifications is loaded on demand, never with a static import.
+ *
+ * Its entry point runs side effects while it evaluates: `DevicePushTokenAutoRegistration.fx` subscribes a
+ * device-token listener at module scope, and on a build where that is unsupported the subscription throws
+ * during the import itself. A `try` inside this file cannot catch that, because the throw happens before any
+ * of this code exists, so the module object came back undefined and every screen importing it went down too,
+ * the root layout included. The whole app rendered nothing because an optional subsystem was unavailable.
+ *
+ * Requiring it here moves that failure inside a `try`, and caching the answer means an unsupported build pays
+ * for one failed require rather than one per call. Push is optional. The app is not.
+ */
+type NotificationsModule = typeof ExpoNotifications;
+
+let loaded: NotificationsModule | null | undefined;
+
+function notifications(): NotificationsModule | null {
+  if (loaded !== undefined) return loaded;
+  // Expo Go on Android is a documented no-push host, and its throw happens inside Metro's own module guard,
+  // which reports it as a fatal error before this catch ever runs. Skipping the require keeps the dev client
+  // usable instead of red-boxing on every reload; the catch below still covers every other build.
+  if (isRunningInExpoGo() && Platform.OS === "android") {
+    loaded = null;
+    return loaded;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    loaded = require("expo-notifications") as NotificationsModule;
+  } catch {
+    loaded = null;
+  }
+  return loaded;
+}
+
+/** Runs `fn` against the module, returning `fallback` when it is unavailable or the call throws. */
+function guard<T>(fn: (n: NotificationsModule) => T, fallback: T): T {
+  const n = notifications();
+  if (!n) return fallback;
+  try {
+    return fn(n);
+  } catch {
+    return fallback;
+  }
+}
+
+/** Whether this build can do push at all. Callers use it to hide the affordance rather than fail on tap. */
+export function pushAvailable(): boolean {
+  return notifications() !== null;
+}
+
+/**
+ * Installs the foreground presentation handler.
+ *
+ * Called explicitly rather than on import: a side effect that runs at module scope is exactly what made this
+ * module dangerous to import in the first place.
+ */
+export function installNotificationHandler(): void {
+  guard(
+    (n) =>
+      n.setNotificationHandler({
+        handleNotification: async () => ({
+          shouldShowBanner: true,
+          shouldShowList: true,
+          shouldPlaySound: true,
+          shouldSetBadge: false,
+        }),
+      }),
+    undefined,
+  );
+}
 
 /** Android requires a channel before anything is delivered; without one notifications are silently dropped. */
 export async function configureAndroidChannel(): Promise<void> {
   if (Platform.OS !== "android") return;
-  await Notifications.setNotificationChannelAsync("default", {
-    name: "Katha",
-    importance: Notifications.AndroidImportance.DEFAULT,
-    vibrationPattern: [0, 250, 250, 250],
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
+  await guard(
+    (n) =>
+      n.setNotificationChannelAsync("default", {
+        name: "Katha",
+        importance: n.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250, 250, 250],
+        lockscreenVisibility: n.AndroidNotificationVisibility.PUBLIC,
+      }),
+    Promise.resolve(null),
+  );
 }
 
 export async function hasAskedForPush(): Promise<boolean> {
@@ -50,8 +117,12 @@ export async function hasAskedForPush(): Promise<boolean> {
 
 /** Current OS-level permission, without prompting. */
 export async function pushPermission(): Promise<"granted" | "denied" | "undetermined"> {
-  const { status } = await Notifications.getPermissionsAsync();
-  return status as "granted" | "denied" | "undetermined";
+  const result = await guard<Promise<ExpoNotifications.NotificationPermissionsStatus | null>>(
+    (n) => n.getPermissionsAsync(),
+    Promise.resolve(null),
+  );
+  // No module means no permission to report, and the settings toggle reads that as off rather than breaking.
+  return (result?.status ?? "denied") as "granted" | "denied" | "undetermined";
 }
 
 /**
@@ -63,12 +134,17 @@ export async function ensureRegistered({ prompt = true }: { prompt?: boolean } =
   try {
     // A simulator has no push service, and asking there only produces a confusing failure.
     if (!Device.isDevice) return false;
+    if (!pushAvailable()) return false;
 
-    let { status } = await Notifications.getPermissionsAsync();
+    let status = await pushPermission();
     if (status !== "granted") {
       if (!prompt) return false;
       await setJson(ASKED_KEY, true);
-      ({ status } = await Notifications.requestPermissionsAsync());
+      const asked = await guard<Promise<ExpoNotifications.NotificationPermissionsStatus | null>>(
+        (n) => n.requestPermissionsAsync(),
+        Promise.resolve(null),
+      );
+      status = (asked?.status ?? "denied") as typeof status;
     }
     if (status !== "granted") return false;
 
@@ -78,7 +154,11 @@ export async function ensureRegistered({ prompt = true }: { prompt?: boolean } =
     const projectId =
       Constants.expoConfig?.extra?.eas?.projectId ?? (Constants as { easConfig?: { projectId?: string } }).easConfig?.projectId;
     if (!projectId) return false;
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    const issued = await guard<Promise<ExpoNotifications.ExpoPushToken | null>>(
+      (n) => n.getExpoPushTokenAsync({ projectId }),
+      Promise.resolve(null),
+    );
+    const token = issued?.data;
     if (!token) return false;
 
     const cached = await getJson<string>(TOKEN_KEY);
@@ -101,6 +181,25 @@ export async function unregister(): Promise<void> {
     /* the session may already be gone; the token dies with it */
   }
   await setJson(TOKEN_KEY, null);
+}
+
+/**
+ * The last notification tap, and a subscription to future ones.
+ *
+ * Wrapped here so `PushRouter` never touches the module directly: it runs inside the navigator, where a throw
+ * unmounts the app rather than merely losing a notification tap.
+ */
+export function lastNotificationResponse(): ExpoNotifications.NotificationResponse | null {
+  return guard<ExpoNotifications.NotificationResponse | null>((n) => n.getLastNotificationResponse(), null);
+}
+
+export function clearLastNotificationResponse(): void {
+  guard((n) => n.clearLastNotificationResponse(), undefined);
+}
+
+export function onNotificationResponse(listener: (response: ExpoNotifications.NotificationResponse) => void): () => void {
+  const sub = guard<ExpoNotifications.EventSubscription | null>((n) => n.addNotificationResponseReceivedListener(listener), null);
+  return () => sub?.remove();
 }
 
 /** Where a notification wants the app to go. Mirrors the `data` the worker sends. */

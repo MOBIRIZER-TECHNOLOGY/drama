@@ -21,7 +21,9 @@ export default function SeriesLinkScreen() {
   }>();
   const { onboarded } = useConfig();
 
-  const params: Record<string, string> = { id: slug };
+  // Typed against the route's own shape, not a loose string map: expo-router's generated types require `id`,
+  // and a widened record silently drops that guarantee at the call sites below.
+  const params: { id: string; episode?: string } = { id: slug };
   if (ep) params.episode = ep;
 
   useEffect(() => {
