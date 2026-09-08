@@ -10,6 +10,11 @@ class WorkerSettings(BaseSettings):
     ffmpeg_bin: str = "ffmpeg"
     ffprobe_bin: str = "ffprobe"
     hls_ladder: list[str] = ["1080p", "720p", "480p"]
+    # Package renditions with AES-128. On, because this catalogue sells episodes and an unencrypted segment is
+    # the episode to anyone who gets its URL. It costs the fMP4 container: HLS has no AES-128 for fMP4, only
+    # SAMPLE-AES, which needs a DRM licence server, so encrypted output is MPEG-TS. Turn it off and renditions
+    # go back to fMP4 in the clear.
+    hls_encrypt: bool = True
     max_jobs: int = 4
 
 

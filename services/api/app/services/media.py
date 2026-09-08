@@ -66,6 +66,10 @@ def media_url(value: str | None) -> str | None:
 # master rotates the entire catalogue in one move. HKDF because it is the right tool and leaves nothing to
 # argue about; the label pins the purpose so the same secret cannot collide with another use later.
 
+# What the packager bakes into the playlist as the key URI. It is never fetched: the manifest route replaces
+# it with a URL minted for one viewer. Shared so the packagers and the router cannot drift apart.
+PLACEHOLDER_KEY_URI = "katha:key"
+
 CONTENT_KEY_LABEL = b"katha:hls:aes128:v1:"
 CONTENT_IV_LABEL = b"katha:hls:aes128-iv:v1:"
 CONTENT_KEY_BYTES = 16  # AES-128, which is what HLS METHOD=AES-128 means.

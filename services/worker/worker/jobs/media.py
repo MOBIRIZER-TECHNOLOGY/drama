@@ -23,6 +23,7 @@ import structlog
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.models.catalog import AssetStatus, VideoAsset
+from app.services.media import PLACEHOLDER_KEY_URI, content_iv, content_key
 from botocore.config import Config
 from sqlalchemy import select
 
@@ -76,7 +77,7 @@ async def _probe(path: Path) -> dict:
 
 
 async def _transcode_rendition(
-    src: Path, out_dir: Path, name: str, spec: dict, has_audio: bool, portrait: bool
+    src: Path, out_dir: Path, name: str, spec: dict, has_audio: bool, portrait: bool, key_info: Path | None
 ) -> None:
     ws = get_worker_settings()
     out_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240 - tiny local fs op
@@ -117,30 +118,38 @@ async def _transcode_rendition(
         cmd += ["-c:a", "aac", "-b:a", spec["a_bitrate"], "-ac", "2"]
     else:
         cmd += ["-an"]
-    cmd += [
-        "-f",
-        "hls",
-        "-hls_time",
-        "4",
-        "-hls_playlist_type",
-        "vod",
-        "-hls_segment_type",
-        "fmp4",
-        "-hls_flags",
-        "independent_segments",
-        "-hls_fmp4_init_filename",
-        "init.mp4",
-        "-hls_segment_filename",
-        str(out_dir / "seg_%04d.m4s"),
-        str(out_dir / "index.m3u8"),
-    ]
+    cmd += ["-f", "hls", "-hls_time", "4", "-hls_playlist_type", "vod", "-hls_flags", "independent_segments"]
+    if key_info is not None:
+        # AES-128 is defined for MPEG-TS only. fMP4 encryption in HLS means SAMPLE-AES, which needs a licence
+        # server; until there is one, protecting the media costs the container.
+        cmd += [
+            "-hls_segment_type",
+            "mpegts",
+            "-hls_key_info_file",
+            str(key_info),
+            "-hls_segment_filename",
+            str(out_dir / "seg_%04d.ts"),
+        ]
+    else:
+        cmd += [
+            "-hls_segment_type",
+            "fmp4",
+            "-hls_fmp4_init_filename",
+            "init.mp4",
+            "-hls_segment_filename",
+            str(out_dir / "seg_%04d.m4s"),
+        ]
+    cmd += [str(out_dir / "index.m3u8")]
     code, out = await _run(*cmd)
     if code != 0:
         raise RuntimeError(f"ffmpeg {name} failed: {out[-800:]}")
 
 
-def _master_playlist(renditions: dict[str, dict]) -> str:
-    lines = ["#EXTM3U", "#EXT-X-VERSION:7", "#EXT-X-INDEPENDENT-SEGMENTS"]
+def _master_playlist(renditions: dict[str, dict], *, encrypted: bool) -> str:
+    # Version 7 is required by fMP4's EXT-X-MAP. TS needs only 6, and claiming 7 there would shut out players
+    # that support everything actually used.
+    version = 6 if encrypted else 7
+    lines = ["#EXTM3U", f"#EXT-X-VERSION:{version}", "#EXT-X-INDEPENDENT-SEGMENTS"]
     for name, r in renditions.items():
         lines.append(
             f'#EXT-X-STREAM-INF:BANDWIDTH={r["bandwidth"]},RESOLUTION={r["width"]}x{r["height"]},CODECS="avc1.4d401f,mp4a.40.2"'
@@ -163,6 +172,8 @@ async def _upload_dir(local: Path, prefix: str) -> int:
                 if path.suffix == ".mp4"
                 else "video/iso.segment"
                 if path.suffix == ".m4s"
+                else "video/mp2t"
+                if path.suffix == ".ts"
                 else "application/octet-stream"
             )
             await asyncio.to_thread(
@@ -209,12 +220,27 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
         portrait = info["height"] >= info["width"]
         long_edge = max(info["width"], info["height"])
         out_root = tmp / "hls"
+
+        # The key and IV are derived from the master secret and this asset's id, never stored. ffmpeg needs
+        # them on disk, so they live in the same temp tree that is deleted in `finally`; the API derives the
+        # same values again when a player asks for the key.
+        encrypt = get_worker_settings().hls_encrypt
+        key_info: Path | None = None
+        if encrypt:
+            key_file = tmp / "hls.key"
+            key_file.write_bytes(content_key(aid))  # noqa: ASYNC240 - local temp write
+            key_info = tmp / "hls.keyinfo"
+            key_info.write_text(  # noqa: ASYNC240 - local temp write
+                f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n{content_iv(aid).hex()}\n",
+                encoding="utf-8",
+            )
+
         renditions: dict[str, dict] = {}
         for name in get_worker_settings().hls_ladder:
             spec = LADDER[name]
             if spec["height"] > long_edge and renditions:
                 continue  # never upscale, but always keep at least one rendition
-            await _transcode_rendition(src, out_root / name, name, spec, info["has_audio"], portrait)
+            await _transcode_rendition(src, out_root / name, name, spec, info["has_audio"], portrait, key_info)
             short_edge = max(2, int(round(spec["height"] * min(info["width"], info["height"]) / long_edge / 2) * 2))
             renditions[name] = {
                 "bandwidth": spec["bandwidth"],
@@ -222,20 +248,25 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
                 "height": spec["height"] if portrait else short_edge,
                 "playlist": f"{name}/index.m3u8",
             }
-        (out_root / "master.m3u8").write_text(_master_playlist(renditions), encoding="utf-8")
+        (out_root / "master.m3u8").write_text(_master_playlist(renditions, encrypted=encrypt), encoding="utf-8")
         prefix = f"hls/{aid}"
         uploaded = await _upload_dir(out_root, prefix)
         await _set_status(
             aid,
             AssetStatus.ready,
             hls_master_key=f"{prefix}/master.m3u8",
+            # Recorded so `/play` knows to hand back the manifest route, which mints the per-viewer key URL,
+            # rather than a direct CDN link that no player could decrypt.
+            is_encrypted=encrypt,
             renditions=renditions,
             duration_sec=round(info["duration"]),
             width=info["width"],
             height=info["height"],
         )
-        log.info("transcode.ready", asset_id=asset_id, renditions=list(renditions), files=uploaded)
-        return {"status": "ready", "renditions": list(renditions), "files": uploaded}
+        log.info(
+            "transcode.ready", asset_id=asset_id, renditions=list(renditions), files=uploaded, encrypted=encrypt
+        )
+        return {"status": "ready", "renditions": list(renditions), "files": uploaded, "encrypted": encrypt}
     except Exception as exc:  # any failure is recorded on the asset for the admin to see
         await _set_status(aid, AssetStatus.failed, error=str(exc)[:2000])
         log.error("transcode.failed", asset_id=asset_id, error=str(exc))

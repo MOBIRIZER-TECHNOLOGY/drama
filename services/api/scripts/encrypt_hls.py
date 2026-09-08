@@ -36,10 +36,8 @@ from sqlalchemy.orm import selectinload  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.models.catalog import Episode, Series  # noqa: E402
-from app.services.media import content_iv, content_key  # noqa: E402
+from app.services.media import PLACEHOLDER_KEY_URI, content_iv, content_key  # noqa: E402
 
-# Replaced at request time by the manifest route; a player never sees this value.
-PLACEHOLDER_KEY_URI = "katha:key"
 RENDITIONS = ("1080p", "720p", "540p", "360p")
 DEFAULT_LIBRARY = Path(__file__).resolve().parents[3] / "ref" / "videos"
 
