@@ -36,6 +36,25 @@ def verify_hls_signature(path: str, exp: int, user_id: str, sig: str) -> bool:
     return hmac.compare_digest(expected, sig)
 
 
+def media_url(value: str | None) -> str | None:
+    """Resolve a stored cover, banner or thumbnail into something a client can fetch.
+
+    These columns used to hold absolute URLs, which quietly tied every row to one client's view of one host.
+    A device and a browser do not agree on what a development machine is called, so the same database served
+    working images to the phone and broken ones to the web; in production it means the CDN hostname is baked
+    into every row and cannot be changed, regionalised or moved without a data migration.
+
+    The value is now a key in our own media store, resolved against `cdn_base_url` at response time — the
+    same treatment `hls_master_key` has always had. Anything already absolute is passed through untouched, so
+    a poster hosted somewhere else still works and existing rows keep resolving while they are migrated.
+    """
+    if not value:
+        return None
+    if value.startswith(("http://", "https://", "//", "data:")):
+        return value
+    return f"{get_settings().cdn_base_url.rstrip('/')}/{value.lstrip('/')}"
+
+
 # ---- AES-128 HLS content keys ----------------------------------------------
 #
 # Signed URLs decide who may *start* a stream; they do nothing once bytes are out. Anyone holding an unexpired

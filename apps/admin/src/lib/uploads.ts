@@ -56,8 +56,18 @@ export function isCancelled(e: unknown): boolean {
   return e instanceof ApiError && e.code === "upload_cancelled";
 }
 
-/** presign(image) -> PUT -> public_url */
-export async function uploadImage(file: File, onProgress?: (fraction: number) => void, signal?: AbortSignal): Promise<string> {
+/**
+ * presign(image) -> PUT -> the object's key, plus a URL for showing it back.
+ *
+ * The key is what gets stored. Storing the absolute URL was what tied every cover to one hostname, so the CDN
+ * could not move and a device and a browser could not both be served from the same row. The API resolves keys
+ * against its own media base when it answers.
+ */
+export async function uploadImage(
+  file: File,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<{ key: string; url: string }> {
   if (!file.type.startsWith("image/")) throw new ApiError("Please choose an image file.", 0, "bad_content_type");
   checkSize(file, MAX_IMAGE_BYTES, "Image");
   const presign = await call(
@@ -67,7 +77,7 @@ export async function uploadImage(file: File, onProgress?: (fraction: number) =>
   );
   await putWithProgress(presign.upload_url, file, onProgress, signal);
   if (!presign.public_url) throw new ApiError("Storage returned no public URL for the image", 500, "no_public_url");
-  return presign.public_url;
+  return { key: presign.key, url: presign.public_url };
 }
 
 /** presign(video) -> PUT -> register -> VideoAsset (queued). Poll with `pollVideo`. */

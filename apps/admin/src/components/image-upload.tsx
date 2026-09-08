@@ -7,6 +7,14 @@ import { Icon } from "./icons";
 import { Button, Input } from "./ui";
 
 /**
+ * Where uploaded images can be read back from, for previews only.
+ *
+ * The field stores a key, and a key is not something an <img> can load, so the console needs to know the
+ * media base to show one. This is display-only: nothing composed here is ever saved.
+ */
+const MEDIA_BASE = (process.env.NEXT_PUBLIC_MEDIA_BASE ?? "").replace(/\/$/, "");
+
+/**
  * Image field: presign -> PUT -> public_url. Also accepts a pasted URL.
  * `aspect` controls the preview frame (portrait 9:16 for covers, wide for banners).
  * An in-flight upload is aborted when the component unmounts.
@@ -28,8 +36,14 @@ export function ImageUpload({
   const fileRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
+  /** Set right after an upload, because `value` is then a key and a key is not something an <img> can load. */
+  const [preview, setPreview] = useState<string | null>(null);
 
   useEffect(() => () => abortRef.current?.abort(), []);
+
+  // A stored value is a key; a pasted one may already be a URL. Either way the preview needs something
+  // absolute, and a fresh upload has one to hand.
+  const previewSrc = preview ?? (value && /^(https?:)?\/\//.test(value) ? value : value ? `${MEDIA_BASE}/${value.replace(/^\//, "")}` : null);
 
   const frame =
     aspect === "portrait" ? "aspect-[9/16] w-28" : aspect === "wide" ? "aspect-[16/9] w-full max-w-sm" : "aspect-square w-28";
@@ -41,8 +55,10 @@ export function ImageUpload({
     abortRef.current = controller;
     setProgress(0);
     try {
-      const url = await uploadImage(file, setProgress, controller.signal);
-      onChange(url);
+      const { key, url } = await uploadImage(file, setProgress, controller.signal);
+      // Store the key; keep the URL only so the preview has something to show before the next save.
+      onChange(key);
+      setPreview(url);
       toast.success(`${label} uploaded`);
     } catch (e) {
       if (!isCancelled(e)) toast.error(e instanceof Error ? e.message : "Upload failed");
@@ -61,9 +77,9 @@ export function ImageUpload({
           className={`${frame} relative shrink-0 overflow-hidden rounded-lg border border-line bg-surface-2`}
           aria-busy={progress != null}
         >
-          {value ? (
+          {previewSrc ? (
             // eslint-disable-next-line @next/next/no-img-element -- remote bucket URLs; no optimisation needed in admin
-            <img src={value} alt="" className="h-full w-full object-cover" />
+            <img src={previewSrc} alt="" className="h-full w-full object-cover" />
           ) : (
             <div className="grid h-full w-full place-items-center text-muted">
               <Icon name="upload" size={20} />

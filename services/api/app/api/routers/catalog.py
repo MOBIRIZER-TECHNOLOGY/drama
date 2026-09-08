@@ -40,7 +40,7 @@ from app.schemas.catalog import (
 from app.services import access as access_svc
 from app.services import config as config_svc
 from app.services import recommend
-from app.services.media import sign_hls_url, sign_path
+from app.services.media import media_url, sign_hls_url, sign_path
 from app.services.storage import public_url
 
 log = structlog.get_logger()
@@ -84,8 +84,8 @@ def _card(
         slug=series.slug,
         title=tr.title if tr else series.slug,
         synopsis=tr.synopsis if tr else None,
-        cover_url=series.cover_url,
-        banner_url=series.banner_url,
+        cover_url=media_url(series.cover_url),
+        banner_url=media_url(series.banner_url),
         is_featured=series.is_featured,
         is_premium=series.is_premium,
         free_episodes=series.free_episodes,
@@ -515,7 +515,7 @@ async def series_detail(
                 id=ep.id,
                 number=ep.number,
                 title=ep.title,
-                thumbnail_url=ep.thumbnail_url,
+                thumbnail_url=media_url(ep.thumbnail_url),
                 duration_sec=ep.duration_sec,
                 is_free=free,
                 price=access_svc.episode_price(series, ep),
@@ -676,7 +676,7 @@ async def shorts(
                     episode_id=ep.id,
                     episode_number=ep.number,
                     episode_title=ep.title,
-                    thumbnail_url=ep.thumbnail_url,
+                    thumbnail_url=media_url(ep.thumbnail_url),
                     duration_sec=ep.duration_sec,
                     is_free=free,
                     price=access_svc.episode_price(series, ep),
@@ -685,7 +685,7 @@ async def shorts(
                     slug=series.slug,
                     title=tr.title if tr else series.slug,
                     synopsis=tr.synopsis if tr else None,
-                    cover_url=series.cover_url,
+                    cover_url=media_url(series.cover_url),
                     categories=[_category_out(c, lang) for c in series.categories],
                     episode_count=counts.get(series.id, 0),
                     free_episodes=series.free_episodes,

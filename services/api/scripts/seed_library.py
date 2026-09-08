@@ -33,7 +33,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.models.catalog import (  # noqa: E402
     AssetStatus,
@@ -68,7 +67,6 @@ async def _category(db, name: str, order: int) -> Category:
 async def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--library", type=Path, default=DEFAULT_LIBRARY)
-    parser.add_argument("--cdn-base", default=None, help="Defaults to KATHA_CDN_BASE_URL.")
     args = parser.parse_args()
 
     catalog_path = args.library / "catalog.json"
@@ -78,8 +76,6 @@ async def main() -> int:
         return 0
 
     catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
-    # Keys are relative to the directory that holds `library/`, because that is what the static server serves.
-    cdn = (args.cdn_base or get_settings().cdn_base_url or "").rstrip("/")
 
     imported = 0
     async with SessionLocal() as db:
@@ -105,8 +101,10 @@ async def main() -> int:
             # One featured title is enough to fill the hero without every card claiming to be the highlight.
             series.is_featured = order == 0
             series.sort_weight = 100 - order
+            # Stored as a key, not a URL: the API resolves it against its own CDN base at response time, so
+            # one database serves a phone and a browser that disagree about what this host is called.
             if entry.get("cover"):
-                series.cover_url = f"{cdn}/{entry['cover']}" if cdn else entry["cover"]
+                series.cover_url = entry["cover"]
             await db.flush()
 
             genre = entry.get("genre")
@@ -147,7 +145,7 @@ async def main() -> int:
                 row.is_free_override = not ep.get("locked", False)
                 row.price_override = int(ep["coin_cost"]) if ep.get("coin_cost") else None
                 if ep.get("poster_9x16"):
-                    row.thumbnail_url = f"{cdn}/{ep['poster_9x16']}" if cdn else ep["poster_9x16"]
+                    row.thumbnail_url = ep["poster_9x16"]
                 await db.flush()
 
                 hls = ep.get("hls")
@@ -170,8 +168,7 @@ async def main() -> int:
         await db.commit()
 
     print(f"Imported {imported} series from {catalog_path}.")
-    if not cdn:
-        print("No CDN base URL set, so covers and HLS are stored as relative keys.")
+    print("Covers, posters and HLS are stored as keys; the API resolves them against KATHA_CDN_BASE_URL.")
     return 0
 
 

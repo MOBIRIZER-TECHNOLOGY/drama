@@ -45,6 +45,9 @@ def _series_out(s: Series, episode_count: int, episodes: list[AdminEpisodeOut] |
     return AdminSeriesOut(
         id=s.id,
         slug=s.slug,
+        # Deliberately unresolved. The console edits these fields and saves them straight back, so what it
+        # reads has to be what it writes; resolving here would turn every save into an absolute URL again.
+        # It composes its own preview URL from NEXT_PUBLIC_MEDIA_BASE.
         cover_url=s.cover_url,
         banner_url=s.banner_url,
         original_language=s.original_language,
