@@ -24,7 +24,7 @@ from app.schemas.auth import (
 from app.schemas.common import Ok
 from app.services import push, storage
 from app.services import users as users_svc
-from app.services.access import is_vip
+from app.services.access import ad_unlocks_remaining, is_vip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -85,6 +85,7 @@ async def logout(ctx: CurrentUser, db: DB) -> Ok:
 async def _user_out(db, user) -> UserOut:
     out = UserOut.model_validate(user)
     out.is_vip = await is_vip(db, user.id)
+    out.ad_unlocks_remaining = await ad_unlocks_remaining(db, user.id)
     return out
 
 

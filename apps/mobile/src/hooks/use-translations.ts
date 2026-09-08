@@ -76,6 +76,7 @@ export const en: Record<string, string> = {
   "player.unlock_title": "Unlock episode",
   "player.unlock_coins": "Unlock with {n} coins",
   "player.watch_ad": "Watch an ad to unlock",
+  "player.free_unlocks_left": "{n} free unlocks left today",
   "player.auto_unlock": "Auto-unlock next episodes",
   "player.balance": "Balance",
   "player.top_up": "Top Up",

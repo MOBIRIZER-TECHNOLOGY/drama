@@ -301,3 +301,78 @@ async def test_quote_prices_without_creating_a_purchase(session):
     assert discounted.amount == Decimal("69.30") and discounted.discount_pct == 30
     after = await session.scalar(sel(func.count()).select_from(Purchase))
     assert before == after  # quoting creates nothing
+
+
+async def test_ad_unlocks_are_capped_per_day(session):
+    """The daily cap was published to every client and enforced nowhere.
+
+    `/v1/config` tells the app `economy.ad_unlocks_per_day`, and the app shows it as a free-unlock counter, but
+    nothing on the server counted them. Ad unlocks cannot currently succeed at all (they need a network-verified
+    AdEvent, and AdMob SSV only landed recently), so the hole was invisible: the moment that path works, the cap
+    is the only thing standing between a viewer and the whole catalogue for the price of watching adverts.
+    """
+    from app.models.catalog import Episode as Ep
+    from app.models.ops import Setting
+    from app.models.wallet import AdEvent, UnlockMethod
+
+    u = await _user(session)
+    s = Series(
+        slug=f"s-{uuid.uuid4().hex[:8]}",
+        free_episodes=1,
+        episode_price=10,
+        status=PublishStatus.published,
+        content_rating="U",
+    )
+    session.add(s)
+    await session.flush()
+    session.add(SeriesTranslation(series_id=s.id, lang="en", title="T"))
+    eps = [
+        Ep(series_id=s.id, number=n, status=PublishStatus.published, published_at=datetime.now(UTC))
+        for n in (1, 2, 3, 4)
+    ]
+    session.add_all(eps)
+
+    # A cap of two, so the third unlock is the one that must be refused.
+    session.add(Setting(namespace="economy", data={"ad_unlocks_per_day": 2}, updated_at=datetime.now(UTC)))
+    await session.flush()
+
+    assert await access.ad_unlocks_remaining(session, u.id) == 2
+
+    for i, episode in enumerate(eps[1:3], start=1):
+        session.add(
+            AdEvent(
+                user_id=u.id,
+                network="admob",
+                ssv_transaction_id=f"cap-tx{i}",
+                purpose="unlock",
+                created_at=datetime.now(UTC),
+            )
+        )
+        await session.flush()
+        await access.unlock_episode(
+            session, user=u, episode_id=episode.id, method=UnlockMethod.ad, ad_event_id=f"cap-tx{i}"
+        )
+
+    assert await access.ad_unlocks_remaining(session, u.id) == 0
+
+    # A third, with a perfectly valid ad event: the cap is what refuses it, not the event.
+    session.add(
+        AdEvent(
+            user_id=u.id,
+            network="admob",
+            ssv_transaction_id="cap-tx3",
+            purpose="unlock",
+            created_at=datetime.now(UTC),
+        )
+    )
+    await session.flush()
+    with pytest.raises(Conflict) as exc:
+        await access.unlock_episode(
+            session, user=u, episode_id=eps[3].id, method=UnlockMethod.ad, ad_event_id="cap-tx3"
+        )
+    assert exc.value.detail["code"] == "ad_unlock_limit_reached"
+
+    # Coins are a separate budget and must not be caught by an ad cap.
+    await ledger.post(session, user_id=u.id, delta=100, kind=LedgerKind.signup_bonus, idempotency_key=f"top-{u.id}")
+    row = await access.unlock_episode(session, user=u, episode_id=eps[3].id, method=UnlockMethod.coins)
+    assert row is not None

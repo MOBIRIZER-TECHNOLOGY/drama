@@ -14856,6 +14856,11 @@
             ],
             "title": "Vip Ends At"
           },
+          "ad_unlocks_remaining": {
+            "type": "integer",
+            "title": "Ad Unlocks Remaining",
+            "default": 0
+          },
           "referral_code": {
             "anyOf": [
               {
@@ -15231,13 +15236,18 @@
               }
             ],
             "title": "Vip Ends At"
+          },
+          "ad_unlocks_remaining": {
+            "type": "integer",
+            "title": "Ad Unlocks Remaining"
           }
         },
         "type": "object",
         "required": [
           "coin_balance",
           "is_vip",
-          "vip_ends_at"
+          "vip_ends_at",
+          "ad_unlocks_remaining"
         ],
         "title": "WalletOut"
       },

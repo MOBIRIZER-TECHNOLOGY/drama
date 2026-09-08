@@ -82,7 +82,7 @@ export function UnlockSheet({
   const t = useT();
   const router = useRouter();
   const { config } = useConfig();
-  const { balance, setBalance, status, requireAuth, applyUser } = useAuth();
+  const { balance, setBalance, status, requireAuth, applyUser, user } = useAuth();
   const [busy, setBusy] = useState<"coins" | "ad" | "bundle" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [needsTopUp, setNeedsTopUp] = useState(false);
@@ -94,6 +94,7 @@ export function UnlockSheet({
   const rewardedAds = config.flags.rewarded_ads === true;
   const signupBonus = config.rewards.signup_bonus ?? 0;
   const enough = balance >= episode.price;
+  const adUnlocksLeft = user?.ad_unlocks_remaining ?? 0;
   const signedIn = status === "signed_in";
 
   const promptSignIn = useCallback(() => {
@@ -345,9 +346,18 @@ export function UnlockSheet({
         </View>
       ) : null}
 
-      {rewardedAds ? (
-        // Ads are phase 2: the flag is off in production, and a real ad_event_id must come from the ad SDK.
-        <Button title={t("player.watch_ad")} variant="secondary" onPress={() => unlock("ad")} disabled={busy !== null} />
+      {/*
+        Ads are phase 2: the flag is off in production, and a real ad_event_id must come from the ad SDK.
+        The remaining count is shown rather than just the button, because "watch an ad" with no sense of how
+        many are left reads as unlimited, and the server will refuse the one after the cap either way.
+      */}
+      {rewardedAds && adUnlocksLeft > 0 ? (
+        <View style={styles.adBlock}>
+          <Button title={t("player.watch_ad")} variant="secondary" onPress={() => unlock("ad")} disabled={busy !== null} />
+          <Text variant="caption" style={styles.adLeft}>
+            {t("player.free_unlocks_left", { n: adUnlocksLeft })}
+          </Text>
+        </View>
       ) : null}
 
       {/* Auto-unlock is the mechanic that turns a binge into spend; framed as a benefit, not a setting. */}
@@ -401,6 +411,8 @@ const styles = StyleSheet.create({
   savePill: { backgroundColor: colors.gold, borderRadius: 999, paddingHorizontal: spacing.sm, paddingVertical: 2 },
   strike: { textDecorationLine: "line-through" },
   centred: { textAlign: "center" },
+  adBlock: { gap: spacing.xs },
+  adLeft: { textAlign: "center" },
   toggleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
 });
 

@@ -4,14 +4,15 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.errors import AgeGateRequired, Conflict, NotFound
 from app.models.catalog import Episode, PublishStatus, Series
 from app.models.identity import User
-from app.models.wallet import EpisodeUnlock, LedgerKind, UnlockMethod, VipMembership
+from app.models.wallet import CoinLedger, EpisodeUnlock, LedgerKind, UnlockMethod, VipMembership
+from app.services import config as config_svc
 from app.services import ledger, rewards
 
 
@@ -44,6 +45,31 @@ def episode_price(series: Series, episode: Episode) -> int:
     if series.episode_price is not None:
         return series.episode_price
     return get_settings().default_episode_price
+
+
+async def ad_unlocks_used_today(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """Ad unlocks this user has already taken today, counted from the ledger."""
+    start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    return int(
+        await session.scalar(
+            select(func.count())
+            .select_from(CoinLedger)
+            .where(
+                CoinLedger.user_id == user_id,
+                CoinLedger.kind == LedgerKind.ad_unlock,
+                CoinLedger.created_at >= start,
+            )
+        )
+        or 0
+    )
+
+
+async def ad_unlocks_remaining(session: AsyncSession, user_id: uuid.UUID) -> int:
+    """How many ad unlocks are left today. The clients show this; the server is what enforces it."""
+    cap = (await config_svc.namespace(session, "economy")).get(
+        "ad_unlocks_per_day", get_settings().default_ad_unlocks_per_day
+    )
+    return max(0, int(cap) - await ad_unlocks_used_today(session, user_id))
 
 
 def episode_is_free(series: Series, episode: Episode) -> bool:
@@ -216,6 +242,11 @@ async def unlock_episode(
     elif method == UnlockMethod.ad:
         if not ad_event_id:
             raise Conflict("A verified ad event is required", code="ad_event_required")
+        # The daily cap was published to every client in /v1/config and enforced nowhere, so the number was a
+        # suggestion. Once ad unlocks can actually succeed, an uncapped one gives away the whole catalogue to
+        # anyone willing to watch adverts, which is the opposite of what the cap exists for.
+        if await ad_unlocks_remaining(session, user.id) <= 0:
+            raise Conflict("No free unlocks left today", code="ad_unlock_limit_reached")
         # Only a network-verified completion (AdEvent written by the SSV callback) can unlock. None exist until
         # phase 2 wires AdMob SSV, so this path rejects every request today by construction.
         await rewards.consume_ad_event(session, user.id, ad_event_id, purpose="unlock")

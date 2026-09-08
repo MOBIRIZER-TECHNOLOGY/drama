@@ -5011,6 +5011,11 @@ export interface components {
             is_vip: boolean;
             /** Vip Ends At */
             vip_ends_at?: string | null;
+            /**
+             * Ad Unlocks Remaining
+             * @default 0
+             */
+            ad_unlocks_remaining: number;
             /** Referral Code */
             referral_code: string | null;
             /** Age Confirmed At */
@@ -5144,6 +5149,8 @@ export interface components {
             is_vip: boolean;
             /** Vip Ends At */
             vip_ends_at: string | null;
+            /** Ad Unlocks Remaining */
+            ad_unlocks_remaining: number;
         };
         /** OfferOut */
         app__api__routers__admin_growth__OfferOut: {

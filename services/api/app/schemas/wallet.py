@@ -22,6 +22,9 @@ class WalletOut(BaseModel):
     coin_balance: int
     is_vip: bool
     vip_ends_at: datetime | None
+    # How many ad unlocks are left today. The clients offer "watch an ad" only while this is above zero, so
+    # the count has to come from the same place that enforces it rather than from the configured cap alone.
+    ad_unlocks_remaining: int
 
 
 class PackPriceOut(BaseModel):

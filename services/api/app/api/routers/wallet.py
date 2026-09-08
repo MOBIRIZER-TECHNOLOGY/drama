@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.api.deps import DB, CurrentUser, OptionalUser, client_country
 from app.models.wallet import CoinPack, PackPrice, VipMembership
 from app.schemas.wallet import LedgerRow, PackOut, PackPriceOut, WalletOut
+from app.services import access
 from app.services import ledger as ledger_svc
 from app.services import offers as offers_svc
 
@@ -26,7 +27,10 @@ async def wallet(ctx: CurrentUser, db: DB) -> WalletOut:
         .limit(1)
     )
     return WalletOut(
-        coin_balance=ctx.user.coin_balance, is_vip=vip is not None, vip_ends_at=vip.ends_at if vip else None
+        coin_balance=ctx.user.coin_balance,
+        is_vip=vip is not None,
+        vip_ends_at=vip.ends_at if vip else None,
+        ad_unlocks_remaining=await access.ad_unlocks_remaining(db, ctx.user.id),
     )
 
 

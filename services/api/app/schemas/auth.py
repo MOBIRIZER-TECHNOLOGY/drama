@@ -42,6 +42,9 @@ class UserOut(ORMModel):
     coin_balance: int
     is_vip: bool = False
     vip_ends_at: datetime | None = None
+    # Ad unlocks left today. It rides the same response as the balance because the unlock sheet reads both
+    # together and refreshes this object after every unlock, so the counter cannot drift from the wallet.
+    ad_unlocks_remaining: int = 0
     referral_code: str | None
     age_confirmed_at: datetime | None = None
     notification_prefs: dict | None = None
