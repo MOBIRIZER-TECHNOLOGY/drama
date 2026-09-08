@@ -12,7 +12,7 @@ from app.api.routers.catalog import _card, _episode_counts
 from app.core.config import get_settings
 from app.core.errors import AppError, NotFound
 from app.core.ratelimit import limiter
-from app.core.redis import redis_client
+from app.core.redis import cache_available, note_cache_failure, note_cache_success, redis_client
 from app.models.catalog import Episode, Series
 from app.models.engagement import ContactMessage, Favorite, Report, WatchProgress
 from app.models.wallet import CoinLedger, Purchase
@@ -45,13 +45,18 @@ async def view(request: Request, series_id: uuid.UUID, db: DB, ctx: OptionalUser
     """Counts one view per viewer per series per day (Redis set), so refreshes and bots do not inflate Top Picks."""
     viewer = str(ctx.user.id) if ctx else (request.client.host if request.client else "anon")
     key = f"view:{series_id}:{datetime.now(UTC).date().isoformat()}"
-    try:
-        r = await redis_client()
-        if not await r.sadd(key, viewer):
-            return Ok()
-        await r.expire(key, 60 * 60 * 26)
-    except Exception:  # noqa: BLE001 - Redis down: count the view anyway
-        pass
+    # Skipped entirely while Redis is parked: this runs on every play, and paying a connect timeout per view
+    # is how one dead dependency becomes a slow product.
+    if cache_available():
+        try:
+            r = await redis_client()
+            if not await r.sadd(key, viewer):
+                note_cache_success()
+                return Ok()
+            await r.expire(key, 60 * 60 * 26)
+            note_cache_success()
+        except Exception:  # noqa: BLE001 - Redis down: count the view anyway
+            note_cache_failure()
     await eng.record_view(db, series_id)
     await db.commit()
     return Ok()

@@ -9,6 +9,7 @@ import { Icon } from "@/components/icons";
 import { NotificationSettings } from "@/components/notification-settings";
 import { Button, Card, Divider, ListRow, Pill, Screen, Skeleton, Text, Toast } from "@/components/ui";
 import { useQuery } from "@/hooks/use-query";
+import { useLegalLinks } from "@/hooks/use-legal-links";
 import { useT } from "@/hooks/use-translations";
 import { api } from "@/lib/api";
 import { unwrap , errorMessage } from "@/lib/errors";
@@ -21,6 +22,7 @@ import { useConfig } from "@/providers/config";
 
 export default function MeScreen() {
   const t = useT();
+  const { openPrivacy, openTerms, openRateUs } = useLegalLinks();
   const router = useRouter();
   const { config, lang, reloadConfig } = useConfig();
   const { status, user, balance, signOut, refreshUser, requireAuth, applyUser } = useAuth();
@@ -43,17 +45,6 @@ export default function MeScreen() {
       }
       if (signedIn) refreshUser().catch(() => {});
     }, [signedIn, refreshUser]),
-  );
-
-  const openUrl = useCallback(
-    (url: string | null | undefined, fallbackSlug: string) => {
-      if (url) {
-        WebBrowser.openBrowserAsync(url, { presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET }).catch(() => {});
-      } else {
-        router.push({ pathname: "/page/[slug]", params: { slug: fallbackSlug } });
-      }
-    },
-    [router],
   );
 
   const onSignOut = useCallback(async () => {
@@ -277,13 +268,13 @@ export default function MeScreen() {
             disabled={busy !== null}
           />
           <Divider />
-          <ListRow title={t("me.privacy")} onPress={() => openUrl(config.mobile.privacy_policy_url, "privacy")} />
+          <ListRow title={t("me.privacy")} onPress={openPrivacy} />
           <Divider />
-          <ListRow title={t("me.terms")} onPress={() => openUrl(config.mobile.terms_url, "terms")} />
+          <ListRow title={t("me.terms")} onPress={openTerms} />
           {config.mobile.rate_us_url ? (
             <>
               <Divider />
-              <ListRow title={t("me.rate")} onPress={() => openUrl(config.mobile.rate_us_url, "rate")} />
+              <ListRow title={t("me.rate")} onPress={openRateUs} />
             </>
           ) : null}
         </Card>

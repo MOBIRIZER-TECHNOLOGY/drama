@@ -85,7 +85,14 @@ export default async function config(): Promise<NextConfig> {
   return {
     env: { NEXT_PUBLIC_LANGS: langs.join(",") },
     ...(devOrigins.length ? { allowedDevOrigins: devOrigins } : {}),
-    images: { remotePatterns },
+    images: {
+      remotePatterns,
+      // Development only. Media is served from a machine on the LAN (the emulator and the browser have to
+      // reach one hostname between them), and Next blocks private addresses by default to stop the image
+      // optimiser being used to probe an internal network. That protection matters in production, where this
+      // stays off; locally the "internal network" is this laptop.
+      dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
+    },
     // IndexNow verification file: /<key>.txt must return the key. The path is dynamic, and the app root already
     // owns the `[lang]` segment, so it is rewritten onto a fixed route handler instead of a second dynamic segment.
     async rewrites() {

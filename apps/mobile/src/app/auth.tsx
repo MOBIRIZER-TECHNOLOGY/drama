@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { Button, Divider, Screen, Text, TextInput } from "@/components/ui";
+import { useLegalLinks } from "@/hooks/use-legal-links";
 import { useT } from "@/hooks/use-translations";
 import { firebaseConfigured } from "@/lib/firebase";
 import { googleIdToken, googleSignInAvailable } from "@/lib/google-signin";
@@ -25,6 +26,7 @@ export default function AuthScreen() {
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const { config } = useConfig();
   const { status, signInWithEmail, signUpWithEmail, sendPasswordReset, signInWithGoogleIdToken, signInWithApple } = useAuth();
+  const { openPrivacy, openTerms } = useLegalLinks();
   const [mode, setMode] = useState<Mode>("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -289,12 +291,12 @@ export default function AuthScreen() {
           */}
           <Text variant="caption" style={styles.consent}>
             {t("auth.by_continuing")}{" "}
-            <Text variant="caption" color={colors.accent} onPress={() => router.push({ pathname: "/page/[slug]", params: { slug: "terms" } })}>
+            <Text variant="caption" color={colors.accent} onPress={openTerms}>
               {t("me.terms")}
             </Text>
             {" "}
             {t("auth.and")}{" "}
-            <Text variant="caption" color={colors.accent} onPress={() => router.push({ pathname: "/page/[slug]", params: { slug: "privacy" } })}>
+            <Text variant="caption" color={colors.accent} onPress={openPrivacy}>
               {t("me.privacy")}
             </Text>
           </Text>

@@ -140,12 +140,17 @@ export const IconCheck = (p: P) => (
     <path d="m5 12 5 5 9-10" />
   </svg>
 );
-export const IconGift = (p: P) => (
-  <svg {...base(p)}>
-    <rect x="3" y="8" width="18" height="5" rx="1" />
-    <path d="M5 13v7h14v-7M12 8v12M12 8c-2-4-6-3-6-1s3 1 6 1zM12 8c2-4 6-3 6-1s-3 1-6 1z" />
-  </svg>
-);
+// Takes `filled` because the bottom nav hands it to every tab icon. Without accepting and stripping it, the
+// boolean reaches the DOM as an attribute and React warns on every render of the Rewards tab.
+export const IconGift = (p: P & { filled?: boolean }) => {
+  const { filled, ...rest } = p;
+  return (
+    <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
+      <rect x="3" y="8" width="18" height="5" rx="1" />
+      <path d="M5 13v7h14v-7M12 8v12M12 8c-2-4-6-3-6-1s3 1 6 1zM12 8c2-4 6-3 6-1s-3 1-6 1z" />
+    </svg>
+  );
+};
 export const IconList = (p: P) => (
   <svg {...base(p)}>
     <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />

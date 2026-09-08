@@ -16,7 +16,7 @@ from app.api.deps import DB, CurrentUser, OptionalUser, client_country
 from app.core.config import get_settings
 from app.core.errors import AgeGateRequired, Conflict, Forbidden, NotFound, Unauthorized
 from app.core.ratelimit import limiter
-from app.core.redis import redis_client
+from app.core.redis import cache_available, note_cache_failure, note_cache_success, redis_client
 from app.models.catalog import Category, Embedding, Episode, PublishStatus, Series, SeriesTranslation, Subtitle
 from app.models.engagement import Favorite, Like, WatchProgress
 from app.models.wallet import EpisodeUnlock
@@ -264,19 +264,24 @@ async def home(
     The anonymous response is cached for 60 seconds per language and country.
     """
     cache_key = f"home:{lang}:{country or '*'}"
-    if ctx is None:
+    # `cache_available()` is what stops a dead Redis costing a timeout on every request. The try/except alone
+    # still waits for the connection to fail; this skips it once it has failed enough times to be believed.
+    use_cache = ctx is None and cache_available()
+    if use_cache:
         try:
             cached = await (await redis_client()).get(cache_key)
+            note_cache_success()
             if cached:
                 return HomeOut.model_validate_json(cached)
         except Exception:  # noqa: BLE001 - cache optional
-            pass
+            note_cache_failure()
     out = await _build_home(db, ctx, lang, country)
-    if ctx is None:
+    if use_cache:
         try:
             await (await redis_client()).set(cache_key, out.model_dump_json(), ex=60)
+            note_cache_success()
         except Exception:  # noqa: BLE001
-            pass
+            note_cache_failure()
     return out
 
 
