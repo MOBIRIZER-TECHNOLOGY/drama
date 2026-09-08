@@ -306,7 +306,7 @@
           "auth"
         ],
         "summary": "Clear Push Token",
-        "description": "Stop delivery to this device without signing out — what a notifications toggle in settings calls.",
+        "description": "Stop delivery to this device without signing out \u2014 what a notifications toggle in settings calls.",
         "operationId": "clear_push_token_v1_auth_me_push_token_delete",
         "responses": {
           "200": {
@@ -563,6 +563,7 @@
           "catalog"
         ],
         "summary": "List Series",
+        "description": "The catalogue, filtered and ordered.\n\n`sort` exists because the editorial order was the only order a visitor could have: someone looking for\nwhat is popular, or what landed this week, had no way to ask. `featured` keeps the operator's own weighting\nand stays the default, so nothing about the curated experience changes unless the visitor asks it to.\n\n`status` and `length` are the two questions this audience actually asks of a short-drama catalogue \u2014 \"is it\nfinished so I can binge it\" and \"how much am I committing to\" \u2014 and neither could be asked at all.",
         "operationId": "list_series_v1_series_get",
         "parameters": [
           {
@@ -606,6 +607,51 @@
                 }
               ],
               "title": "Q"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(featured|popular|newest|updated)$",
+              "default": "featured",
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(ongoing|completed)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "length",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(short|medium|long)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Length"
             }
           },
           {
@@ -665,17 +711,39 @@
         ],
         "summary": "List Categories",
         "operationId": "list_categories_v1_categories_get",
+        "parameters": [
+          {
+            "name": "lang",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "en",
+              "title": "Lang"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
+                  "type": "array",
                   "items": {
                     "$ref": "#/components/schemas/CategoryOut"
                   },
-                  "type": "array",
                   "title": "Response List Categories V1 Categories Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -689,7 +757,7 @@
           "catalog"
         ],
         "summary": "Browse",
-        "description": "Every category with its top series, in one request.\n\nThe browse page used to fetch the catalogue and then make one more request per category — 1 + N round trips\non every revalidation, which is most of its time to first byte. Grouping happens here instead, over a single\nset of queries, and the shape matches `/home` so the client renders it with the same rail component.\n\nAn uncategorised rail is appended when there is anything in it, so nothing in the catalogue is unreachable.",
+        "description": "Every category with its top series, in one request.\n\nThe browse page used to fetch the catalogue and then make one more request per category \u2014 1 + N round trips\non every revalidation, which is most of its time to first byte. Grouping happens here instead, over a single\nset of queries, and the shape matches `/home` so the client renders it with the same rail component.\n\nAn uncategorised rail is appended when there is anything in it, so nothing in the catalogue is unreachable.",
         "operationId": "browse_v1_browse_get",
         "parameters": [
           {
@@ -1332,6 +1400,33 @@
         }
       }
     },
+    "/v1/me/export": {
+      "get": {
+        "tags": [
+          "engagement"
+        ],
+        "summary": "Export Me",
+        "description": "The caller's own data as JSON. Rate-limited because it is a wide read, not because it is sensitive.",
+        "operationId": "export_me_v1_me_export_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExportOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/me/history": {
       "delete": {
         "tags": [
@@ -1456,7 +1551,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Ok"
+                  "$ref": "#/components/schemas/ContactOut"
                 }
               }
             }
@@ -1836,7 +1931,7 @@
           "purchases"
         ],
         "summary": "Redeem Play",
-        "description": "Grant a Google Play purchase after verifying it with Google.\n\nAndroid must sell digital content through Play Billing, so this is the Android equivalent of the Stripe and\nRazorpay webhooks — and it keeps the same rule those follow: the client reports that a purchase happened,\nthe server asks the store what actually happened, and only a confirmed purchase moves coins.",
+        "description": "Grant a Google Play purchase after verifying it with Google.\n\nAndroid must sell digital content through Play Billing, so this is the Android equivalent of the Stripe and\nRazorpay webhooks \u2014 and it keeps the same rule those follow: the client reports that a purchase happened,\nthe server asks the store what actually happened, and only a confirmed purchase moves coins.",
         "operationId": "redeem_play_v1_purchases_play_redeem_post",
         "requestBody": {
           "content": {
@@ -2304,6 +2399,153 @@
         ]
       }
     },
+    "/v1/admin/auth/totp/setup": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Totp Setup",
+        "description": "Hands back a candidate secret. Nothing is written until a code proves the app actually holds it.\n\nDeliberately stateless: an abandoned setup leaves no half-enrolled account behind, and re-running it simply\nsupersedes the previous candidate.",
+        "operationId": "totp_setup_v1_admin_auth_totp_setup_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TotpSetupOut"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/auth/totp/enable": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Totp Enable",
+        "operationId": "totp_enable_v1_admin_auth_totp_enable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpEnableIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/auth/totp/disable": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Totp Disable",
+        "description": "Both factors are required to remove a factor; otherwise a stolen session could quietly disarm it.",
+        "operationId": "totp_disable_v1_admin_auth_totp_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpDisableIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/v1/admin/auth/sign-out-all": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Sign Out Everywhere",
+        "description": "Invalidates every token issued to this account, and returns a fresh one for the caller.\n\nReturning a new token rather than 204 is deliberate: the operator who clicked this is not trying to sign\nthemselves out of the tab they are looking at.",
+        "operationId": "sign_out_everywhere_v1_admin_auth_sign_out_all_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminToken"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
     "/v1/admin/auth/forgot": {
       "post": {
         "tags": [
@@ -2514,11 +2756,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AdminSeriesOut"
-                  },
-                  "title": "Response List Series V1 Admin Series Get"
+                  "$ref": "#/components/schemas/AdminSeriesPage"
                 }
               }
             }
@@ -3254,6 +3492,7 @@
           "admin"
         ],
         "summary": "Purchases",
+        "description": "Purchases, searchable, with a count and a per-currency sum over the whole filtered set.\n\nSearch and date filtering used to happen in the browser over one loaded page, which meant a dispute that\narrived quoting an order id could only be found if that order happened to be on screen \u2014 and the \"collected\"\nfigure beside it was a subtotal of whatever had loaded. Both now run in the database.\n\n`q` matches our own purchase id, either gateway identifier, and the buyer's public id or email, because a\ndispute arrives quoting whichever of those the other party happens to hold.",
         "operationId": "purchases_v1_admin_purchases_get",
         "security": [
           {
@@ -3278,13 +3517,64 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
-              "default": 100,
+              "maximum": 200,
+              "default": 50,
               "title": "Limit"
             }
           },
@@ -3305,11 +3595,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/PurchaseAdminOut"
-                  },
-                  "title": "Response Purchases V1 Admin Purchases Get"
+                  "$ref": "#/components/schemas/AdminPurchasePage"
                 }
               }
             }
@@ -4108,6 +4394,55 @@
         ]
       }
     },
+    "/v1/admin/accounts/{account_id}/revoke-sessions": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Revoke Sessions",
+        "description": "Ends every session for one account.\n\nDisabling an account already blocks it, but leaves the reason on the record; this is the lighter action for\na lost laptop or a shared password, where the person keeps their access and only their tokens die.",
+        "operationId": "revoke_sessions_v1_admin_accounts__account_id__revoke_sessions_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminAccountOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/accounts/{account_id}": {
       "put": {
         "tags": [
@@ -4218,6 +4553,7 @@
           "admin"
         ],
         "summary": "Languages",
+        "description": "Languages, each with how far its translation has actually got.\n\nThree grouped counts rather than a query per language: the string keys English defines, how many of them\neach language has, and how many CMS pages each language has a body for.",
         "operationId": "languages_v1_admin_languages_get",
         "responses": {
           "200": {
@@ -4514,28 +4850,77 @@
           "admin"
         ],
         "summary": "Pages",
+        "description": "Slugs, flags and which languages each page has \u2014 paged, searchable, and without the bodies.\n\nOne extra query fetches the titles for the whole page at once; the previous shape ran a query per row and\nreturned every body with it.",
         "operationId": "pages_v1_admin_pages_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/AdminCmsPageOut"
-                  },
-                  "type": "array",
-                  "title": "Response Pages V1 Admin Pages Get"
+                  "$ref": "#/components/schemas/AdminCmsPagePage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       },
       "post": {
         "tags": [
@@ -4543,15 +4928,20 @@
         ],
         "summary": "Create Page",
         "operationId": "create_page_v1_admin_pages_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/CmsPageIn"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "201": {
@@ -4574,15 +4964,57 @@
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/v1/admin/pages/{page_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Page Detail",
+        "description": "One page with every translation body \u2014 what the editor loads when a row is opened.",
+        "operationId": "page_detail_v1_admin_pages__page_id__get",
         "security": [
           {
             "HTTPBearer": []
           }
-        ]
-      }
-    },
-    "/v1/admin/pages/{page_id}": {
+        ],
+        "parameters": [
+          {
+            "name": "page_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Page Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminCmsPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
       "put": {
         "tags": [
           "admin"
@@ -4692,6 +5124,7 @@
           "admin"
         ],
         "summary": "Reports",
+        "description": "Reports, paged, with the total so the screen can stop lying about how much work is left.\n\n`oldest_first` exists because a queue sorted newest-first is the wrong order for an SLA: the report that has\nbeen waiting longest is the one that matters.",
         "operationId": "reports_v1_admin_reports_get",
         "security": [
           {
@@ -4722,9 +5155,31 @@
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
-              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          },
+          {
+            "name": "oldest_first",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Oldest First"
             }
           }
         ],
@@ -4734,11 +5189,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AdminReportOut"
-                  },
-                  "title": "Response Reports V1 Admin Reports Get"
+                  "$ref": "#/components/schemas/AdminReportPage"
                 }
               }
             }
@@ -4820,6 +5271,7 @@
           "admin"
         ],
         "summary": "Inbox",
+        "description": "Messages, paged and searchable.\n\nAt the old hard cap, finding one complaint among two hundred was manual scrolling, and the unread count in\nthe header was computed from the loaded page \u2014 so it was wrong the moment the list was truncated.",
         "operationId": "inbox_v1_admin_inbox_get",
         "security": [
           {
@@ -4838,14 +5290,43 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
-              "maximum": 500,
-              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -4855,11 +5336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AdminContactOut"
-                  },
-                  "title": "Response Inbox V1 Admin Inbox Get"
+                  "$ref": "#/components/schemas/AdminContactPage"
                 }
               }
             }
@@ -4979,28 +5456,77 @@
           "admin"
         ],
         "summary": "Moderation",
+        "description": "Open reports and AI-flagged series in one queue, oldest first within each kind.\n\nBoth halves are counted over the whole table before anything is sliced, so the tab badges are workloads\nrather than samples.",
         "operationId": "moderation_v1_admin_moderation_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^(report|flagged_series)$"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/ModerationItem"
-                  },
-                  "type": "array",
-                  "title": "Response Moderation V1 Admin Moderation Get"
+                  "$ref": "#/components/schemas/ModerationPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
           }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ]
+        }
       }
     },
     "/v1/admin/moderation/series/{series_id}": {
@@ -5009,7 +5535,7 @@
           "admin"
         ],
         "summary": "Moderate Series",
-        "description": "Act on a moderation item, and record who decided what.\n\nClearing an AI safety flag, unpublishing a title and changing its rating are all content decisions someone\nmay have to defend later — a takedown dispute, a store review, a complaint. None of them left a trace.",
+        "description": "Act on a moderation item, and record who decided what.\n\nClearing an AI safety flag, unpublishing a title and changing its rating are all content decisions someone\nmay have to defend later \u2014 a takedown dispute, a store review, a complaint. None of them left a trace.",
         "operationId": "moderate_series_v1_admin_moderation_series__series_id__post",
         "security": [
           {
@@ -5068,7 +5594,7 @@
           "admin"
         ],
         "summary": "Audit Log",
-        "description": "Who did what, most recent first.\n\nOwner-only: the log names admins and the accounts they acted on, which is more than a support role needs.",
+        "description": "Who did what, most recent first, with the size of the filtered set.\n\nOwner-only: the log names admins and the accounts they acted on, which is more than a support role needs.\nAn audit log you can only page blindly through is not evidence; the total is what makes \"show me every\nban in March\" answerable.",
         "operationId": "audit_log_v1_admin_audit_get",
         "security": [
           {
@@ -5157,11 +5683,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/AuditRow"
-                  },
-                  "title": "Response Audit Log V1 Admin Audit Get"
+                  "$ref": "#/components/schemas/AdminAuditPage"
                 }
               }
             }
@@ -5524,6 +6046,219 @@
         ]
       }
     },
+    "/v1/admin/ad-placements": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "List Placements",
+        "operationId": "list_placements_v1_admin_ad_placements_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "slot",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 32
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Slot"
+            }
+          },
+          {
+            "name": "active_only",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Active Only"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdPlacementPage"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Create Placement",
+        "operationId": "create_placement_v1_admin_ad_placements_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdPlacementIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdPlacementOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/ad-placements/{placement_id}": {
+      "put": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Update Placement",
+        "operationId": "update_placement_v1_admin_ad_placements__placement_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "placement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Placement Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdPlacementIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdPlacementOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete Placement",
+        "operationId": "delete_placement_v1_admin_ad_placements__placement_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "placement_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Placement Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/experiments": {
       "get": {
         "tags": [
@@ -5807,6 +6542,7 @@
           "admin"
         ],
         "summary": "Flags",
+        "description": "Flags with the admin who last set each one, in one grouped query rather than a lookup per row.",
         "operationId": "flags_v1_admin_flags_get",
         "responses": {
           "200": {
@@ -6372,6 +7108,7 @@
           "admin"
         ],
         "summary": "List Videos",
+        "description": "Assets, paged and searchable by source key, with a per-status tally over the whole table.",
         "operationId": "list_videos_v1_admin_uploads_videos_get",
         "security": [
           {
@@ -6396,13 +7133,43 @@
             }
           },
           {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
-              "default": 100,
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
               "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
             }
           }
         ],
@@ -6412,11 +7179,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/VideoAssetOut"
-                  },
-                  "title": "Response List Videos V1 Admin Uploads Videos Get"
+                  "$ref": "#/components/schemas/VideoAssetPage"
                 }
               }
             }
@@ -6646,6 +7409,246 @@
   },
   "components": {
     "schemas": {
+      "AdPlacementConfig": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slot": {
+            "type": "string",
+            "title": "Slot"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "unit_id": {
+            "type": "string",
+            "title": "Unit Id"
+          },
+          "reward_coins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reward Coins"
+          },
+          "frequency_cap_sec": {
+            "type": "integer",
+            "title": "Frequency Cap Sec",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slot",
+          "provider",
+          "unit_id"
+        ],
+        "title": "AdPlacementConfig",
+        "description": "One placement the client on this platform may render.\n\nUnit ids are the provider's public identifiers \u2014 an AdMob unit ships inside every APK \u2014 so serving them here\nexposes nothing. What the client cannot be trusted to decide is *whether* a placement is live, what a\nrewarded view pays, or how often it may run; all three come from here."
+      },
+      "AdPlacementIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "slot": {
+            "type": "string",
+            "title": "Slot"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "unit_id": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Unit Id"
+          },
+          "platforms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Platforms"
+          },
+          "reward_coins": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 10000.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reward Coins"
+          },
+          "frequency_cap_sec": {
+            "type": "integer",
+            "maximum": 86400.0,
+            "minimum": 0.0,
+            "title": "Frequency Cap Sec",
+            "default": 0
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active",
+            "default": false
+          },
+          "sort_order": {
+            "type": "integer",
+            "maximum": 10000.0,
+            "minimum": 0.0,
+            "title": "Sort Order",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "slot",
+          "provider",
+          "unit_id",
+          "platforms"
+        ],
+        "title": "AdPlacementIn"
+      },
+      "AdPlacementOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "slot": {
+            "type": "string",
+            "title": "Slot"
+          },
+          "provider": {
+            "type": "string",
+            "title": "Provider"
+          },
+          "unit_id": {
+            "type": "string",
+            "title": "Unit Id"
+          },
+          "platforms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Platforms"
+          },
+          "reward_coins": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reward Coins"
+          },
+          "frequency_cap_sec": {
+            "type": "integer",
+            "title": "Frequency Cap Sec"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slot",
+          "provider",
+          "unit_id",
+          "platforms",
+          "reward_coins",
+          "frequency_cap_sec",
+          "is_active",
+          "sort_order",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AdPlacementOut"
+      },
+      "AdPlacementPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdPlacementOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "active": {
+            "type": "integer",
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "active"
+        ],
+        "title": "AdPlacementPage"
+      },
       "AdminAccountOut": {
         "properties": {
           "id": {
@@ -6679,6 +7682,11 @@
               }
             ],
             "title": "Last Login At"
+          },
+          "totp_enabled": {
+            "type": "boolean",
+            "title": "Totp Enabled",
+            "default": false
           }
         },
         "type": "object",
@@ -6743,6 +7751,27 @@
         "type": "object",
         "title": "AdminAccountUpdateIn"
       },
+      "AdminAuditPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditRow"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AdminAuditPage"
+      },
       "AdminCategoryOut": {
         "properties": {
           "id": {
@@ -6765,6 +7794,18 @@
           "sort_order": {
             "type": "integer",
             "title": "Sort Order"
+          },
+          "series_count": {
+            "type": "integer",
+            "title": "Series Count",
+            "default": 0
+          },
+          "translations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Translations"
           }
         },
         "type": "object",
@@ -6813,6 +7854,76 @@
           "translations"
         ],
         "title": "AdminCmsPageOut"
+      },
+      "AdminCmsPagePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminCmsPageSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AdminCmsPagePage"
+      },
+      "AdminCmsPageSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "slug": {
+            "type": "string",
+            "title": "Slug"
+          },
+          "show_in_footer": {
+            "type": "boolean",
+            "title": "Show In Footer"
+          },
+          "is_published": {
+            "type": "boolean",
+            "title": "Is Published"
+          },
+          "languages": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Languages"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "slug",
+          "show_in_footer",
+          "is_published",
+          "languages"
+        ],
+        "title": "AdminCmsPageSummary",
+        "description": "A row in the pages list, without the bodies.\n\nThe list used to return every page with the full `body_html` of every translation \u2014 a query per page on top\nof it \u2014 so opening the screen downloaded the entire CMS corpus, in every language, to render a table of\nslugs. A help centre of forty pages in six languages is several megabytes of HTML nobody looks at."
       },
       "AdminContactOut": {
         "properties": {
@@ -6878,6 +7989,32 @@
           "created_at"
         ],
         "title": "AdminContactOut"
+      },
+      "AdminContactPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminContactOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "unread": {
+            "type": "integer",
+            "title": "Unread"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "unread"
+        ],
+        "title": "AdminContactPage"
       },
       "AdminEpisodeOut": {
         "properties": {
@@ -7054,6 +8191,26 @@
           "sort_order": {
             "type": "integer",
             "title": "Sort Order"
+          },
+          "ui_translated": {
+            "type": "integer",
+            "title": "Ui Translated",
+            "default": 0
+          },
+          "ui_total": {
+            "type": "integer",
+            "title": "Ui Total",
+            "default": 0
+          },
+          "pages_translated": {
+            "type": "integer",
+            "title": "Pages Translated",
+            "default": 0
+          },
+          "pages_total": {
+            "type": "integer",
+            "title": "Pages Total",
+            "default": 0
           }
         },
         "type": "object",
@@ -7077,6 +8234,17 @@
           "password": {
             "type": "string",
             "title": "Password"
+          },
+          "otp": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Otp"
           }
         },
         "type": "object",
@@ -7102,6 +8270,11 @@
           },
           "role": {
             "$ref": "#/components/schemas/AdminRole"
+          },
+          "totp_enabled": {
+            "type": "boolean",
+            "title": "Totp Enabled",
+            "default": false
           }
         },
         "type": "object",
@@ -7229,6 +8402,36 @@
         ],
         "title": "AdminPackOut"
       },
+      "AdminPurchasePage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PurchaseAdminOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "totals_by_currency": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Totals By Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "totals_by_currency"
+        ],
+        "title": "AdminPurchasePage",
+        "description": "Purchases, with the total and the money in the filtered set.\n\nFinance reconciles against a number; a page of rows with no count and no sum is not something you can\nreconcile against, and exporting the visible page silently exported a sample."
+      },
       "AdminReportOut": {
         "properties": {
           "id": {
@@ -7320,6 +8523,28 @@
           "created_at"
         ],
         "title": "AdminReportOut"
+      },
+      "AdminReportPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminReportOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AdminReportPage",
+        "description": "Reports with a real total.\n\nThe screen used to take the first N rows and say nothing about the rest, so a review-bomb produced silent\ntruncation on exactly the day the page mattered \u2014 an operator working a spike had no way to know they were\nseeing a fraction of it."
       },
       "AdminRewardTaskOut": {
         "properties": {
@@ -7652,6 +8877,28 @@
         ],
         "title": "AdminSeriesOut"
       },
+      "AdminSeriesPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AdminSeriesOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "AdminSeriesPage",
+        "description": "The catalogue list, with the number of series in it.\n\nWithout a total the console could only say \"showing 1-20\" \u2014 an operator could not tell whether the library\nheld 40 series or 4,000, and the pager could not offer page numbers, so reaching the end of a large\ncatalogue meant clicking Next until it stopped."
+      },
       "AdminToken": {
         "properties": {
           "access_token": {
@@ -7857,7 +9104,7 @@
           "last_seen_at"
         ],
         "title": "AdminUserDetail",
-        "description": "Everything the drawer needs in one call.\n\n\"I paid and got no coins\" is the most common support ticket and could not be answered without leaving for\nthe Purchases screen and searching by hand — and VIP could be granted blind, because current membership was\nnever shown, so a second grant could silently stack on an active pass."
+        "description": "Everything the drawer needs in one call.\n\n\"I paid and got no coins\" is the most common support ticket and could not be answered without leaving for\nthe Purchases screen and searching by hand \u2014 and VIP could be granted blind, because current membership was\nnever shown, so a second grant could silently stack on an active pass."
       },
       "AdminUserOut": {
         "properties": {
@@ -8085,6 +9332,26 @@
         ],
         "title": "AdminUserPurchase",
         "description": "One purchase, as support needs to read it: what was bought, whether it settled, and what it granted."
+      },
+      "AdsConfig": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": false
+          },
+          "placements": {
+            "items": {
+              "$ref": "#/components/schemas/AdPlacementConfig"
+            },
+            "type": "array",
+            "title": "Placements",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "AdsConfig",
+        "description": "`enabled` is false when nothing is live, so a client can skip loading an ad SDK at all."
       },
       "AssetStatus": {
         "type": "string",
@@ -8370,6 +9637,13 @@
             "type": "integer",
             "title": "Sort Order",
             "default": 0
+          },
+          "translations": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Translations"
           }
         },
         "type": "object",
@@ -8716,6 +9990,18 @@
           "lang": {
             "type": "string",
             "title": "Lang"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
           }
         },
         "type": "object",
@@ -8861,6 +10147,13 @@
             "type": "array",
             "title": "Languages"
           },
+          "ads": {
+            "$ref": "#/components/schemas/AdsConfig",
+            "default": {
+              "enabled": false,
+              "placements": []
+            }
+          },
           "flags": {
             "additionalProperties": {
               "type": "boolean"
@@ -8940,6 +10233,25 @@
           "message"
         ],
         "title": "ContactIn"
+      },
+      "ContactOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok",
+            "default": true
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reference"
+        ],
+        "title": "ContactOut",
+        "description": "A short reference the sender can quote.\n\nThe form said \"we got it\" and gave the sender nothing to hold, so a follow-up email started with \"I wrote\nto you last week about something\". Eight characters of the message id is enough to find the row and short\nenough to read over the phone."
       },
       "ContinueProgress": {
         "properties": {
@@ -9213,7 +10525,7 @@
           "currency_symbol": {
             "type": "string",
             "title": "Currency Symbol",
-            "default": "₹"
+            "default": "\u20b9"
           },
           "episode_price": {
             "type": "integer",
@@ -9665,6 +10977,63 @@
         ],
         "title": "ExperimentOut"
       },
+      "ExportOut": {
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "profile": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Profile"
+          },
+          "coin_ledger": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Coin Ledger"
+          },
+          "purchases": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Purchases"
+          },
+          "watch_history": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Watch History"
+          },
+          "favourites": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Favourites"
+          }
+        },
+        "type": "object",
+        "required": [
+          "generated_at",
+          "profile",
+          "coin_ledger",
+          "purchases",
+          "watch_history",
+          "favourites"
+        ],
+        "title": "ExportOut",
+        "description": "Everything this account holds, in one document.\n\nA viewer could delete their account and could not see what deleting it would remove \u2014 which is the wrong\nway round, and the wrong way round for India's DPDP Act and the Play policy alike. Deliberately built from\nthe caller's own token: there is no user id parameter, so this endpoint cannot be pointed at anyone else.\n\nMoney rows are included because they are the ones people actually dispute; nothing here is a secret the\naccount does not already own."
+      },
       "FirebaseWebConfig": {
         "properties": {
           "api_key": {
@@ -9773,6 +11142,17 @@
             "type": "string",
             "format": "date-time",
             "title": "Updated At"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
           }
         },
         "type": "object",
@@ -10484,6 +11864,38 @@
         ],
         "title": "ModerationItem"
       },
+      "ModerationPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ModerationItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "reports": {
+            "type": "integer",
+            "title": "Reports"
+          },
+          "flagged": {
+            "type": "integer",
+            "title": "Flagged"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "reports",
+          "flagged"
+        ],
+        "title": "ModerationPage",
+        "description": "The queue with its real size, and each half counted separately.\n\nThe endpoint took the newest 200 open reports and the newest 200 flagged series and returned them merged,\nsaying nothing about either cap. On the day a review-bomb or a bad ingest fills this queue \u2014 the only day\nit matters \u2014 an operator was working a sample and could not tell."
+      },
       "MyListOut": {
         "properties": {
           "favorites": {
@@ -11094,6 +12506,39 @@
       },
       "PurchaseAdminOut": {
         "properties": {
+          "gateway_payment_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Payment Id"
+          },
+          "external_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Id"
+          },
+          "user_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Email"
+          },
           "id": {
             "type": "string",
             "format": "uuid",
@@ -13035,6 +14480,61 @@
         ],
         "title": "TokenPair"
       },
+      "TotpDisableIn": {
+        "properties": {
+          "password": {
+            "type": "string",
+            "title": "Password"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "password",
+          "code"
+        ],
+        "title": "TotpDisableIn"
+      },
+      "TotpEnableIn": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "code"
+        ],
+        "title": "TotpEnableIn"
+      },
+      "TotpSetupOut": {
+        "properties": {
+          "secret": {
+            "type": "string",
+            "title": "Secret"
+          },
+          "otpauth_uri": {
+            "type": "string",
+            "title": "Otpauth Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "secret",
+          "otpauth_uri"
+        ],
+        "title": "TotpSetupOut",
+        "description": "The secret, and the URI an authenticator app scans. Shown once and never stored until confirmed."
+      },
       "TranscriptOut": {
         "properties": {
           "series_id": {
@@ -13509,6 +15009,54 @@
           "coins_spent": {
             "type": "integer",
             "title": "Coins Spent"
+          },
+          "conversion": {
+            "type": "number",
+            "title": "Conversion",
+            "default": 0.0
+          },
+          "is_control": {
+            "type": "boolean",
+            "title": "Is Control",
+            "default": false
+          },
+          "lift_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lift Pct"
+          },
+          "p_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P Value"
+          },
+          "significant": {
+            "type": "boolean",
+            "title": "Significant",
+            "default": false
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
           }
         },
         "type": "object",
@@ -13605,6 +15153,36 @@
           "error"
         ],
         "title": "VideoAssetOut"
+      },
+      "VideoAssetPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VideoAssetOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "counts"
+        ],
+        "title": "VideoAssetPage",
+        "description": "Assets with a total and a per-status tally.\n\nThe screen took the newest 200 rows and said nothing about the rest, so on a library with real volume the\none failed transcode an operator was looking for could sit permanently below the cut. `counts` puts the\nfailure tally in front of them without having to change the filter to find out whether there is anything\nto change the filter for."
       },
       "VipGrantIn": {
         "properties": {

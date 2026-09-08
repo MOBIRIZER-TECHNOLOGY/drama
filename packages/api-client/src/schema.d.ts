@@ -246,7 +246,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Series */
+        /**
+         * List Series
+         * @description The catalogue, filtered and ordered.
+         *
+         *     `sort` exists because the editorial order was the only order a visitor could have: someone looking for
+         *     what is popular, or what landed this week, had no way to ask. `featured` keeps the operator's own weighting
+         *     and stays the default, so nothing about the curated experience changes unless the visitor asks it to.
+         *
+         *     `status` and `length` are the two questions this audience actually asks of a short-drama catalogue — "is it
+         *     finished so I can binge it" and "how much am I committing to" — and neither could be asked at all.
+         */
         get: operations["list_series_v1_series_get"];
         put?: never;
         post?: never;
@@ -483,6 +493,26 @@ export interface paths {
         };
         /** My List */
         get: operations["my_list_v1_me_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Me
+         * @description The caller's own data as JSON. Rate-limited because it is a wide read, not because it is sensitive.
+         */
+        get: operations["export_me_v1_me_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -888,6 +918,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/auth/totp/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Setup
+         * @description Hands back a candidate secret. Nothing is written until a code proves the app actually holds it.
+         *
+         *     Deliberately stateless: an abandoned setup leaves no half-enrolled account behind, and re-running it simply
+         *     supersedes the previous candidate.
+         */
+        post: operations["totp_setup_v1_admin_auth_totp_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth/totp/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Totp Enable */
+        post: operations["totp_enable_v1_admin_auth_totp_enable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth/totp/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Totp Disable
+         * @description Both factors are required to remove a factor; otherwise a stolen session could quietly disarm it.
+         */
+        post: operations["totp_disable_v1_admin_auth_totp_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/auth/sign-out-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign Out Everywhere
+         * @description Invalidates every token issued to this account, and returns a fresh one for the caller.
+         *
+         *     Returning a new token rather than 204 is deliberate: the operator who clicked this is not trying to sign
+         *     themselves out of the tab they are looking at.
+         */
+        post: operations["sign_out_everywhere_v1_admin_auth_sign_out_all_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/auth/forgot": {
         parameters: {
             query?: never;
@@ -1093,7 +1206,17 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Purchases */
+        /**
+         * Purchases
+         * @description Purchases, searchable, with a count and a per-currency sum over the whole filtered set.
+         *
+         *     Search and date filtering used to happen in the browser over one loaded page, which meant a dispute that
+         *     arrived quoting an order id could only be found if that order happened to be on screen — and the "collected"
+         *     figure beside it was a subtotal of whatever had loaded. Both now run in the database.
+         *
+         *     `q` matches our own purchase id, either gateway identifier, and the buyer's public id or email, because a
+         *     dispute arrives quoting whichever of those the other party happens to hold.
+         */
         get: operations["purchases_v1_admin_purchases_get"];
         put?: never;
         post?: never;
@@ -1285,6 +1408,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/accounts/{account_id}/revoke-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Sessions
+         * @description Ends every session for one account.
+         *
+         *     Disabling an account already blocks it, but leaves the reason on the record; this is the lighter action for
+         *     a lost laptop or a shared password, where the person keeps their access and only their tokens die.
+         */
+        post: operations["revoke_sessions_v1_admin_accounts__account_id__revoke_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/accounts/{account_id}": {
         parameters: {
             query?: never;
@@ -1310,7 +1456,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Languages */
+        /**
+         * Languages
+         * @description Languages, each with how far its translation has actually got.
+         *
+         *     Three grouped counts rather than a query per language: the string keys English defines, how many of them
+         *     each language has, and how many CMS pages each language has a body for.
+         */
         get: operations["languages_v1_admin_languages_get"];
         put?: never;
         post?: never;
@@ -1383,7 +1535,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Pages */
+        /**
+         * Pages
+         * @description Slugs, flags and which languages each page has — paged, searchable, and without the bodies.
+         *
+         *     One extra query fetches the titles for the whole page at once; the previous shape ran a query per row and
+         *     returned every body with it.
+         */
         get: operations["pages_v1_admin_pages_get"];
         put?: never;
         /** Create Page */
@@ -1401,7 +1559,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Page Detail
+         * @description One page with every translation body — what the editor loads when a row is opened.
+         */
+        get: operations["page_detail_v1_admin_pages__page_id__get"];
         /** Update Page */
         put: operations["update_page_v1_admin_pages__page_id__put"];
         post?: never;
@@ -1419,7 +1581,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Reports */
+        /**
+         * Reports
+         * @description Reports, paged, with the total so the screen can stop lying about how much work is left.
+         *
+         *     `oldest_first` exists because a queue sorted newest-first is the wrong order for an SLA: the report that has
+         *     been waiting longest is the one that matters.
+         */
         get: operations["reports_v1_admin_reports_get"];
         put?: never;
         post?: never;
@@ -1453,7 +1621,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inbox */
+        /**
+         * Inbox
+         * @description Messages, paged and searchable.
+         *
+         *     At the old hard cap, finding one complaint among two hundred was manual scrolling, and the unread count in
+         *     the header was computed from the loaded page — so it was wrong the moment the list was truncated.
+         */
         get: operations["inbox_v1_admin_inbox_get"];
         put?: never;
         post?: never;
@@ -1504,7 +1678,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Moderation */
+        /**
+         * Moderation
+         * @description Open reports and AI-flagged series in one queue, oldest first within each kind.
+         *
+         *     Both halves are counted over the whole table before anything is sliced, so the tab badges are workloads
+         *     rather than samples.
+         */
         get: operations["moderation_v1_admin_moderation_get"];
         put?: never;
         post?: never;
@@ -1546,9 +1726,11 @@ export interface paths {
         };
         /**
          * Audit Log
-         * @description Who did what, most recent first.
+         * @description Who did what, most recent first, with the size of the filtered set.
          *
          *     Owner-only: the log names admins and the accounts they acted on, which is more than a support role needs.
+         *     An audit log you can only page blindly through is not evidence; the total is what makes "show me every
+         *     ban in March" answerable.
          */
         get: operations["audit_log_v1_admin_audit_get"];
         put?: never;
@@ -1690,6 +1872,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/ad-placements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Placements */
+        get: operations["list_placements_v1_admin_ad_placements_get"];
+        put?: never;
+        /** Create Placement */
+        post: operations["create_placement_v1_admin_ad_placements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/ad-placements/{placement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Placement */
+        put: operations["update_placement_v1_admin_ad_placements__placement_id__put"];
+        post?: never;
+        /** Delete Placement */
+        delete: operations["delete_placement_v1_admin_ad_placements__placement_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/experiments": {
         parameters: {
             query?: never;
@@ -1786,7 +2004,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Flags */
+        /**
+         * Flags
+         * @description Flags with the admin who last set each one, in one grouped query rather than a lookup per row.
+         */
         get: operations["flags_v1_admin_flags_get"];
         put?: never;
         post?: never;
@@ -1952,7 +2173,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Videos */
+        /**
+         * List Videos
+         * @description Assets, paged and searchable by source key, with a per-status tally over the whole table.
+         */
         get: operations["list_videos_v1_admin_uploads_videos_get"];
         put?: never;
         /** Register Video */
@@ -2022,6 +2246,103 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AdPlacementConfig
+         * @description One placement the client on this platform may render.
+         *
+         *     Unit ids are the provider's public identifiers — an AdMob unit ships inside every APK — so serving them here
+         *     exposes nothing. What the client cannot be trusted to decide is *whether* a placement is live, what a
+         *     rewarded view pays, or how often it may run; all three come from here.
+         */
+        AdPlacementConfig: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slot */
+            slot: string;
+            /** Provider */
+            provider: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Reward Coins */
+            reward_coins?: number | null;
+            /**
+             * Frequency Cap Sec
+             * @default 0
+             */
+            frequency_cap_sec: number;
+        };
+        /** AdPlacementIn */
+        AdPlacementIn: {
+            /** Name */
+            name: string;
+            /** Slot */
+            slot: string;
+            /** Provider */
+            provider: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Platforms */
+            platforms: string[];
+            /** Reward Coins */
+            reward_coins?: number | null;
+            /**
+             * Frequency Cap Sec
+             * @default 0
+             */
+            frequency_cap_sec: number;
+            /**
+             * Is Active
+             * @default false
+             */
+            is_active: boolean;
+            /**
+             * Sort Order
+             * @default 0
+             */
+            sort_order: number;
+        };
+        /** AdPlacementOut */
+        AdPlacementOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Slot */
+            slot: string;
+            /** Provider */
+            provider: string;
+            /** Unit Id */
+            unit_id: string;
+            /** Platforms */
+            platforms: string[];
+            /** Reward Coins */
+            reward_coins: number | null;
+            /** Frequency Cap Sec */
+            frequency_cap_sec: number;
+            /** Is Active */
+            is_active: boolean;
+            /** Sort Order */
+            sort_order: number;
+            /** Created At */
+            created_at: string | null;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** AdPlacementPage */
+        AdPlacementPage: {
+            /** Items */
+            items: components["schemas"]["AdPlacementOut"][];
+            /** Total */
+            total: number;
+            /** Active */
+            active: number;
+        };
         /** AdminAccountOut */
         AdminAccountOut: {
             /**
@@ -2038,6 +2359,11 @@ export interface components {
             is_active: boolean;
             /** Last Login At */
             last_login_at: string | null;
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
         };
         /** AdminAccountUpdateIn */
         AdminAccountUpdateIn: {
@@ -2048,6 +2374,13 @@ export interface components {
             is_active?: boolean | null;
             /** Password */
             password?: string | null;
+        };
+        /** AdminAuditPage */
+        AdminAuditPage: {
+            /** Items */
+            items: components["schemas"]["AuditRow"][];
+            /** Total */
+            total: number;
         };
         /** AdminCategoryOut */
         AdminCategoryOut: {
@@ -2064,6 +2397,15 @@ export interface components {
             show_on_home: boolean;
             /** Sort Order */
             sort_order: number;
+            /**
+             * Series Count
+             * @default 0
+             */
+            series_count: number;
+            /** Translations */
+            translations?: {
+                [key: string]: string;
+            };
         };
         /** AdminCmsPageOut */
         AdminCmsPageOut: {
@@ -2080,6 +2422,38 @@ export interface components {
             is_published: boolean;
             /** Translations */
             translations: components["schemas"]["CmsTranslationIn"][];
+        };
+        /** AdminCmsPagePage */
+        AdminCmsPagePage: {
+            /** Items */
+            items: components["schemas"]["AdminCmsPageSummary"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * AdminCmsPageSummary
+         * @description A row in the pages list, without the bodies.
+         *
+         *     The list used to return every page with the full `body_html` of every translation — a query per page on top
+         *     of it — so opening the screen downloaded the entire CMS corpus, in every language, to render a table of
+         *     slugs. A help centre of forty pages in six languages is several megabytes of HTML nobody looks at.
+         */
+        AdminCmsPageSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Slug */
+            slug: string;
+            /** Show In Footer */
+            show_in_footer: boolean;
+            /** Is Published */
+            is_published: boolean;
+            /** Languages */
+            languages: string[];
+            /** Title */
+            title?: string | null;
         };
         /** AdminContactOut */
         AdminContactOut: {
@@ -2105,6 +2479,15 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** AdminContactPage */
+        AdminContactPage: {
+            /** Items */
+            items: components["schemas"]["AdminContactOut"][];
+            /** Total */
+            total: number;
+            /** Unread */
+            unread: number;
         };
         /** AdminEpisodeOut */
         AdminEpisodeOut: {
@@ -2150,6 +2533,26 @@ export interface components {
             is_rtl: boolean;
             /** Sort Order */
             sort_order: number;
+            /**
+             * Ui Translated
+             * @default 0
+             */
+            ui_translated: number;
+            /**
+             * Ui Total
+             * @default 0
+             */
+            ui_total: number;
+            /**
+             * Pages Translated
+             * @default 0
+             */
+            pages_translated: number;
+            /**
+             * Pages Total
+             * @default 0
+             */
+            pages_total: number;
         };
         /** AdminLogin */
         AdminLogin: {
@@ -2160,6 +2563,8 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+            /** Otp */
+            otp?: string | null;
         };
         /** AdminOut */
         AdminOut: {
@@ -2170,6 +2575,11 @@ export interface components {
             /** Display Name */
             display_name: string;
             role: components["schemas"]["AdminRole"];
+            /**
+             * Totp Enabled
+             * @default false
+             */
+            totp_enabled: boolean;
         };
         /** AdminPackOut */
         AdminPackOut: {
@@ -2207,6 +2617,23 @@ export interface components {
              */
             prices: components["schemas"]["PackPriceIn"][];
         };
+        /**
+         * AdminPurchasePage
+         * @description Purchases, with the total and the money in the filtered set.
+         *
+         *     Finance reconciles against a number; a page of rows with no count and no sum is not something you can
+         *     reconcile against, and exporting the visible page silently exported a sample.
+         */
+        AdminPurchasePage: {
+            /** Items */
+            items: components["schemas"]["PurchaseAdminOut"][];
+            /** Total */
+            total: number;
+            /** Totals By Currency */
+            totals_by_currency: {
+                [key: string]: number;
+            };
+        };
         /** AdminReportOut */
         AdminReportOut: {
             /**
@@ -2233,6 +2660,20 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /**
+         * AdminReportPage
+         * @description Reports with a real total.
+         *
+         *     The screen used to take the first N rows and say nothing about the rest, so a review-bomb produced silent
+         *     truncation on exactly the day the page mattered — an operator working a spike had no way to know they were
+         *     seeing a fraction of it.
+         */
+        AdminReportPage: {
+            /** Items */
+            items: components["schemas"]["AdminReportOut"][];
+            /** Total */
+            total: number;
         };
         /** AdminRewardTaskOut */
         AdminRewardTaskOut: {
@@ -2336,6 +2777,20 @@ export interface components {
              * @default []
              */
             episodes: components["schemas"]["AdminEpisodeOut"][];
+        };
+        /**
+         * AdminSeriesPage
+         * @description The catalogue list, with the number of series in it.
+         *
+         *     Without a total the console could only say "showing 1-20" — an operator could not tell whether the library
+         *     held 40 series or 4,000, and the pager could not offer page numbers, so reaching the end of a large
+         *     catalogue meant clicking Next until it stopped.
+         */
+        AdminSeriesPage: {
+            /** Items */
+            items: components["schemas"]["AdminSeriesOut"][];
+            /** Total */
+            total: number;
         };
         /** AdminToken */
         AdminToken: {
@@ -2490,6 +2945,22 @@ export interface components {
             paid_at: string | null;
         };
         /**
+         * AdsConfig
+         * @description `enabled` is false when nothing is live, so a client can skip loading an ad SDK at all.
+         */
+        AdsConfig: {
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /**
+             * Placements
+             * @default []
+             */
+            placements: components["schemas"]["AdPlacementConfig"][];
+        };
+        /**
          * AssetStatus
          * @enum {string}
          */
@@ -2624,6 +3095,10 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+            /** Translations */
+            translations?: {
+                [key: string]: string;
+            };
         };
         /** CategoryOut */
         CategoryOut: {
@@ -2760,6 +3235,8 @@ export interface components {
             body_html: string;
             /** Lang */
             lang: string;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** CmsTranslationIn */
         CmsTranslationIn: {
@@ -2818,6 +3295,13 @@ export interface components {
             mobile: components["schemas"]["MobileConfig"];
             /** Languages */
             languages: components["schemas"]["ConfigLanguage"][];
+            /**
+             * @default {
+             *       "enabled": false,
+             *       "placements": []
+             *     }
+             */
+            ads: components["schemas"]["AdsConfig"];
             /** Flags */
             flags: {
                 [key: string]: boolean;
@@ -2839,6 +3323,23 @@ export interface components {
             message: string;
             /** Captcha Token */
             captcha_token?: string | null;
+        };
+        /**
+         * ContactOut
+         * @description A short reference the sender can quote.
+         *
+         *     The form said "we got it" and gave the sender nothing to hold, so a follow-up email started with "I wrote
+         *     to you last week about something". Eight characters of the message id is enough to find the row and short
+         *     enough to read over the phone.
+         */
+        ContactOut: {
+            /**
+             * Ok
+             * @default true
+             */
+            ok: boolean;
+            /** Reference */
+            reference: string;
         };
         /** ContinueProgress */
         ContinueProgress: {
@@ -3111,6 +3612,44 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * ExportOut
+         * @description Everything this account holds, in one document.
+         *
+         *     A viewer could delete their account and could not see what deleting it would remove — which is the wrong
+         *     way round, and the wrong way round for India's DPDP Act and the Play policy alike. Deliberately built from
+         *     the caller's own token: there is no user id parameter, so this endpoint cannot be pointed at anyone else.
+         *
+         *     Money rows are included because they are the ones people actually dispute; nothing here is a secret the
+         *     account does not already own.
+         */
+        ExportOut: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /** Profile */
+            profile: {
+                [key: string]: unknown;
+            };
+            /** Coin Ledger */
+            coin_ledger: {
+                [key: string]: unknown;
+            }[];
+            /** Purchases */
+            purchases: {
+                [key: string]: unknown;
+            }[];
+            /** Watch History */
+            watch_history: {
+                [key: string]: unknown;
+            }[];
+            /** Favourites */
+            favourites: {
+                [key: string]: unknown;
+            }[];
+        };
         /** FirebaseWebConfig */
         FirebaseWebConfig: {
             /** Api Key */
@@ -3148,6 +3687,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+            /** Updated By */
+            updated_by?: string | null;
         };
         /** FooterLink */
         FooterLink: {
@@ -3402,6 +3943,24 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * ModerationPage
+         * @description The queue with its real size, and each half counted separately.
+         *
+         *     The endpoint took the newest 200 open reports and the newest 200 flagged series and returned them merged,
+         *     saying nothing about either cap. On the day a review-bomb or a bad ingest fills this queue — the only day
+         *     it matters — an operator was working a sample and could not tell.
+         */
+        ModerationPage: {
+            /** Items */
+            items: components["schemas"]["ModerationItem"][];
+            /** Total */
+            total: number;
+            /** Reports */
+            reports: number;
+            /** Flagged */
+            flagged: number;
+        };
         /** MyListOut */
         MyListOut: {
             /** Favorites */
@@ -3634,6 +4193,12 @@ export interface components {
         PublishStatus: "draft" | "review" | "published" | "archived";
         /** PurchaseAdminOut */
         PurchaseAdminOut: {
+            /** Gateway Payment Id */
+            gateway_payment_id?: string | null;
+            /** External Id */
+            external_id?: string | null;
+            /** User Email */
+            user_email?: string | null;
             /**
              * Id
              * Format: uuid
@@ -4312,6 +4877,30 @@ export interface components {
              */
             is_new_user: boolean;
         };
+        /** TotpDisableIn */
+        TotpDisableIn: {
+            /** Password */
+            password: string;
+            /** Code */
+            code: string;
+        };
+        /** TotpEnableIn */
+        TotpEnableIn: {
+            /** Secret */
+            secret: string;
+            /** Code */
+            code: string;
+        };
+        /**
+         * TotpSetupOut
+         * @description The secret, and the URI an authenticator app scans. Shown once and never stored until confirmed.
+         */
+        TotpSetupOut: {
+            /** Secret */
+            secret: string;
+            /** Otpauth Uri */
+            otpauth_uri: string;
+        };
         /** TranscriptOut */
         TranscriptOut: {
             /**
@@ -4478,6 +5067,27 @@ export interface components {
             };
             /** Coins Spent */
             coins_spent: number;
+            /**
+             * Conversion
+             * @default 0
+             */
+            conversion: number;
+            /**
+             * Is Control
+             * @default false
+             */
+            is_control: boolean;
+            /** Lift Pct */
+            lift_pct?: number | null;
+            /** P Value */
+            p_value?: number | null;
+            /**
+             * Significant
+             * @default false
+             */
+            significant: boolean;
+            /** Note */
+            note?: string | null;
         };
         /** VideoAssetOut */
         VideoAssetOut: {
@@ -4499,6 +5109,25 @@ export interface components {
             error: string | null;
             /** Created At */
             created_at?: string | null;
+        };
+        /**
+         * VideoAssetPage
+         * @description Assets with a total and a per-status tally.
+         *
+         *     The screen took the newest 200 rows and said nothing about the rest, so on a library with real volume the
+         *     one failed transcode an operator was looking for could sit permanently below the cut. `counts` puts the
+         *     failure tally in front of them without having to change the filter to find out whether there is anything
+         *     to change the filter for.
+         */
+        VideoAssetPage: {
+            /** Items */
+            items: components["schemas"]["VideoAssetOut"][];
+            /** Total */
+            total: number;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
         };
         /** VipGrantIn */
         VipGrantIn: {
@@ -4985,6 +5614,9 @@ export interface operations {
                 lang?: string;
                 category?: string | null;
                 q?: string | null;
+                sort?: string;
+                status?: string | null;
+                length?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -5016,7 +5648,9 @@ export interface operations {
     };
     list_categories_v1_categories_get: {
         parameters: {
-            query?: never;
+            query?: {
+                lang?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5030,6 +5664,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategoryOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5419,6 +6062,26 @@ export interface operations {
             };
         };
     };
+    export_me_v1_me_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExportOut"];
+                };
+            };
+        };
+    };
     clear_history_v1_me_history_delete: {
         parameters: {
             query?: {
@@ -5502,7 +6165,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Ok"];
+                    "application/json": components["schemas"]["ContactOut"];
                 };
             };
             /** @description Validation Error */
@@ -6064,6 +6727,112 @@ export interface operations {
             };
         };
     };
+    totp_setup_v1_admin_auth_totp_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TotpSetupOut"];
+                };
+            };
+        };
+    };
+    totp_enable_v1_admin_auth_totp_enable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpEnableIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    totp_disable_v1_admin_auth_totp_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpDisableIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_out_everywhere_v1_admin_auth_sign_out_all_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminToken"];
+                };
+            };
+        };
+    };
     forgot_v1_admin_auth_forgot_post: {
         parameters: {
             query?: never;
@@ -6185,7 +6954,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminSeriesOut"][];
+                    "application/json": components["schemas"]["AdminSeriesPage"];
                 };
             };
             /** @description Validation Error */
@@ -6672,6 +7441,9 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string | null;
+                q?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
                 limit?: number;
                 offset?: number;
             };
@@ -6687,7 +7459,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PurchaseAdminOut"][];
+                    "application/json": components["schemas"]["AdminPurchasePage"];
                 };
             };
             /** @description Validation Error */
@@ -7177,6 +7949,37 @@ export interface operations {
             };
         };
     };
+    revoke_sessions_v1_admin_accounts__account_id__revoke_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                account_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminAccountOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     update_account_v1_admin_accounts__account_id__put: {
         parameters: {
             query?: never;
@@ -7436,7 +8239,11 @@ export interface operations {
     };
     pages_v1_admin_pages_get: {
         parameters: {
-            query?: never;
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7449,7 +8256,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminCmsPageOut"][];
+                    "application/json": components["schemas"]["AdminCmsPagePage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7469,6 +8285,37 @@ export interface operations {
         responses: {
             /** @description Successful Response */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminCmsPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    page_detail_v1_admin_pages__page_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                page_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7558,6 +8405,8 @@ export interface operations {
             query?: {
                 status?: components["schemas"]["ReportStatus"] | null;
                 limit?: number;
+                offset?: number;
+                oldest_first?: boolean;
             };
             header?: never;
             path?: never;
@@ -7571,7 +8420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminReportOut"][];
+                    "application/json": components["schemas"]["AdminReportPage"];
                 };
             };
             /** @description Validation Error */
@@ -7624,7 +8473,9 @@ export interface operations {
         parameters: {
             query?: {
                 unread_only?: boolean;
+                q?: string | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -7638,7 +8489,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AdminContactOut"][];
+                    "application/json": components["schemas"]["AdminContactPage"];
                 };
             };
             /** @description Validation Error */
@@ -7716,7 +8567,11 @@ export interface operations {
     };
     moderation_v1_admin_moderation_get: {
         parameters: {
-            query?: never;
+            query?: {
+                kind?: string | null;
+                limit?: number;
+                offset?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -7729,7 +8584,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ModerationItem"][];
+                    "application/json": components["schemas"]["ModerationPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -7790,7 +8654,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AuditRow"][];
+                    "application/json": components["schemas"]["AdminAuditPage"];
                 };
             };
             /** @description Validation Error */
@@ -8018,6 +8882,137 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobOut"];
+                };
+            };
+        };
+    };
+    list_placements_v1_admin_ad_placements_get: {
+        parameters: {
+            query?: {
+                slot?: string | null;
+                active_only?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdPlacementPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_placement_v1_admin_ad_placements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdPlacementIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdPlacementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_placement_v1_admin_ad_placements__placement_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdPlacementIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdPlacementOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_placement_v1_admin_ad_placements__placement_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                placement_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -8542,7 +9537,9 @@ export interface operations {
         parameters: {
             query?: {
                 status?: components["schemas"]["AssetStatus"] | null;
+                q?: string | null;
                 limit?: number;
+                offset?: number;
             };
             header?: never;
             path?: never;
@@ -8556,7 +9553,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VideoAssetOut"][];
+                    "application/json": components["schemas"]["VideoAssetPage"];
                 };
             };
             /** @description Validation Error */
