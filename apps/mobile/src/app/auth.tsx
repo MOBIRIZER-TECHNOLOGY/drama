@@ -24,7 +24,7 @@ export default function AuthScreen() {
   const router = useRouter();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
   const { config } = useConfig();
-  const { status, signInWithEmail, signUpWithEmail, signInWithGoogleIdToken, signInWithApple } = useAuth();
+  const { status, signInWithEmail, signUpWithEmail, sendPasswordReset, signInWithGoogleIdToken, signInWithApple } = useAuth();
   const [mode, setMode] = useState<Mode>("sign_in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -66,6 +66,8 @@ export default function AuthScreen() {
       .then(setAppleAvailable)
       .catch(() => setAppleAvailable(false));
   }, [config.auth.apple]);
+
+  const [notice, setNotice] = useState<string | null>(null);
 
   const run = useCallback(
     async (kind: Exclude<Busy, null>, action: () => Promise<boolean>) => {
@@ -110,6 +112,31 @@ export default function AuthScreen() {
       return true;
     });
   }, [email, password, name, mode, run, signInWithEmail, signUpWithEmail, emailProblem, passwordProblem]);
+
+  /**
+   * Sends a reset link and confirms it in place.
+   *
+   * Deliberately not routed through `run`: that helper closes the screen on success, and here the viewer has
+   * to stay and read the confirmation. The same message shows whether or not the address has an account, so
+   * the form cannot be used to find out which emails are registered.
+   */
+  const resetPassword = useCallback(() => {
+    setTouched((prev) => ({ ...prev, email: true }));
+    if (emailProblem) return;
+    setError(null);
+    setNotice(null);
+    setBusy("email");
+    void (async () => {
+      try {
+        await sendPasswordReset(email);
+        setNotice(t("auth.reset_sent"));
+      } catch (e) {
+        setError(firebaseErrorMessage(e));
+      } finally {
+        setBusy(null);
+      }
+    })();
+  }, [email, emailProblem, sendPasswordReset, t]);
 
   const startGoogle = useCallback(() => {
     void run("google", async () => {
@@ -218,6 +245,18 @@ export default function AuthScreen() {
                 loading={busy === "email"}
                 disabled={busy !== null}
               />
+              {notice ? (
+                <Text variant="caption" color={colors.success}>
+                  {notice}
+                </Text>
+              ) : null}
+              {mode === "sign_in" ? (
+                <Pressable onPress={resetPassword} accessibilityRole="button" style={styles.forgot} disabled={busy !== null}>
+                  <Text variant="caption" color={colors.accent}>
+                    {t("auth.forgot_password")}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 onPress={() => {
                   setMode((m) => (m === "sign_in" ? "sign_up" : "sign_in"));
@@ -242,6 +281,23 @@ export default function AuthScreen() {
               {error}
             </Text>
           ) : null}
+
+          {/*
+            Required by both stores and by the privacy policy itself, and it was missing: the app collected an
+            account without ever telling anyone what they were agreeing to. Placed above the alternative
+            providers so it covers every route in, not only the email form.
+          */}
+          <Text variant="caption" style={styles.consent}>
+            {t("auth.by_continuing")}{" "}
+            <Text variant="caption" color={colors.accent} onPress={() => router.push({ pathname: "/page/[slug]", params: { slug: "terms" } })}>
+              {t("me.terms")}
+            </Text>
+            {" "}
+            {t("auth.and")}{" "}
+            <Text variant="caption" color={colors.accent} onPress={() => router.push({ pathname: "/page/[slug]", params: { slug: "privacy" } })}>
+              {t("me.privacy")}
+            </Text>
+          </Text>
 
           {(googleEnabled || appleEnabled || phoneEnabled) && emailEnabled ? (
             <View style={styles.orRow}>
@@ -286,6 +342,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "flex-end", paddingVertical: spacing.sm },
   form: { gap: spacing.md, marginTop: spacing.sm },
   switch: { alignSelf: "center", paddingVertical: spacing.sm },
+  forgot: { alignSelf: "center", paddingVertical: spacing.xs },
+  consent: { textAlign: "center", marginTop: spacing.md },
   orRow: { flexDirection: "row", alignItems: "center", gap: spacing.md },
   appleButton: { height: 48, width: "100%" },
   todo: { textAlign: "center", marginTop: spacing.xs },

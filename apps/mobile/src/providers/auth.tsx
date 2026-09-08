@@ -4,6 +4,7 @@ import {
   GoogleAuthProvider,
   OAuthProvider,
   signInWithCredential,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   updateProfile,
@@ -28,6 +29,9 @@ type AuthContextValue = {
   refreshUser: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string, displayName?: string) => Promise<void>;
+  /** Sends a Firebase reset link. Resolves whether or not the address has an account, so it cannot be used
+   * to discover which emails are registered. */
+  sendPasswordReset: (email: string) => Promise<void>;
   signInWithGoogleIdToken: (idToken: string) => Promise<void>;
   signInWithApple: (identityToken: string, rawNonce: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -135,6 +139,25 @@ export function AuthProvider({ children }: PropsWithChildren) {
     [exchange],
   );
 
+  /**
+   * Password reset.
+   *
+   * There was no way back into an email account at all: forget the password and the account, its coins and
+   * everything unlocked with them were simply gone. Firebase owns the credential, so it owns the reset.
+   *
+   * `auth/user-not-found` is swallowed deliberately. Reporting it turns this box into an oracle for which
+   * addresses have accounts, and the caller shows the same "check your inbox" either way.
+   */
+  const sendPasswordReset = useCallback(async (email: string) => {
+    try {
+      await sendPasswordResetEmail(getFirebaseAuth(), email.trim());
+    } catch (e) {
+      const code = typeof e === "object" && e !== null && "code" in e ? String((e as { code: string }).code) : "";
+      if (code === "auth/user-not-found" || code === "auth/invalid-email") return;
+      throw e;
+    }
+  }, []);
+
   const signUpWithEmail = useCallback(
     async (email: string, password: string, displayName?: string) => {
       const cred = await createUserWithEmailAndPassword(getFirebaseAuth(), email.trim(), password);
@@ -201,13 +224,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
       refreshUser,
       signInWithEmail,
       signUpWithEmail,
+      sendPasswordReset,
       signInWithGoogleIdToken,
       signInWithApple,
       signOut,
       applyUser,
       requireAuth,
     }),
-    [status, user, balance, setBalance, refreshUser, signInWithEmail, signUpWithEmail, signInWithGoogleIdToken, signInWithApple, signOut, applyUser, requireAuth],
+    [status, user, balance, setBalance, refreshUser, signInWithEmail, signUpWithEmail, sendPasswordReset, signInWithGoogleIdToken, signInWithApple, signOut, applyUser, requireAuth],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
