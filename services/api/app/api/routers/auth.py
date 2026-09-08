@@ -2,13 +2,13 @@ import asyncio
 import uuid
 
 from fastapi import APIRouter, Request
-from firebase_admin import auth as fb_auth
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUser, client_ip
 from app.core.config import get_settings
 from app.core.errors import Conflict, Unauthorized
+from app.core.firebase import delete_user as delete_firebase_user
 from app.core.firebase import verify_id_token
 from app.core.ratelimit import limiter
 from app.models.identity import Session
@@ -33,10 +33,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @limiter.limit("20/minute")
 async def exchange(request: Request, body: ExchangeRequest, db: DB) -> TokenPair:
     """Verify a Firebase ID token and issue Katha access + refresh tokens for this device."""
+    # `verify_id_token` raises Unauthorized itself, with a code the clients can tell apart; a bare ValueError
+    # would still be a 500, so it is narrowed here rather than left to the generic handler.
     try:
         ident = await asyncio.to_thread(verify_id_token, body.firebase_id_token)
-    except (fb_auth.InvalidIdTokenError, fb_auth.ExpiredIdTokenError, ValueError) as exc:
-        raise Unauthorized("Firebase token rejected") from exc
+    except ValueError as exc:
+        raise Unauthorized("Sign-in token is not valid", code="invalid_id_token") from exc
 
     user, created = await users_svc.get_or_create_from_firebase(
         db, ident, locale=body.locale, referral_code=body.referral_code
@@ -193,10 +195,10 @@ async def delete_me(ctx: CurrentUser, db: DB) -> Ok:
     identities = (await db.scalars(select(AuthIdentity).where(AuthIdentity.user_id == user.id))).all()
     for ident in identities:
         if ident.provider == "firebase":
-            try:
-                await asyncio.to_thread(fb_auth.delete_user, ident.provider_uid)
-            except Exception:  # noqa: BLE001 - already gone or Firebase unreachable; local deletion proceeds
-                pass
+            # Returns False when there is no service account to delete with, or Firebase refused. The local
+            # account is erased either way; the helper logs which happened so a stranded Firebase record is
+            # visible rather than silent.
+            await asyncio.to_thread(delete_firebase_user, ident.provider_uid)
         await db.delete(ident)
     for row in (await db.scalars(select(Session).where(Session.user_id == user.id))).all():
         row.revoked_at = datetime.now(UTC)
