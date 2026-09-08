@@ -19,7 +19,7 @@ const sharp = require(join(root, "node_modules/.pnpm/sharp@0.35.4_@types+node@20
 
 const MARK = readFileSync(join(root, "apps/web/public/logo-mark.svg"), "utf8");
 /** The app's own ground, so an opaque icon and the splash screen are the same colour. */
-const GROUND = "#141013";
+const GROUND = "#0A0A0A";
 
 /**
  * The mark already sits at ~60% of its viewBox, which is exactly the Android adaptive safe zone. A plain icon

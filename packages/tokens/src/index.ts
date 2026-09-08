@@ -1,42 +1,61 @@
-/** Design tokens shared by web and mobile. Dark-first: the player and feed live on near-black. */
+/**
+ * Design tokens shared by web and mobile. Dark-first: the player and feed live on near-black.
+ *
+ * The palette is the reference app's, taken from its `res/values/colors.xml` rather than reinvented: crimson
+ * primary on a neutral near-black, with gold for anything premium. Matching it is the point — this product is
+ * a rebuild of that one, and a different hue makes every screen read as a different product no matter how
+ * closely the layouts agree.
+ *
+ * The earlier palette here was orange, derived from the brand mark, because the mark's own red (#D40A2C) only
+ * reaches 3.7:1 on a dark ground and body text needs 4.5. That was the right constraint and the wrong answer:
+ * the reference hits the same constraint and solves it by lightening the red rather than abandoning it.
+ * #F42452 is 4.9:1 on the ground and 4.6:1 on a card, so the product can be red after all. The mark's own
+ * gradient is kept below for drawing the logo itself.
+ */
 export const colors = {
-  ground: "#141013",
-  surface: "#1F181B",
-  surface2: "#2A2125",
-  ink: "#F3ECEE",
-  ink2: "#D9CDD1",
-  muted: "#A99BA0",
-  // Hairline borders. `line` was ~1.6:1 on `ground`, well under the 3:1 WCAG needs for a non-text boundary, so
-  // on a cheap LCD in daylight the whole card system disappeared. Lifted, with `lineStrong` for anything that
-  // has to read as an edge (inputs, table rules, focus outlines).
-  line: "#3E3338",
-  lineStrong: "#554750",
+  // Neutrals are the reference's, and deliberately neutral rather than warm: a warm-tinted grey next to a
+  // crimson accent shifts the whole surface pink.
+  ground: "#0A0A0A",
+  surface: "#141414",
+  surface2: "#242427",
+  ink: "#FAFAFA",
+  ink2: "#D4D4D8",
+  muted: "#A1A1AA",
   /**
-   * Taken from the brand mark, which runs amber to red.
-   *
-   * The mark's deep red (#D40A2C) only reaches 3.5:1 on `ground`, well under the 4.5 body text needs, so the
-   * accent is the gradient's midpoint rather than either end — still a colour that is literally in the logo,
-   * and comfortable at 6.1:1. The two ends are kept below for anywhere the gradient itself is drawn.
+   * Hairline borders. On this ground nothing subtle enough to read as a hairline also clears 3:1, so there are
+   * two: `line` divides content that is already grouped, `lineStrong` is for anything whose edge is the only
+   * thing saying it is a control (inputs, focus rings, table rules).
    */
-  accent: "#F0692A",
-  accentHover: "#F47A3C",
-  accentInk: "#1A0A10",
-  /** VIP and premium: the amber body of the mark's left page. */
-  gold: "#F5A31A",
-  goldHover: "#FDC125",
+  line: "#3A3A40",
+  lineStrong: "#5E5E66",
+  /** The reference's primary. Filled controls take `accentInk` for their label, which is 4.9:1 on it. */
+  accent: "#F42452",
+  accentHover: "#FF4E73",
+  accentInk: "#12080B",
+  /** VIP, coins and anything premium. The reference uses one gold for all of it. */
+  gold: "#EAB308",
+  goldHover: "#FACC15",
   /** The mark's own gradient, for the logo and the few places the brand is drawn rather than referenced. */
   brandFrom: "#FDC125",
   brandTo: "#D40A2C",
-  success: "#8ED1AE",
-  // Pushed yellow, away from the accent. An amber warning sat 11 degrees from an orange brand, which on a
-  // badge beside a button reads as the same colour; at 45 degrees it reads as a different thing entirely.
-  warning: "#F2CE5E",
-  danger: "#F09AA6",
+  success: "#34D399",
+  /**
+   * Amber sits close to `gold`, which is deliberate and no longer a problem. The collision that mattered was
+   * with the accent: an amber badge beside an orange button read as one colour. Against crimson both are 56
+   * degrees away, and gold and warning never appear on the same control.
+   */
+  warning: "#FBBF24",
+  /**
+   * Error text only. It is close in hue to the accent, which is unavoidable when the brand itself is red, and
+   * tolerable because the two never compete: `danger` is only ever a caption, `accent` is only ever a fill.
+   * They are separated by lightness instead, 8.7:1 against 4.9:1.
+   */
+  danger: "#FF8A8A",
   // Semantic roles every component was previously inventing inline as bg-black/40, rgba(0,0,0,0.45), and so on.
-  scrim: "rgba(20, 16, 19, 0.72)",
+  scrim: "rgba(10, 10, 10, 0.72)",
   overlay: "rgba(0, 0, 0, 0.45)",
-  focus: "#F0692A",
-  disabled: "#6B5C62",
+  focus: "#F42452",
+  disabled: "#6B6B73",
 } as const;
 
 export const radii = { sm: 6, md: 12, lg: 18, pill: 999 } as const;

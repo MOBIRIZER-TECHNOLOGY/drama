@@ -33,7 +33,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
           width: "100%",
           height: "100%",
           display: "flex",
-          background: "#141013",
+          background: "#0A0A0A",
           color: "#F4ECEE",
           padding: 64,
           gap: 56,
@@ -54,7 +54,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
             <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.5 }}>Katha</div>
-            <div style={{ width: 8, height: 8, borderRadius: 8, background: "#F0692A" }} />
+            <div style={{ width: 8, height: 8, borderRadius: 8, background: "#F42452" }} />
             <div style={{ fontSize: 22, color: "#A29398" }}>Short dramas</div>
           </div>
           <div
@@ -78,7 +78,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
                   fontSize: 28,
                   padding: "10px 22px",
                   borderRadius: 999,
-                  background: "#1F181B",
+                  background: "#141414",
                   border: "1px solid #332A2E",
                 }}
               >
@@ -91,7 +91,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
                   fontSize: 28,
                   padding: "10px 22px",
                   borderRadius: 999,
-                  background: "#F0692A",
+                  background: "#F42452",
                   color: "#2A0F16",
                   fontWeight: 600,
                 }}

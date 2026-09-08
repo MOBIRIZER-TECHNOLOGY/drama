@@ -1,6 +1,6 @@
 import { colors, radii, spacing } from "@katha/tokens";
 import { FlashList } from "@shopify/flash-list";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, StyleSheet, useWindowDimensions, View } from "react-native";
 import { Icon } from "@/components/icons";
@@ -21,7 +21,9 @@ export default function SearchScreen() {
   const t = useT();
   const router = useRouter();
   const { lang } = useConfig();
-  const [q, setQ] = useState("");
+  // Opened from a genre chip on home, the screen arrives with its query already set rather than empty.
+  const { q: initialQuery } = useLocalSearchParams<{ q?: string }>();
+  const [q, setQ] = useState(initialQuery ?? "");
   const [result, setResult] = useState<{ query: string; items: SeriesCardModel[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

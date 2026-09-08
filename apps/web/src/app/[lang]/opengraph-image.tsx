@@ -23,14 +23,14 @@ export default async function Image({ params }: { params: Promise<{ lang: string
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
-          background: "#141013",
+          background: "#0A0A0A",
           color: "#F4ECEE",
           padding: 96,
           fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
         }}
       >
         <div style={{ display: "flex", fontSize: 116, fontWeight: 700, letterSpacing: -3 }}>
-          Katha<span style={{ color: "#F0692A" }}>.</span>
+          Katha<span style={{ color: "#F42452" }}>.</span>
         </div>
         <div style={{ display: "flex", fontSize: 40, color: "#A29398", marginTop: 20, maxWidth: 900 }}>{tagline}</div>
         <div style={{ display: "flex", gap: 16, marginTop: 56 }}>
@@ -41,7 +41,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
                 fontSize: 26,
                 padding: "10px 22px",
                 borderRadius: 999,
-                background: "#1F181B",
+                background: "#141414",
                 border: "1px solid #332A2E",
               }}
             >

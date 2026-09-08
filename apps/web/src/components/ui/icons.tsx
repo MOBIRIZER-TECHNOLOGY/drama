@@ -235,7 +235,7 @@ export const IconShorts = (p: P & { filled?: boolean }) => {
   return (
     <svg {...base(rest)} fill={filled ? "currentColor" : "none"}>
       <rect x="6" y="2.5" width="12" height="19" rx="3" />
-      <path d="M10.5 9.5v5l4-2.5z" fill={filled ? "var(--color-ground, #141013)" : "currentColor"} stroke="none" />
+      <path d="M10.5 9.5v5l4-2.5z" fill={filled ? "var(--color-ground, #0A0A0A)" : "currentColor"} stroke="none" />
     </svg>
   );
 };

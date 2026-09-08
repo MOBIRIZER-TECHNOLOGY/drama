@@ -2,7 +2,7 @@ import { colors, radii, spacing } from "@katha/tokens";
 import { FlashList } from "@shopify/flash-list";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef } from "react";
-import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { FeaturedSlider } from "@/components/featured-slider";
 import { Icon } from "@/components/icons";
 import { Rail } from "@/components/rail";
@@ -41,6 +41,21 @@ export default function HomeScreen() {
     }, [signedIn, refetchHome]),
   );
 
+  /**
+   * Genres, as a row of chips under the featured carousel.
+   *
+   * The reference puts these on the home screen rather than only inside search, and it is the right call for a
+   * catalogue this shallow: "Romance" is how this audience browses, and burying it behind the search icon
+   * means most viewers never see that the catalogue has shape. Tapping one opens search already narrowed.
+   */
+  const categoriesQuery = useQuery(
+    async () => unwrap(await api.GET("/v1/categories", { params: { query: { lang } } })),
+    [lang],
+  );
+  const categories = categoriesQuery.data ?? [];
+
+  const rewardsEnabled = config.rewards?.enabled !== false;
+
   // `for_you` is personalised (present only for signed-in viewers with history) and sits right after
   // Continue Watching, above the editorial rails.
   const rails = useMemo(() => {
@@ -57,14 +72,23 @@ export default function HomeScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Text variant="display" style={styles.brand}>
-          {config.site.name ?? "Katha"}
-        </Text>
+        <View style={styles.brandRow}>
+          {/* The mark, not just the wordmark: it is the only place in the app the brand is actually drawn. */}
+          <Image source={require("../../../assets/images/icon.png")} style={styles.mark} accessibilityIgnoresInvertColors />
+          <Text variant="display" style={styles.brand}>
+            {config.site.name ?? "Katha"}
+          </Text>
+        </View>
         <View style={styles.headerRight}>
-          {signedIn ? (
-            <Pressable onPress={() => router.push("/wallet")} accessibilityRole="button" style={styles.coins}>
-              <Icon name="coin" size={14} />
-              <Text variant="label">{balance}</Text>
+          {rewardsEnabled ? (
+            <Pressable
+              onPress={() => router.push("/rewards")}
+              accessibilityRole="button"
+              accessibilityLabel={t("rewards.title")}
+              style={styles.rewardsPill}
+            >
+              <Icon name="gift" size={14} color={colors.gold} />
+              <Text variant="label">{signedIn ? String(balance) : t("rewards.title")}</Text>
             </Pressable>
           ) : null}
           <Pressable onPress={() => router.push("/search")} accessibilityRole="button" accessibilityLabel={t("home.search")} hitSlop={8}>
@@ -103,6 +127,27 @@ export default function HomeScreen() {
           ListHeaderComponent={
             <View>
               {rails.featured ? <FeaturedSlider items={rails.featured.items} /> : null}
+              {categories.length > 0 ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.genres}
+                  accessibilityRole="tablist"
+                >
+                  {categories.map((c) => (
+                    <Pressable
+                      key={c.id}
+                      onPress={() => router.push({ pathname: "/search", params: { q: c.name } })}
+                      accessibilityRole="button"
+                      style={styles.genre}
+                    >
+                      <Text variant="label" color={colors.ink2}>
+                        {c.name}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : null}
               {rails.cont && rails.cont.items.length > 0 ? <ContinueRail title={rails.cont.title || t("home.continue_watching")} items={rails.cont.items} /> : null}
               {rails.forYou ? <Rail title={rails.forYou.title || t("home.for_you")} items={rails.forYou.items} /> : null}
             </View>
@@ -180,14 +225,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
   },
-  brand: { color: colors.accent },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  mark: { width: 32, height: 32, borderRadius: radii.sm },
+  brand: { color: colors.ink },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  coins: {
+  /**
+   * Gold rather than the accent, and filled rather than outlined: this is the one control on the screen that
+   * is offering something instead of asking for something, and it should not read as another nav button.
+   */
+  rewardsPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: spacing.md,
     paddingVertical: 6,
+    borderRadius: radii.pill,
+    backgroundColor: "rgba(234, 179, 8, 0.15)",
+  },
+  // No bottom padding: the section header that follows already carries its own top margin, and stacking the
+  // two left a band of dead space under the chips that read as a rail that had failed to load.
+  genres: { flexDirection: "row", gap: spacing.sm, paddingHorizontal: spacing.lg },
+  genre: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
     borderRadius: radii.pill,
     backgroundColor: colors.surface,
     borderWidth: StyleSheet.hairlineWidth,

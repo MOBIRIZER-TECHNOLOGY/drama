@@ -36,7 +36,9 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: styles.bar,
-        tabBarActiveTintColor: colors.ink,
+        // The reference tints the selected tab with the brand colour rather than plain white, which is what
+        // makes the bar read as part of the product instead of a system chrome default.
+        tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: styles.label,
         sceneStyle: { backgroundColor: colors.ground },
