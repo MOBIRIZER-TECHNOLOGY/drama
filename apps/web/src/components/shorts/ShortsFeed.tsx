@@ -39,11 +39,24 @@ const PREFETCH_WITHIN = 4;
  * Only the centred item holds a video element; everything else is a poster, so the feed never keeps more than
  * one HLS session alive.
  */
-export function ShortsFeed({ initial, nextCursor, lang }: { initial: ShortItemData[]; nextCursor: string | null; lang: string }) {
+export function ShortsFeed({
+  initial,
+  nextCursor,
+  lang,
+  startAt,
+}: {
+  initial: ShortItemData[];
+  nextCursor: string | null;
+  lang: string;
+  /** `?s=slug&ep=n` from the URL: where a shared or reloaded feed should open. */
+  startAt?: { slug: string; episode: number } | null;
+}) {
   const t = useT();
   const [extra, setExtra] = useState<ShortItemData[]>([]);
   const [cursor, setCursor] = useState<string | null>(nextCursor);
-  const [activeId, setActiveId] = useState<string | null>(initial[0]?.episode_id ?? null);
+  const openAt =
+    startAt && initial.find((i) => i.slug === startAt.slug && i.episode_number === startAt.episode);
+  const [activeId, setActiveId] = useState<string | null>(openAt?.episode_id ?? initial[0]?.episode_id ?? null);
   const [muted, setMuted] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingMore = useRef(false);
@@ -64,6 +77,16 @@ export function ShortsFeed({ initial, nextCursor, lang }: { initial: ShortItemDa
     loadingMore.current = false;
   }, [cursor, lang, initial]);
 
+  // Open on the requested short. Runs once: after that the observer owns which item is active.
+  const scrolledToStart = useRef(false);
+  useEffect(() => {
+    if (scrolledToStart.current || !openAt) return;
+    scrolledToStart.current = true;
+    containerRef.current
+      ?.querySelector(`[data-episode-id="${openAt.episode_id}"]`)
+      ?.scrollIntoView({ block: "start" });
+  }, [openAt]);
+
   useEffect(() => {
     const root = containerRef.current;
     if (!root) return;
@@ -83,6 +106,13 @@ export function ShortsFeed({ initial, nextCursor, lang }: { initial: ShortItemDa
         if (index >= 0) {
           const item = items[index];
           track("shorts_swipe", { position: index, series_id: item.series_id, episode_number: item.episode_number });
+          // The address bar follows the feed, so reload and back land on the short being watched instead of
+          // restarting at the top, and the URL is worth copying. `replaceState` rather than a push: a swipe is
+          // not a navigation, and filling the history stack would break the back button entirely.
+          const url = new URL(window.location.href);
+          url.searchParams.set("s", item.slug);
+          url.searchParams.set("ep", String(item.episode_number));
+          window.history.replaceState(null, "", url);
           if (index >= items.length - PREFETCH_WITHIN) void loadMore();
         }
       },
@@ -209,9 +239,12 @@ function ShortItem({
     // Carry the episode and a campaign tag, so the recipient lands on the cliffhanger that prompted the share
     // rather than on episode one, and the funnel can tell organic shares apart.
     const params = new URLSearchParams({ utm_source: "share" });
-    if (item.episode_number > 1) params.set("ep", String(item.episode_number));
     if (user?.referral_code) params.set("ref", user.referral_code);
-    const url = `${window.location.origin}${href(`/series/${item.slug}`)}?${params}`;
+    // The episode has its own indexable page now; sharing `?ep=N` pointed at a query parameter Google will
+    // not index and split the authority of every share away from the page built to receive it.
+    const path =
+      item.episode_number > 1 ? `/series/${item.slug}/${item.episode_number}` : `/series/${item.slug}`;
+    const url = `${window.location.origin}${href(path)}?${params}`;
     track("share", { series_id: seriesId, episode_id: episodeId, surface: "shorts", method: typeof navigator.share === "function" ? "native" : "clipboard" });
     try {
       if (navigator.share) {

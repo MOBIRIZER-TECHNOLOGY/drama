@@ -63,7 +63,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     fetchTranslations(lang),
     fetchFooterPages(lang),
     fetchConfig(),
-    fetchCategories(),
+    fetchCategories(lang),
   ]);
   const dir: "ltr" | "rtl" = languages.find((l) => l.code === lang)?.rtl ? "rtl" : "ltr";
   const t = (key: string, fallback: string) => messages[key] || fallback;

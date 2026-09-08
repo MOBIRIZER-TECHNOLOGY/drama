@@ -112,9 +112,16 @@ export const fetchSeries = cache(
     ),
 );
 
+export type SearchFilters = { category?: string; status?: "completed" | "ongoing"; length?: "short" | "medium" | "long" };
+
 export const searchSeries = cache(
-  (q: string, lang: string): Promise<Loaded<SeriesCard[]>> =>
-    load(() => api.GET("/v1/series", { params: { query: { q, lang, limit: 40 } }, signal: timeoutSignal() })),
+  (q: string, lang: string, filters: SearchFilters = {}): Promise<Loaded<SeriesCard[]>> =>
+    load(() =>
+      api.GET("/v1/series", {
+        params: { query: { q, lang, limit: 40, ...filters } },
+        signal: timeoutSignal(),
+      }),
+    ),
 );
 
 export const fetchPage = cache(
@@ -122,21 +129,29 @@ export const fetchPage = cache(
     load(() => api.GET("/v1/pages/{slug}", { params: { path: { slug }, query: { lang } }, signal: timeoutSignal() })),
 );
 
-export const fetchCategories = cache(async (): Promise<CategoryOut[]> => {
-  const rows = await cached("categories", 60_000, async () => {
-    const { data } = await api.GET("/v1/categories", { signal: timeoutSignal() });
+/** Genre names come back in `lang`, so the cache key has to carry it or one language poisons the others. */
+export const fetchCategories = cache(async (lang: string = "en"): Promise<CategoryOut[]> => {
+  const rows = await cached(`categories:${lang}`, 60_000, async () => {
+    const { data } = await api.GET("/v1/categories", { params: { query: { lang } }, signal: timeoutSignal() });
     return data ?? null;
   });
   return rows ?? [];
 });
 
-export type SeriesListQuery = { lang: string; category?: string; limit?: number; offset?: number };
+export type SeriesListQuery = {
+  lang: string;
+  category?: string;
+  /** "featured" keeps the operator's own weighting and is the default. */
+  sort?: "featured" | "popular" | "newest" | "updated";
+  limit?: number;
+  offset?: number;
+};
 
 export const fetchSeriesList = cache(
-  ({ lang, category, limit = 40, offset = 0 }: SeriesListQuery): Promise<Loaded<SeriesCard[]>> =>
+  ({ lang, category, sort = "featured", limit = 40, offset = 0 }: SeriesListQuery): Promise<Loaded<SeriesCard[]>> =>
     load(() =>
       api.GET("/v1/series", {
-        params: { query: { lang, category: category || undefined, limit, offset } },
+        params: { query: { lang, category: category || undefined, sort, limit, offset } },
         signal: timeoutSignal(),
       }),
     ),

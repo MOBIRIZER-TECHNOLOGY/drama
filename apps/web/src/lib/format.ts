@@ -60,6 +60,18 @@ export function formatDate(iso: string | null | undefined, locale: string = "en"
   }
 }
 
+/** Date without a clock time — for things dated by the day, like when a policy last changed. */
+export function formatDay(iso: string | null | undefined, locale: string = "en"): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  try {
+    return new Intl.DateTimeFormat(locale, { dateStyle: "long" }).format(d);
+  } catch {
+    return d.toLocaleDateString();
+  }
+}
+
 export function formatRelative(iso: string | null | undefined, locale: string = "en"): string {
   if (!iso) return "";
   const d = new Date(iso);

@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { clientApi } from "@/lib/client-api";
 import { call } from "@/lib/errors";
 import { formatNumber } from "@/lib/format";
+import * as guestHistory from "@/lib/guest-history";
 import { useToast } from "@/lib/toast";
 import type { EpisodeOut, PlayOut, SeriesDetail } from "@/lib/types";
 import { AgeGateDialog } from "../AgeGateDialog";
@@ -349,7 +350,22 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
 
   const putProgress = useCallback(
     (episodeId: string, positionSec: number, completed: boolean) => {
-      if (status !== "authenticated") return;
+      if (status !== "authenticated") {
+        // A guest has nowhere on the server to keep this, so it is kept in their browser instead and the home
+        // page reads it back. Without it, four episodes watched signed-out left no trace at all.
+        const episode = episodes.find((e) => e.id === episodeId);
+        if (status === "anonymous" && episode) {
+          guestHistory.record({
+            seriesId: series.id,
+            slug: series.slug,
+            title: series.title,
+            coverUrl: series.cover_url ?? null,
+            episodeNumber: episode.number,
+            positionSec,
+          });
+        }
+        return;
+      }
       void call(() =>
         clientApi.PUT("/v1/episodes/{episode_id}/progress", {
           params: { path: { episode_id: episodeId } },
@@ -358,7 +374,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
         }),
       );
     },
-    [status],
+    [status, episodes, series.id, series.slug, series.title, series.cover_url],
   );
 
   const onEnded = () => {

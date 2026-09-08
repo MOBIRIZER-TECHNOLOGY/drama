@@ -9,7 +9,7 @@ import { call, type ApiError } from "@/lib/errors";
 import { useLoader } from "@/lib/use-loader";
 import { formatDuration, formatRelative } from "@/lib/format";
 import { useToast } from "@/lib/toast";
-import type { MyListOut } from "@/lib/types";
+import type { HistoryItem, MyListOut } from "@/lib/types";
 import { PageTitle, RequireAuth } from "./RequireAuth";
 import { SeriesCard } from "./SeriesCard";
 import { Button, buttonClass } from "./ui/Button";
@@ -36,6 +36,7 @@ function MyListInner() {
   // Clearing everything was a one-tap ghost button with no confirmation and no undo, while removing a *single*
   // row was equally easy — the destructive weighting was inverted.
   const [confirmClear, setConfirmClear] = useState(false);
+  const [onlyUnfinished, setOnlyUnfinished] = useState(false);
 
   const load = useCallback(async () => {
     const res = await call(() => clientApi.GET("/v1/me/list", { params: { query: { lang } } }));
@@ -59,6 +60,17 @@ function MyListInner() {
   if (error) return <ErrorState error={error} onRetry={load} />;
 
   const historyCount = data?.history.length ?? 0;
+  /**
+   * "Unfinished" is the reason to open this page at all.
+   *
+   * Every episode ever started landed in one undifferentiated list, so a series finished last month sat
+   * beside the one abandoned mid-cliffhanger and the list got less useful the more it was used. A series
+   * counts as unfinished while there is an episode after the one last watched.
+   */
+  const isUnfinished = (h: HistoryItem) =>
+    !h.completed || h.episode_number < (h.series.episode_count || h.episode_number);
+  const unfinishedCount = (data?.history ?? []).filter(isUnfinished).length;
+  const history = (data?.history ?? []).filter((h) => (onlyUnfinished ? isUnfinished(h) : true));
 
   return (
     <div>
@@ -94,16 +106,29 @@ function MyListInner() {
       <PageTitle>{t("my_list.title", "My List")}</PageTitle>
 
       <section aria-labelledby="cw-heading">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <h2 id="cw-heading" className="font-display text-lg font-semibold text-ink">
             {t("my_list.continue", "Continue watching")}
           </h2>
-          {data && data.history.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} loading={busy === "all"}>
-              <IconTrash size={14} />
-              {t("my_list.clear_history", "Clear history")}
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {data && data.history.length > 0 && unfinishedCount < data.history.length && (
+              <label className="flex items-center gap-2 text-sm text-muted">
+                <input
+                  type="checkbox"
+                  checked={onlyUnfinished}
+                  onChange={(e) => setOnlyUnfinished(e.target.checked)}
+                  className="h-4 w-4 accent-accent"
+                />
+                {t("my_list.only_unfinished", "Unfinished only")}
+              </label>
+            )}
+            {data && data.history.length > 0 && (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmClear(true)} loading={busy === "all"}>
+                <IconTrash size={14} />
+                {t("my_list.clear_history", "Clear history")}
+              </Button>
+            )}
+          </div>
         </div>
         {!data ? (
           <div className="flex flex-col gap-2">
@@ -111,11 +136,15 @@ function MyListInner() {
               <Skeleton key={i} className="h-24 w-full" />
             ))}
           </div>
-        ) : data.history.length === 0 ? (
+        ) : history.length === 0 ? (
           <EmptyState
             icon={<IconPlay size={28} />}
-            title={t("my_list.no_history", "Nothing in progress")}
-            message={t("my_list.no_history_hint", "Episodes you start will show up here so you can pick up where you left off.")}
+            title={onlyUnfinished ? t("my_list.all_caught_up", "All caught up") : t("my_list.no_history", "Nothing in progress")}
+            message={
+              onlyUnfinished
+                ? t("my_list.all_caught_up_hint", "You have finished everything you started. Find something new.")
+                : t("my_list.no_history_hint", "Episodes you start will show up here so you can pick up where you left off.")
+            }
             action={
               <Link href={href("/")} className={buttonClass("secondary", "sm")}>
                 {t("my_list.browse", "Browse dramas")}
@@ -124,7 +153,7 @@ function MyListInner() {
           />
         ) : (
           <ul className="flex flex-col gap-2">
-            {data.history.map((h) => {
+            {history.map((h) => {
               const pct = h.duration_sec ? Math.min(100, Math.round((h.position_sec / h.duration_sec) * 100)) : h.completed ? 100 : 0;
               const nextNumber = h.completed ? h.episode_number + 1 : h.episode_number;
               const target = href(`/series/${h.series.slug}?ep=${Math.min(nextNumber, h.series.episode_count || nextNumber)}`);

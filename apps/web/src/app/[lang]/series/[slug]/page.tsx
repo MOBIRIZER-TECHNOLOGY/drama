@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { JsonLd } from "@/components/JsonLd";
 import { Rail } from "@/components/Rail";
 import { SeriesCard } from "@/components/SeriesCard";
 import { SeriesView } from "@/components/series/SeriesView";
 import { ErrorState } from "@/components/ui/states";
 import { localeHref } from "@/lib/languages";
-import { tvSeriesJsonLd, videoObjectJsonLd } from "@/lib/seo";
+import { breadcrumbJsonLd, tvSeriesJsonLd, videoObjectJsonLd } from "@/lib/seo";
 import { fetchLanguages, fetchSeries, fetchTranslations } from "@/lib/server-data";
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/series/[slug]">): Promise<Metadata> {
@@ -60,10 +61,25 @@ export default async function SeriesPage({ params, searchParams }: PageProps<"/[
   const wanted = initialEpisode ?? series.continue_episode_number ?? 1;
   const currentEpisode = sorted.find((e) => e.number === wanted) ?? sorted[0] ?? null;
   const video = currentEpisode ? videoObjectJsonLd(series, currentEpisode, lang) : null;
+  // Genre first when the series has one: it is the page a viewer most plausibly wants to go up to.
+  const crumbs = [
+    { name: t("browse.title", "Browse all dramas"), path: "/series" },
+    ...(series.categories[0] ? [{ name: series.categories[0].name, path: `/category/${series.categories[0].slug}` }] : []),
+    { name: series.title },
+  ];
 
   return (
     <>
-      <JsonLd data={video ? [tvSeriesJsonLd(series, lang), video] : tvSeriesJsonLd(series, lang)} />
+      <JsonLd
+        data={[
+          tvSeriesJsonLd(series, lang),
+          breadcrumbJsonLd(crumbs, lang),
+          ...(video ? [video] : []),
+        ]}
+      />
+      <div className="mx-auto max-w-[1400px] px-4 pt-4 sm:px-6 lg:px-8">
+        <Breadcrumbs crumbs={crumbs} lang={lang} label={t("common.breadcrumb", "Breadcrumb")} />
+      </div>
       <SeriesView series={series} initialEpisode={initialEpisode} />
       {series.similar.length > 0 && (
         <div className="mx-auto mt-6 max-w-[1400px]">

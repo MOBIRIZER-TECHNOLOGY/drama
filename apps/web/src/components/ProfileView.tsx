@@ -41,6 +41,8 @@ function ProfileInner() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionOut[] | null>(null);
   const [sessionsError, setSessionsError] = useState<ApiError | null>(null);
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -52,6 +54,32 @@ function ProfileInner() {
   // Irreversible, so it asks the viewer to type the word rather than accepting a reflexive second click.
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+
+  /**
+   * The account's own data, as a file.
+   *
+   * Built in the browser from the JSON the API returns rather than served as an attachment, so nothing has to
+   * be written to storage and no link exists that could be shared by accident.
+   */
+  const exportData = useCallback(async () => {
+    setExporting(true);
+    setExportError(null);
+    const { data, error } = await call(() => clientApi.GET("/v1/me/export"));
+    setExporting(false);
+    if (error || !data) {
+      setExportError(error?.message ?? "Could not prepare your data.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `katha-data-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }, []);
 
   const loadSessions = useCallback(async () => {
     const { data, error } = await call(() => clientApi.GET("/v1/auth/sessions"));
@@ -261,6 +289,26 @@ function ProfileInner() {
               <IconLogout size={16} />
               {t("auth.sign_out", "Sign out")}
             </Button>
+
+            <div className="mt-5 border-t border-line pt-4">
+              {/* Deleting is offered above; being able to see what deleting removes should come first. */}
+              <h3 className="text-sm font-medium text-ink">{t("profile.export_title", "Download your data")}</h3>
+              <p className="mt-1 text-sm text-muted">
+                {t(
+                  "profile.export_hint",
+                  "Your profile, coin history, purchases, watch history and saved titles, as a JSON file.",
+                )}
+              </p>
+              <Button variant="secondary" className="mt-3" loading={exporting} onClick={exportData}>
+                <IconUpload size={16} className="rotate-180" />
+                {t("profile.export", "Download data")}
+              </Button>
+              {exportError && (
+                <p role="alert" className="mt-2 text-sm text-danger">
+                  {exportError}
+                </p>
+              )}
+            </div>
 
             <div className="mt-5 border-t border-line pt-4">
               <h3 className="text-sm font-medium text-ink">{t("profile.delete_title", "Delete your account")}</h3>

@@ -123,6 +123,63 @@ dialog {
   text-align: start;
 }
 
+/* A wide table scrolls inside its own box instead of pushing the article sideways. */
+.prose-cms .cms-scroll {
+  overflow-x: auto;
+  margin-bottom: 1em;
+  -webkit-overflow-scrolling: touch;
+}
+.prose-cms .cms-scroll table {
+  margin-bottom: 0;
+  min-width: 32rem;
+}
+/* An anchored heading should not land under the sticky header. */
+.prose-cms :is(h2, h3)[id] {
+  scroll-margin-top: 5rem;
+}
+
+/*
+ * Terms, privacy and refund pages get printed and attached to support tickets. Without this the chrome, the
+ * dark ground and the link colours all came with them, and link targets were lost entirely.
+ */
+@media print {
+  :root {
+    color-scheme: light;
+  }
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  header,
+  footer,
+  nav[aria-label],
+  .print\:hidden {
+    display: none !important;
+  }
+  article {
+    max-width: none;
+    padding: 0;
+  }
+  .prose-cms a {
+    color: #000;
+    text-decoration: underline;
+  }
+  .prose-cms a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.85em;
+    word-break: break-all;
+  }
+  .prose-cms :is(h1, h2, h3) {
+    break-after: avoid;
+  }
+  .prose-cms .cms-scroll {
+    overflow: visible;
+  }
+  .prose-cms .cms-scroll table {
+    min-width: 0;
+  }
+}
+
 /* Range inputs used by the player (seek + volume). */
 input[type="range"].k-range {
   appearance: none;

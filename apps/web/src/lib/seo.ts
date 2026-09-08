@@ -7,6 +7,29 @@ export function absoluteUrl(lang: string, path: string): string {
   return `${SITE_URL}${localeHref(lang, path)}`;
 }
 
+export type Crumb = { name: string; path?: string };
+
+/**
+ * schema.org BreadcrumbList.
+ *
+ * Series and episode pages carried no breadcrumb at all — neither a visible one nor the structured data — so a
+ * search result for "<series> episode 12" showed a bare URL where competitors show a browse trail, and the two
+ * pages had no declared relationship to each other or to the catalogue above them.
+ */
+export function breadcrumbJsonLd(crumbs: Crumb[], lang: string): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: crumbs.map((c, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: c.name,
+      // The last crumb is the current page and takes no `item`, per Google's guidance.
+      ...(c.path ? { item: absoluteUrl(lang, c.path) } : {}),
+    })),
+  };
+}
+
 /** schema.org TVSeries for a series page. */
 export function tvSeriesJsonLd(series: SeriesDetail, lang: string): Record<string, unknown> {
   const url = absoluteUrl(lang, `/series/${series.slug}`);

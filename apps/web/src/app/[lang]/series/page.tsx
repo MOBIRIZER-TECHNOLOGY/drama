@@ -3,9 +3,13 @@ import Link from "next/link";
 import { CategoryBar } from "@/components/CategoryBar";
 import { Rail } from "@/components/Rail";
 import { SeriesCard } from "@/components/SeriesCard";
+import { isSort, SortBar, type Sort } from "@/components/SortBar";
+import { buttonClass } from "@/components/ui/Button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { localeHref } from "@/lib/languages";
-import { fetchBrowse, fetchCategories, fetchLanguages, fetchTranslations } from "@/lib/server-data";
+import { fetchBrowse, fetchCategories, fetchLanguages, fetchSeriesList, fetchTranslations } from "@/lib/server-data";
+
+const PAGE_SIZE = 60;
 
 /** Catalogue pages are cached per language and refreshed in the background every minute. */
 export const revalidate = 60;
@@ -27,19 +31,39 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/series">):
   };
 }
 
-export default async function BrowsePage({ params }: PageProps<"/[lang]/series">) {
+export default async function BrowsePage({ params, searchParams }: PageProps<"/[lang]/series">) {
   const { lang } = await params;
-  // One request. This used to fetch the catalogue and then make another call per category — 1 + N round trips
-  // on every revalidation, which was most of the page's time to first byte. The API groups it now.
-  const [categories, messages, browse] = await Promise.all([
-    fetchCategories(),
+  const sp = await searchParams;
+  const sortParam = Array.isArray(sp.sort) ? sp.sort[0] : sp.sort;
+  /**
+   * Ordering turns this page from a curated set of rails into a flat catalogue.
+   *
+   * Grouped rails are the right default — they are how someone browses without a goal — but a visitor who
+   * wants "what is most watched" or "what landed this week" had no way to ask, and reordering rails would not
+   * have answered it. Asking for an order asks for a list.
+   */
+  const sort: Sort | null = isSort(sortParam) ? sortParam : null;
+  const offsetRaw = Array.isArray(sp.offset) ? sp.offset[0] : sp.offset;
+  const offset = offsetRaw && /^\d+$/.test(offsetRaw) ? Math.min(Number(offsetRaw), 10_000) : 0;
+
+  const [categories, messages, browse, flat] = await Promise.all([
+    fetchCategories(lang),
     fetchTranslations(lang),
-    fetchBrowse(lang),
+    // One request for the grouped view. This used to fetch the catalogue and then make another call per
+    // category — 1 + N round trips on every revalidation, which was most of the page's time to first byte.
+    sort ? Promise.resolve(null) : fetchBrowse(lang),
+    sort ? fetchSeriesList({ lang, sort, limit: PAGE_SIZE, offset }) : Promise.resolve(null),
   ]);
   const t = (key: string, fallback: string) => messages[key] || fallback;
 
-  const rails = browse.ok ? browse.data.rails.filter((r) => r.items.length > 0) : [];
-  const failed = !browse.ok;
+  const rails = browse?.ok ? browse.data.rails.filter((r) => r.items.length > 0) : [];
+  const flatItems = flat?.ok ? flat.data : [];
+  const failed = sort ? !flat?.ok : !browse?.ok;
+
+  const hrefFor = (s: Sort) => localeHref(lang, s === "featured" ? "/series" : `/series?sort=${s}`);
+  const pageHref = (o: number) =>
+    localeHref(lang, `/series?sort=${sort ?? "featured"}${o > 0 ? `&offset=${o}` : ""}`);
+  const hasNext = flatItems.length === PAGE_SIZE;
 
   return (
     <div className="mx-auto max-w-[1400px] py-6 sm:py-8">
@@ -55,6 +79,19 @@ export default async function BrowsePage({ params }: PageProps<"/[lang]/series">
             label={t("browse.categories", "Categories")}
           />
         </div>
+        <div className="mt-4">
+          <SortBar
+            active={sort ?? "featured"}
+            hrefFor={hrefFor}
+            label={t("browse.sort", "Sort")}
+            labels={{
+              featured: t("browse.sort_featured", "Featured"),
+              popular: t("browse.sort_popular", "Most watched"),
+              newest: t("browse.sort_newest", "Newest"),
+              updated: t("browse.sort_updated", "Recently updated"),
+            }}
+          />
+        </div>
       </div>
 
       {failed ? (
@@ -64,6 +101,52 @@ export default async function BrowsePage({ params }: PageProps<"/[lang]/series">
             message={t("browse.error_message", "Please try again in a moment.")}
             retryLabel={t("common.retry", "Try again")}
           />
+        </div>
+      ) : sort ? (
+        <div className="mt-8 px-4 sm:px-6 lg:px-8">
+          {flatItems.length === 0 ? (
+            <EmptyState
+              title={offset > 0 ? t("browse.no_more", "Nothing more to show") : t("browse.empty_title", "Nothing published yet")}
+              message={offset > 0 ? t("browse.no_more_hint", "Go back a page.") : t("browse.empty_message", "New dramas are on their way. Check back soon.")}
+            />
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
+                {flatItems.map((series, i) => (
+                  <SeriesCard
+                    key={series.id}
+                    series={series}
+                    lang={lang}
+                    priority={i < 6}
+                    className="w-full sm:w-full md:w-full"
+                    episodesLabel={t("series.eps", "eps")}
+                    freeLabel={t("series.free", "Free")}
+                  />
+                ))}
+              </div>
+              {(offset > 0 || hasNext) && (
+                <nav aria-label={t("common.pagination", "Pagination")} className="mt-8 flex items-center justify-between gap-3">
+                  {offset > 0 ? (
+                    <Link href={pageHref(Math.max(0, offset - PAGE_SIZE))} rel="prev" className={buttonClass("secondary")}>
+                      {t("common.previous", "Previous")}
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                  <span className="text-sm text-muted">
+                    {`${t("common.page_label", "Page")} ${Math.floor(offset / PAGE_SIZE) + 1}`}
+                  </span>
+                  {hasNext ? (
+                    <Link href={pageHref(offset + PAGE_SIZE)} rel="next" className={buttonClass("secondary")}>
+                      {t("common.next", "Next")}
+                    </Link>
+                  ) : (
+                    <span />
+                  )}
+                </nav>
+              )}
+            </>
+          )}
         </div>
       ) : rails.length === 0 ? (
         <div className="mx-auto mt-10 max-w-lg px-4">

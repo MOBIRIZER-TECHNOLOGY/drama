@@ -2,6 +2,8 @@ import DOMPurify from "isomorphic-dompurify";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ErrorState } from "@/components/ui/states";
+import { enhanceCmsHtml } from "@/lib/cms-html";
+import { formatDay } from "@/lib/format";
 import { localeHref } from "@/lib/languages";
 import { fetchLanguages, fetchPage, fetchTranslations } from "@/lib/server-data";
 
@@ -45,10 +47,35 @@ export default async function CmsPage({ params }: PageProps<"/[lang]/p/[slug]">)
       </div>
     );
   }
-  const html = DOMPurify.sanitize(page.data.body_html, SANITIZE);
+  const { html, toc } = enhanceCmsHtml(DOMPurify.sanitize(page.data.body_html, SANITIZE));
+  const updated = formatDay(page.data.updated_at, lang);
   return (
     <article className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <h1 className="font-display mb-6 text-3xl font-bold text-ink">{page.data.title}</h1>
+      <h1 className="font-display mb-2 text-3xl font-bold text-ink">{page.data.title}</h1>
+      {updated ? (
+        <p className="mb-6 text-sm text-muted">
+          {t("page.updated", "Last updated")} <time dateTime={page.data.updated_at ?? undefined}>{updated}</time>
+        </p>
+      ) : (
+        <div className="mb-6" />
+      )}
+
+      {/* Only for pages long enough to get lost in; a two-heading contents list is noise. */}
+      {toc.length > 0 ? (
+        <nav aria-label={t("page.contents", "On this page")} className="mb-8 rounded-card border border-line bg-surface-2/50 p-4 print:hidden">
+          <h2 className="mb-2 text-sm font-semibold text-ink">{t("page.contents", "On this page")}</h2>
+          <ol className="space-y-1 text-sm">
+            {toc.map((entry) => (
+              <li key={entry.id} className={entry.level === 3 ? "ps-4" : undefined}>
+                <a href={`#${entry.id}`} className="text-ink-2 underline-offset-2 hover:text-accent hover:underline">
+                  {entry.text}
+                </a>
+              </li>
+            ))}
+          </ol>
+        </nav>
+      ) : null}
+
       <div className="prose-cms" dangerouslySetInnerHTML={{ __html: html }} />
     </article>
   );

@@ -2,10 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CategoryBar } from "@/components/CategoryBar";
+import { isSort, SortBar, type Sort } from "@/components/SortBar";
+import { JsonLd } from "@/components/JsonLd";
 import { SeriesCard } from "@/components/SeriesCard";
 import { buttonClass } from "@/components/ui/Button";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { localeHref } from "@/lib/languages";
+import { breadcrumbJsonLd } from "@/lib/seo";
 import { fetchCategories, fetchLanguages, fetchSeriesList, fetchTranslations } from "@/lib/server-data";
 
 export const revalidate = 60;
@@ -18,8 +21,8 @@ function pageOffset(raw: string | string[] | undefined): number {
   return Math.min(Math.max(0, n), 10_000);
 }
 
-async function findCategory(slug: string) {
-  return (await fetchCategories()).find((c) => c.slug === slug) ?? null;
+async function findCategory(slug: string, lang: string) {
+  return (await fetchCategories(lang)).find((c) => c.slug === slug) ?? null;
 }
 
 export async function generateMetadata({
@@ -28,7 +31,7 @@ export async function generateMetadata({
 }: PageProps<"/[lang]/category/[slug]">): Promise<Metadata> {
   const { lang, slug } = await params;
   const offset = pageOffset((await searchParams).offset);
-  const [category, messages, languages] = await Promise.all([findCategory(slug), fetchTranslations(lang), fetchLanguages()]);
+  const [category, messages, languages] = await Promise.all([findCategory(slug, lang), fetchTranslations(lang), fetchLanguages()]);
   if (!category) notFound();
   const t = (key: string, fallback: string, vars?: Record<string, string>) => {
     let s = messages[key] || fallback;
@@ -62,11 +65,14 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
   const sp = await searchParams;
   const offset = pageOffset(sp.offset);
 
+  const sortParam = Array.isArray(sp.sort) ? sp.sort[0] : sp.sort;
+  const sort: Sort = isSort(sortParam) ? sortParam : "featured";
+
   const [category, categories, messages, result] = await Promise.all([
-    findCategory(slug),
-    fetchCategories(),
+    findCategory(slug, lang),
+    fetchCategories(lang),
     fetchTranslations(lang),
-    fetchSeriesList({ lang, category: slug, limit: PAGE_SIZE, offset }),
+    fetchSeriesList({ lang, category: slug, sort, limit: PAGE_SIZE, offset }),
   ]);
   if (!category) notFound();
   const t = (key: string, fallback: string, vars?: Record<string, string | number>) => {
@@ -79,10 +85,29 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
   // The endpoint returns a plain array: a full page means "there may be more".
   const hasNext = items.length === PAGE_SIZE;
   const path = `/category/${slug}`;
-  const pageHref = (o: number) => localeHref(lang, o > 0 ? `${path}?offset=${o}` : path);
+  // Both controls write to the same query string, so each has to carry the other's state.
+  const query = (o: number, s: Sort) => {
+    const params = new URLSearchParams();
+    if (o > 0) params.set("offset", String(o));
+    if (s !== "featured") params.set("sort", s);
+    const qs = params.toString();
+    return localeHref(lang, qs ? `${path}?${qs}` : path);
+  };
+  const pageHref = (o: number) => query(o, sort);
+  // Changing the order restarts at the first page: staying on page 4 of a different ordering is meaningless.
+  const sortHref = (s: Sort) => query(0, s);
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+      <JsonLd
+        data={breadcrumbJsonLd(
+          [
+            { name: t("browse.title", "Browse all dramas"), path: "/series" },
+            { name: category.name },
+          ],
+          lang,
+        )}
+      />
       <nav aria-label={t("common.breadcrumb", "Breadcrumb")} className="text-sm text-muted">
         <Link href={localeHref(lang, "/series")} className="hover:text-ink">
           {t("browse.title", "Browse all dramas")}
@@ -91,6 +116,19 @@ export default async function CategoryPage({ params, searchParams }: PageProps<"
         <span className="text-ink2">{category.name}</span>
       </nav>
       <h1 className="mt-2 font-display text-2xl font-bold text-ink sm:text-3xl">{category.name}</h1>
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <SortBar
+          active={sort}
+          hrefFor={sortHref}
+          label={t("browse.sort", "Sort")}
+          labels={{
+            featured: t("browse.sort_featured", "Featured"),
+            popular: t("browse.sort_popular", "Most watched"),
+            newest: t("browse.sort_newest", "Newest"),
+            updated: t("browse.sort_updated", "Recently updated"),
+          }}
+        />
+      </div>
       <div className="mt-5">
         <CategoryBar
           categories={categories}

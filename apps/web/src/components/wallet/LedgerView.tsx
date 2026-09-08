@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import { useApp, useHref, useT } from "@/lib/app-context";
 import { clientApi } from "@/lib/client-api";
+import { downloadCsv } from "@/lib/csv";
 import { call, type ApiError } from "@/lib/errors";
 import { useLoader } from "@/lib/use-loader";
 import { formatCoins, formatDate } from "@/lib/format";
@@ -33,17 +34,21 @@ function LedgerInner() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<"all" | "in" | "out">("all");
 
-  const kinds: Record<LedgerRow["kind"], string> = {
-    signup_bonus: t("ledger.signup_bonus", "Welcome bonus"),
-    purchase: t("ledger.purchase", "Purchase"),
-    unlock: t("ledger.unlock", "Episode unlock"),
-    ad_unlock: t("ledger.ad_unlock", "Ad unlock"),
-    checkin: t("ledger.checkin", "Daily check-in"),
-    task: t("ledger.task", "Task reward"),
-    referral: t("ledger.referral", "Referral"),
-    admin_adjust: t("ledger.admin_adjust", "Adjustment"),
-    refund: t("ledger.refund", "Refund"),
-  };
+  // Memoised because the CSV export depends on it; a fresh object each render would rebuild that callback too.
+  const kinds: Record<LedgerRow["kind"], string> = useMemo(
+    () => ({
+      signup_bonus: t("ledger.signup_bonus", "Welcome bonus"),
+      purchase: t("ledger.purchase", "Top-up"),
+      unlock: t("ledger.unlock", "Episode unlock"),
+      ad_unlock: t("ledger.ad_unlock", "Ad unlock"),
+      checkin: t("ledger.checkin", "Daily check-in"),
+      task: t("ledger.task", "Task reward"),
+      referral: t("ledger.referral", "Referral"),
+      admin_adjust: t("ledger.admin_adjust", "Adjustment"),
+      refund: t("ledger.refund", "Refund"),
+    }),
+    [t],
+  );
 
   const load = useCallback(async (before?: string) => {
     const { data, error } = await call(() => clientApi.GET("/v1/wallet/ledger", { params: { query: { limit: PAGE, before } } }));
@@ -57,6 +62,7 @@ function LedgerInner() {
   }, []);
 
   useLoader(load);
+
 
   const loadMore = async () => {
     const last = rows?.[rows.length - 1];
@@ -104,6 +110,26 @@ function LedgerInner() {
     return { earned, spent };
   }, [rows]);
 
+  /**
+   * The rows on screen, as a file.
+   *
+   * A viewer disputing a balance is asked to describe it, and nobody can describe a scrolling list. Exports
+   * exactly what the filter above says is showing, with the human label rather than the wire value.
+   */
+  const exportCsv = useCallback(() => {
+    downloadCsv(
+      `katha-coins-${new Date().toISOString().slice(0, 10)}`,
+      [
+        { key: "created_at", label: t("ledger.col_date", "Date") },
+        { key: "kind", label: t("ledger.col_type", "Type") },
+        { key: "delta", label: t("ledger.col_change", "Change") },
+        { key: "balance_after", label: t("ledger.col_balance", "Balance") },
+        { key: "note", label: t("ledger.col_note", "Note") },
+      ],
+      visible.map((r) => ({ ...r, kind: kinds[r.kind] ?? r.kind })),
+    );
+  }, [visible, kinds, t]);
+
   return (
     <div>
       <PageTitle
@@ -126,6 +152,7 @@ function LedgerInner() {
               spent: formatCoins(summary.spent, lang),
             })}
           </p>
+          <div className="flex flex-wrap items-center gap-2">
           <div className="flex gap-1 rounded-pill border border-line bg-surface p-1 text-sm">
             {(["all", "in", "out"] as const).map((key) => (
               <button
@@ -142,6 +169,11 @@ function LedgerInner() {
                     : t("ledger.filter_out", "Spent")}
               </button>
             ))}
+          </div>
+          {/* Someone disputing a balance is asked to describe it, which nobody can do from a scrolling list. */}
+          <Button variant="ghost" size="sm" onClick={exportCsv}>
+            {t("ledger.export", "Export CSV")}
+          </Button>
           </div>
         </div>
       )}

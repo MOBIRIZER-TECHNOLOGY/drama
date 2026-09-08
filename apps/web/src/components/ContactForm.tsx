@@ -120,7 +120,8 @@ export function ContactForm() {
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
+  /** The reference the server hands back, so the sender has something to quote in a follow-up. */
+  const [sent, setSent] = useState<string | null>(null);
   const [captcha, setCaptcha] = useState<string | null>(null);
   const [captchaReset, setCaptchaReset] = useState(0);
 
@@ -131,7 +132,7 @@ export function ContactForm() {
     }
     setBusy(true);
     setError(null);
-    const { error } = await call(() =>
+    const { data, error } = await call(() =>
       clientApi.POST("/v1/contact", {
         body: {
           name: name.trim(),
@@ -149,23 +150,30 @@ export function ContactForm() {
       setCaptchaReset((k) => k + 1);
       return setError(error.message);
     }
-    setSent(true);
+    setSent(data?.reference ?? "");
   };
 
   return (
     <div className="mx-auto max-w-xl">
       <PageTitle sub={t("contact.subtitle", "Questions, feedback or a problem with a payment — we read everything.")}>{t("contact.title", "Contact us")}</PageTitle>
-      {sent ? (
+      {sent !== null ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-success/40 bg-surface p-8 text-center">
           <span className="rounded-pill bg-success/15 p-3 text-success">
             <IconCheck size={28} />
           </span>
           <h2 className="font-display text-xl font-semibold text-ink">{t("contact.sent_title", "Message sent")}</h2>
           <p className="text-sm text-muted">{t("contact.sent_message", "Thanks for reaching out. We will reply to your email.")}</p>
+          {/* "I wrote to you last week about something" is what a follow-up looks like without this. */}
+          {sent && (
+            <p className="text-sm text-ink2">
+              {t("contact.reference", "Your reference")}{" "}
+              <code className="rounded bg-surface2 px-2 py-0.5 font-mono text-ink">{sent}</code>
+            </p>
+          )}
           <Button
             variant="secondary"
             onClick={() => {
-              setSent(false);
+              setSent(null);
               setMessage("");
               setSubject("");
               setCaptcha(null);

@@ -1,3 +1,5 @@
+import { CategoryBar } from "@/components/CategoryBar";
+import { GuestContinue } from "@/components/GuestContinue";
 import { HeroCarousel } from "@/components/HeroCarousel";
 import { JsonLd } from "@/components/JsonLd";
 import { LandingIntro } from "@/components/LandingIntro";
@@ -6,14 +8,14 @@ import { Rail } from "@/components/Rail";
 import { SeriesCard } from "@/components/SeriesCard";
 import { EmptyState, ErrorState } from "@/components/ui/states";
 import { webSiteJsonLd } from "@/lib/seo";
-import { fetchHome, fetchTranslations } from "@/lib/server-data";
+import { fetchCategories, fetchHome, fetchTranslations } from "@/lib/server-data";
 
 /** Catalogue pages are cached per language and refreshed in the background every minute. */
 export const revalidate = 60;
 
 export default async function HomePage({ params }: PageProps<"/[lang]">) {
   const { lang } = await params;
-  const [home, messages] = await Promise.all([fetchHome(lang), fetchTranslations(lang)]);
+  const [home, messages, categories] = await Promise.all([fetchHome(lang), fetchTranslations(lang), fetchCategories(lang)]);
   const t = (key: string, fallback: string) => messages[key] || fallback;
 
   if (!home.ok) {
@@ -55,7 +57,22 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
           <HeroCarousel items={heroItems.slice(0, 8)} />
         </div>
       )}
+      {/* Genres, right under the hero. Home had no way into the catalogue by genre at all — a visitor who
+          wanted "revenge" had to know to open Browse — and these are also the internal links that make the
+          category pages findable. */}
+      {categories.length > 0 && (
+        <div className="mx-auto mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-8">
+          <CategoryBar
+            categories={categories}
+            lang={lang}
+            activeSlug={null}
+            allLabel={t("home.all_genres", "All")}
+            label={t("home.browse_genres", "Browse by genre")}
+          />
+        </div>
+      )}
       <div className="mx-auto mt-8 flex max-w-[1400px] flex-col gap-10 sm:mt-10">
+        <GuestContinue />
         <PersonalRails />
         {others.map((rail) => {
           // The catalogue's own ordering is already a ranking, so `top_picks` renders numbered. A ranked row is
