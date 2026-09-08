@@ -9,7 +9,7 @@
  * Run: node scripts/check-i18n.mjs
  */
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -23,11 +23,20 @@ function fail(message) {
 }
 
 // 1. The committed catalogue must match what the app actually says today.
+//
+// Compared with line endings normalised, and the original bytes put back when only those differ. Git checks
+// this file out as CRLF wherever `core.autocrlf` is on, the extractor writes LF, and a raw string compare
+// therefore failed on Windows after every fresh checkout — a stale-catalogue error for a file whose keys were
+// all identical. The check is about content, not about which platform ran it.
+const eol = (text) => text.split("\r\n").join("\n");
 const before = readFileSync(webCatalogue, "utf8");
 execFileSync(process.execPath, [join(root, "apps", "web", "scripts", "extract-i18n.mjs")], { stdio: "pipe" });
 const after = readFileSync(webCatalogue, "utf8");
-if (before !== after) {
+if (eol(before) !== eol(after)) {
   fail("apps/web/src/i18n/en.json is stale. Run: pnpm --filter web run i18n:extract");
+} else if (before !== after) {
+  // Same content, different endings: leave the working tree exactly as it was found.
+  writeFileSync(webCatalogue, before);
 }
 
 // 2. Shared keys must agree on their English.

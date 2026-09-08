@@ -1,0 +1,19 @@
+# Line endings are declared here so a checkout matches what the tooling writes.
+#
+# Without this, `core.autocrlf=true` (the Windows default) checks text files out as CRLF while ruff, prettier,
+# the i18n extractor and the OpenAPI generator all write LF. Every one of those then looks like an uncommitted
+# change on a clean tree, and the i18n check reported a stale catalogue for a file whose keys were identical.
+* text=auto eol=lf
+
+# Binary: never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.mp4 binary
+*.pdf binary
