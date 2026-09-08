@@ -84,8 +84,9 @@ export default function NotificationsPage() {
     <>
       <PageHeader title="Notifications" description="Send a push announcement and see what happened to the last ones." />
 
+      {/* Card carries no body padding of its own, because most of them hold a table. A form needs it. */}
       <Card>
-        <form onSubmit={onSubmit} className="grid gap-4">
+        <form onSubmit={onSubmit} className="grid gap-4 p-5">
           <Field label="Title" hint="Shown in bold on the lock screen. Keep it under about 40 characters.">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} maxLength={160} placeholder="New episodes tonight" />
           </Field>

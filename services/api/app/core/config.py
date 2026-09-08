@@ -16,7 +16,17 @@ class Settings(BaseSettings):
     env: Literal["local", "test", "staging", "production"] = "local"
     app_name: str = "Katha API"
     api_version: str = "0.1.0"
-    cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000", "http://localhost:3001"])
+    # `localhost` and `127.0.0.1` are different origins to a browser, and the admin console talks to this API
+    # from the browser, so opening it on the wrong one fails with a 200 in the server log and a bare "Failed
+    # to fetch" in the client. Both spellings are allowed by default; production sets this explicitly anyway.
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:3000",
+            "http://localhost:3001",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:3001",
+        ]
+    )
 
     database_url: str = "postgresql+asyncpg://katha:katha@localhost:5432/katha"
     redis_url: str = "redis://localhost:6379/0"
