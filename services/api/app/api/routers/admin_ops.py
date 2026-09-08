@@ -4,7 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
@@ -14,9 +14,13 @@ from app.models.identity import User
 from app.models.ops import CmsPage, CmsPageTranslation, Language, UiTranslation
 from app.schemas.admin import (
     AdminCmsPageOut,
+    AdminCmsPagePage,
+    AdminCmsPageSummary,
     AdminContactOut,
+    AdminContactPage,
     AdminLanguageOut,
     AdminReportOut,
+    AdminReportPage,
     CmsPageIn,
     CmsTranslationIn,
     LanguageIn,
@@ -36,8 +40,41 @@ router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(A
 
 @router.get("/languages", response_model=list[AdminLanguageOut])
 async def languages(db: DB) -> list[AdminLanguageOut]:
-    rows = await db.scalars(select(Language).order_by(Language.sort_order))
-    return [AdminLanguageOut.model_validate(x) for x in rows.all()]
+    """Languages, each with how far its translation has actually got.
+
+    Three grouped counts rather than a query per language: the string keys English defines, how many of them
+    each language has, and how many CMS pages each language has a body for.
+    """
+    rows = list((await db.scalars(select(Language).order_by(Language.sort_order))).all())
+
+    ui_total = (
+        await db.scalar(select(func.count()).select_from(UiTranslation).where(UiTranslation.lang == "en"))
+    ) or 0
+    ui_by_lang = dict(
+        (
+            await db.execute(select(UiTranslation.lang, func.count()).group_by(UiTranslation.lang))
+        ).all()
+    )
+    pages_total = (await db.scalar(select(func.count()).select_from(CmsPage))) or 0
+    pages_by_lang = dict(
+        (
+            await db.execute(
+                select(CmsPageTranslation.lang, func.count(func.distinct(CmsPageTranslation.page_id))).group_by(
+                    CmsPageTranslation.lang
+                )
+            )
+        ).all()
+    )
+
+    out = []
+    for x in rows:
+        item = AdminLanguageOut.model_validate(x)
+        item.ui_total = ui_total
+        item.ui_translated = int(ui_by_lang.get(x.code, 0))
+        item.pages_total = pages_total
+        item.pages_translated = int(pages_by_lang.get(x.code, 0))
+        out.append(item)
+    return out
 
 
 @router.put("/languages/{code}", response_model=AdminLanguageOut)
@@ -122,10 +159,64 @@ async def _page_out(db, p: CmsPage) -> AdminCmsPageOut:
     )
 
 
-@router.get("/pages", response_model=list[AdminCmsPageOut])
-async def pages(db: DB) -> list[AdminCmsPageOut]:
-    rows = await db.scalars(select(CmsPage).order_by(CmsPage.slug))
-    return [await _page_out(db, p) for p in rows.all()]
+@router.get("/pages", response_model=AdminCmsPagePage)
+async def pages(
+    db: DB,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AdminCmsPagePage:
+    """Slugs, flags and which languages each page has — paged, searchable, and without the bodies.
+
+    One extra query fetches the titles for the whole page at once; the previous shape ran a query per row and
+    returned every body with it.
+    """
+    stmt = select(CmsPage).order_by(CmsPage.slug)
+    count_stmt = select(func.count()).select_from(CmsPage)
+    if q:
+        needle = f"%{q.strip()}%"
+        match = CmsPage.slug.ilike(needle) | CmsPage.id.in_(
+            select(CmsPageTranslation.page_id).where(CmsPageTranslation.title.ilike(needle))
+        )
+        stmt = stmt.where(match)
+        count_stmt = count_stmt.where(match)
+
+    total = await db.scalar(count_stmt) or 0
+    rows = list((await db.scalars(stmt.offset(offset).limit(limit))).all())
+    ids = [p.id for p in rows]
+    titles: dict[uuid.UUID, dict[str, str]] = {}
+    if ids:
+        trs = await db.execute(
+            select(CmsPageTranslation.page_id, CmsPageTranslation.lang, CmsPageTranslation.title).where(
+                CmsPageTranslation.page_id.in_(ids)
+            )
+        )
+        for page_id, lang, title in trs.all():
+            titles.setdefault(page_id, {})[lang] = title
+
+    items = []
+    for p in rows:
+        by_lang = titles.get(p.id, {})
+        items.append(
+            AdminCmsPageSummary(
+                id=p.id,
+                slug=p.slug,
+                show_in_footer=p.show_in_footer,
+                is_published=p.is_published,
+                languages=sorted(by_lang),
+                title=by_lang.get("en") or next(iter(by_lang.values()), None),
+            )
+        )
+    return AdminCmsPagePage(items=items, total=total)
+
+
+@router.get("/pages/{page_id}", response_model=AdminCmsPageOut)
+async def page_detail(page_id: uuid.UUID, db: DB) -> AdminCmsPageOut:
+    """One page with every translation body — what the editor loads when a row is opened."""
+    p = await db.get(CmsPage, page_id)
+    if p is None:
+        raise NotFound("Page")
+    return await _page_out(db, p)
 
 
 @router.post("/pages", response_model=AdminCmsPageOut, status_code=201)
@@ -177,33 +268,49 @@ async def delete_page(page_id: uuid.UUID, db: DB) -> Ok:
 # ---- reports and inbox ----
 
 
-@router.get("/reports", response_model=list[AdminReportOut])
+@router.get("/reports", response_model=AdminReportPage)
 async def reports(
-    db: DB, status: ReportStatus | None = ReportStatus.open, limit: int = Query(100, le=500)
-) -> list[AdminReportOut]:
+    db: DB,
+    status: ReportStatus | None = ReportStatus.open,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    oldest_first: bool = False,
+) -> AdminReportPage:
+    """Reports, paged, with the total so the screen can stop lying about how much work is left.
+
+    `oldest_first` exists because a queue sorted newest-first is the wrong order for an SLA: the report that has
+    been waiting longest is the one that matters.
+    """
     stmt = (
         select(Report, User.public_id, SeriesTranslation.title)
         .outerjoin(User, User.id == Report.reporter_id)
         .outerjoin(Series, Series.id == Report.series_id)
         .outerjoin(SeriesTranslation, (SeriesTranslation.series_id == Series.id) & (SeriesTranslation.lang == "en"))
     )
+    count_stmt = select(func.count()).select_from(Report)
     if status:
         stmt = stmt.where(Report.status == status)
-    rows = await db.execute(stmt.order_by(Report.created_at.desc()).limit(limit))
-    return [
-        AdminReportOut(
-            id=r.id,
-            reporter_public_id=pub,
-            series_id=r.series_id,
-            series_title=title,
-            episode_id=r.episode_id,
-            reason=r.reason,
-            details=r.details,
-            status=r.status.value,
-            created_at=r.created_at,
-        )
-        for r, pub, title in rows.all()
-    ]
+        count_stmt = count_stmt.where(Report.status == status)
+    total = await db.scalar(count_stmt) or 0
+    order = Report.created_at.asc() if oldest_first else Report.created_at.desc()
+    rows = await db.execute(stmt.order_by(order).offset(offset).limit(limit))
+    return AdminReportPage(
+        items=[
+            AdminReportOut(
+                id=r.id,
+                reporter_public_id=pub,
+                series_id=r.series_id,
+                series_title=title,
+                episode_id=r.episode_id,
+                reason=r.reason,
+                details=r.details,
+                status=r.status.value,
+                created_at=r.created_at,
+            )
+            for r, pub, title in rows.all()
+        ],
+        total=total,
+    )
 
 
 @router.put("/reports/{report_id}", response_model=Ok)
@@ -216,13 +323,42 @@ async def set_report_status(report_id: uuid.UUID, body: ReportStatusIn, db: DB) 
     return Ok()
 
 
-@router.get("/inbox", response_model=list[AdminContactOut])
-async def inbox(db: DB, unread_only: bool = False, limit: int = Query(100, le=500)) -> list[AdminContactOut]:
+@router.get("/inbox", response_model=AdminContactPage)
+async def inbox(
+    db: DB,
+    unread_only: bool = False,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> AdminContactPage:
+    """Messages, paged and searchable.
+
+    At the old hard cap, finding one complaint among two hundred was manual scrolling, and the unread count in
+    the header was computed from the loaded page — so it was wrong the moment the list was truncated.
+    """
     stmt = select(ContactMessage)
+    count_stmt = select(func.count()).select_from(ContactMessage)
     if unread_only:
         stmt = stmt.where(ContactMessage.is_read.is_(False))
-    rows = await db.scalars(stmt.order_by(ContactMessage.created_at.desc()).limit(limit))
-    return [AdminContactOut.model_validate(m) for m in rows.all()]
+        count_stmt = count_stmt.where(ContactMessage.is_read.is_(False))
+    if q:
+        needle = f"%{q.strip()}%"
+        match = or_(
+            ContactMessage.name.ilike(needle),
+            ContactMessage.email.ilike(needle),
+            ContactMessage.subject.ilike(needle),
+            ContactMessage.message.ilike(needle),
+        )
+        stmt = stmt.where(match)
+        count_stmt = count_stmt.where(match)
+
+    total = await db.scalar(count_stmt) or 0
+    # Counted over the whole table, not the page: the header badge is a workload, not a sample.
+    unread = await db.scalar(select(func.count()).where(ContactMessage.is_read.is_(False))) or 0
+    rows = await db.scalars(stmt.order_by(ContactMessage.created_at.desc()).offset(offset).limit(limit))
+    return AdminContactPage(
+        items=[AdminContactOut.model_validate(m) for m in rows.all()], total=total, unread=unread
+    )
 
 
 @router.put("/inbox/{message_id}/read", response_model=Ok)
@@ -259,12 +395,54 @@ class ModerationItem(BaseModel):
     created_at: datetime
 
 
-@router.get("/moderation", response_model=list[ModerationItem])
-async def moderation(db: DB) -> list[ModerationItem]:
+class ModerationPage(BaseModel):
+    """The queue with its real size, and each half counted separately.
+
+    The endpoint took the newest 200 open reports and the newest 200 flagged series and returned them merged,
+    saying nothing about either cap. On the day a review-bomb or a bad ingest fills this queue — the only day
+    it matters — an operator was working a sample and could not tell.
+    """
+
+    items: list[ModerationItem]
+    total: int
+    reports: int
+    flagged: int
+
+
+@router.get("/moderation", response_model=ModerationPage)
+async def moderation(
+    db: DB,
+    kind: Annotated[str | None, Query(pattern="^(report|flagged_series)$")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> ModerationPage:
+    """Open reports and AI-flagged series in one queue, oldest first within each kind.
+
+    Both halves are counted over the whole table before anything is sliced, so the tab badges are workloads
+    rather than samples.
+    """
     from app.models.catalog import Series as S
 
+    report_count = (
+        await db.scalar(select(func.count()).select_from(Report).where(Report.status == ReportStatus.open))
+    ) or 0
+    flagged_count = (
+        await db.scalar(
+            select(func.count())
+            .select_from(S)
+            .where(S.moderation_flags.is_not(None), func.cardinality(S.moderation_flags) > 0)
+        )
+    ) or 0
+
     items: list[ModerationItem] = []
-    for r in await reports(db, status="open", limit=200):
+    # `reports` returns a page, not a list. Iterating the model itself yields (field, value) pairs, which is a
+    # silent 500 rather than a type error — hence `.items`, and the regression test that calls this endpoint.
+    open_reports = (
+        await reports(db, status=ReportStatus.open, limit=200)
+        if kind != "flagged_series"
+        else AdminReportPage(items=[], total=0)
+    )
+    for r in open_reports.items:
         items.append(
             ModerationItem(
                 kind="report",
@@ -277,14 +455,15 @@ async def moderation(db: DB) -> list[ModerationItem]:
                 created_at=r.created_at,
             )
         )
-    flagged = await db.execute(
+    flagged_stmt = (
         select(S, SeriesTranslation.title)
         .outerjoin(SeriesTranslation, (SeriesTranslation.series_id == S.id) & (SeriesTranslation.lang == "en"))
         .where(S.moderation_flags.is_not(None), func.cardinality(S.moderation_flags) > 0)
         .order_by(S.updated_at.desc())
         .limit(200)
     )
-    for s_, title in flagged.all():
+    flagged = await db.execute(flagged_stmt) if kind != "report" else None
+    for s_, title in (flagged.all() if flagged is not None else []):
         items.append(
             ModerationItem(
                 kind="flagged_series",
@@ -297,7 +476,17 @@ async def moderation(db: DB) -> list[ModerationItem]:
                 created_at=s_.updated_at,
             )
         )
-    return items
+
+    # Oldest first: a moderation queue is worked from the back, and newest-first buried the report that had
+    # been waiting longest under every fresh one.
+    items.sort(key=lambda i: i.created_at)
+    total = report_count + flagged_count if kind is None else (report_count if kind == "report" else flagged_count)
+    return ModerationPage(
+        items=items[offset : offset + limit],
+        total=total,
+        reports=report_count,
+        flagged=flagged_count,
+    )
 
 
 class ModerateSeriesIn(BaseModel):
@@ -370,7 +559,12 @@ class AuditRow(BaseModel):
     created_at: datetime
 
 
-@router.get("/audit", response_model=list[AuditRow], dependencies=[require_role(AdminRole.owner)])
+class AdminAuditPage(BaseModel):
+    items: list[AuditRow]
+    total: int
+
+
+@router.get("/audit", response_model=AdminAuditPage, dependencies=[require_role(AdminRole.owner)])
 async def audit_log(
     db: DB,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
@@ -378,12 +572,15 @@ async def audit_log(
     action: Annotated[str | None, Query(max_length=64)] = None,
     target_type: Annotated[str | None, Query(max_length=40)] = None,
     target_id: Annotated[str | None, Query(max_length=64)] = None,
-) -> list[AuditRow]:
-    """Who did what, most recent first.
+) -> AdminAuditPage:
+    """Who did what, most recent first, with the size of the filtered set.
 
     Owner-only: the log names admins and the accounts they acted on, which is more than a support role needs.
+    An audit log you can only page blindly through is not evidence; the total is what makes "show me every
+    ban in March" answerable.
     """
     rows = await audit.recent(
         db, limit=limit, offset=offset, action=action, target_type=target_type, target_id=target_id
     )
-    return [AuditRow.model_validate(r, from_attributes=True) for r in rows]
+    total = await audit.count(db, action=action, target_type=target_type, target_id=target_id)
+    return AdminAuditPage(items=[AuditRow.model_validate(r, from_attributes=True) for r in rows], total=total)

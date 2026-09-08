@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -98,6 +98,12 @@ class AdminUser(UUIDPrimaryKey, TimestampMixin, Base):
     display_name: Mapped[str] = mapped_column(String(120), nullable=False)
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[AdminRole] = mapped_column(Enum(AdminRole, name="admin_role"), nullable=False)
+    # Set once an admin has completed enrolment. Present but unverified during setup is not a state we keep:
+    # the secret is only written when a code proves the authenticator holds it.
     totp_secret: Mapped[str | None] = mapped_column(String(64))
+    # Bumped to invalidate every token already issued to this account. Admin tokens are stateless and live for
+    # eight hours, so before this there was no way to end a session — a laptop left in a taxi stayed signed in
+    # until the token expired on its own.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

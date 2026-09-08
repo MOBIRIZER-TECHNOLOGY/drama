@@ -224,10 +224,38 @@ async def delete_user(user_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
 # ---- admin accounts (owner only) ----
 
 
+def _account_out(a: AdminUser) -> AdminAccountOut:
+    out = AdminAccountOut.model_validate(a)
+    out.totp_enabled = bool(a.totp_secret)
+    return out
+
+
 @router.get("/accounts", response_model=list[AdminAccountOut], dependencies=[require_role(AdminRole.owner)])
 async def accounts(db: DB) -> list[AdminAccountOut]:
     rows = await db.scalars(select(AdminUser).order_by(AdminUser.created_at))
-    return [AdminAccountOut.model_validate(a) for a in rows.all()]
+    return [_account_out(a) for a in rows.all()]
+
+
+@router.post(
+    "/accounts/{account_id}/revoke-sessions",
+    response_model=AdminAccountOut,
+    dependencies=[require_role(AdminRole.owner)],
+)
+async def revoke_sessions(account_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> AdminAccountOut:
+    """Ends every session for one account.
+
+    Disabling an account already blocks it, but leaves the reason on the record; this is the lighter action for
+    a lost laptop or a shared password, where the person keeps their access and only their tokens die.
+    """
+    a = await db.get(AdminUser, account_id)
+    if a is None:
+        raise NotFound("Account")
+    a.token_version += 1
+    audit.record(
+        db, admin=admin, action="admin.sessions_revoked", target_type="admin", target_id=a.id, note=a.email
+    )
+    await db.commit()
+    return _account_out(a)
 
 
 @router.post("/accounts", response_model=AdminAccountOut, status_code=201, dependencies=[require_role(AdminRole.owner)])
@@ -240,7 +268,7 @@ async def create_account(body: AdminUserCreateIn, db: DB) -> AdminAccountOut:
     )
     db.add(a)
     await db.commit()
-    return AdminAccountOut.model_validate(a)
+    return _account_out(a)
 
 
 @router.put("/accounts/{account_id}", response_model=AdminAccountOut, dependencies=[require_role(AdminRole.owner)])
@@ -259,7 +287,7 @@ async def update_account(
     if body.password:
         a.password_hash = await asyncio.to_thread(hash_password, body.password)
     await db.commit()
-    return AdminAccountOut.model_validate(a)
+    return _account_out(a)
 
 
 @router.delete("/accounts/{account_id}", response_model=Ok, dependencies=[require_role(AdminRole.owner)])

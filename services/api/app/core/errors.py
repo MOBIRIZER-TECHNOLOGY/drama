@@ -18,8 +18,10 @@ class NotFound(AppError):
 class Unauthorized(AppError):
     code = "unauthorized"
 
-    def __init__(self, detail: str = "Authentication required"):
-        super().__init__(detail, status.HTTP_401_UNAUTHORIZED)
+    def __init__(self, detail: str = "Authentication required", code: str | None = None):
+        # A caller-supplied code lets the console tell "your session was revoked" and "we need your
+        # authenticator code" apart from "your password is wrong", which are three different screens.
+        super().__init__(detail, status.HTTP_401_UNAUTHORIZED, code=code)
 
 
 class Forbidden(AppError):

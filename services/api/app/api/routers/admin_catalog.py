@@ -8,11 +8,22 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
-from app.models.catalog import Category, Episode, PublishStatus, Series, SeriesTranslation, Tag, VideoAsset
+from app.models.catalog import (
+    Category,
+    CategoryTranslation,
+    Episode,
+    PublishStatus,
+    Series,
+    SeriesCategory,
+    SeriesTranslation,
+    Tag,
+    VideoAsset,
+)
 from app.schemas.admin import (
     AdminCategoryOut,
     AdminEpisodeOut,
     AdminSeriesOut,
+    AdminSeriesPage,
     CategoryIn,
     EpisodeIn,
     SeriesIn,
@@ -69,15 +80,21 @@ def _series_query():
     )
 
 
-@router.get("/series", response_model=list[AdminSeriesOut])
+@router.get("/series", response_model=AdminSeriesPage)
 async def list_series(
     db: DB, q: str | None = None, status: PublishStatus | None = None, limit: int = Query(50, le=200), offset: int = 0
-) -> list[AdminSeriesOut]:
+) -> AdminSeriesPage:
     stmt = _series_query()
+    count_stmt = select(func.count()).select_from(Series)
     if status:
         stmt = stmt.where(Series.status == status)
+        count_stmt = count_stmt.where(Series.status == status)
     if q:
         stmt = stmt.join(Series.translations).where(SeriesTranslation.title.ilike(f"%{q}%")).distinct()
+        count_stmt = count_stmt.where(
+            Series.id.in_(select(SeriesTranslation.series_id).where(SeriesTranslation.title.ilike(f"%{q}%")))
+        )
+    total = await db.scalar(count_stmt) or 0
     rows = list((await db.scalars(stmt.order_by(Series.updated_at.desc()).limit(limit).offset(offset))).all())
     counts = dict(
         (
@@ -88,7 +105,7 @@ async def list_series(
             )
         ).all()
     )
-    return [_series_out(s, counts.get(s.id, 0)) for s in rows]
+    return AdminSeriesPage(items=[_series_out(s, counts.get(s.id, 0)) for s in rows], total=total)
 
 
 async def _apply_series(db, s: Series, body: SeriesIn) -> None:
@@ -285,20 +302,52 @@ async def delete_episode(episode_id: uuid.UUID, db: DB) -> Ok:
     return Ok()
 
 
+def _category_out(c: Category, series_count: int = 0) -> AdminCategoryOut:
+    return AdminCategoryOut(
+        id=c.id,
+        slug=c.slug,
+        name=c.name,
+        show_on_home=c.show_on_home,
+        sort_order=c.sort_order,
+        series_count=series_count,
+        translations={t.lang: t.name for t in c.translations},
+    )
+
+
+def _apply_translations(c: Category, translations: dict[str, str]) -> None:
+    """Replaces the translation set, dropping blanks so clearing a field removes the row."""
+    wanted = {lang: name.strip() for lang, name in translations.items() if name.strip()}
+    for tr in list(c.translations):
+        if tr.lang in wanted:
+            tr.name = wanted.pop(tr.lang)
+        else:
+            c.translations.remove(tr)
+    for lang, name in wanted.items():
+        c.translations.append(CategoryTranslation(lang=lang, name=name))
+
+
 @router.get("/categories", response_model=list[AdminCategoryOut])
 async def categories(db: DB) -> list[AdminCategoryOut]:
     rows = await db.scalars(select(Category).order_by(Category.sort_order, Category.name))
-    return [AdminCategoryOut.model_validate(c) for c in rows.all()]
+    cats = rows.all()
+    tally = await db.execute(
+        select(SeriesCategory.category_id, func.count()).group_by(SeriesCategory.category_id)
+    )
+    counts = dict(tally.all())
+    return [_category_out(c, counts.get(c.id, 0)) for c in cats]
 
 
 @router.post("/categories", response_model=AdminCategoryOut, status_code=201)
 async def create_category(body: CategoryIn, db: DB) -> AdminCategoryOut:
     if await db.scalar(select(Category.id).where(Category.slug == body.slug)):
         raise Conflict("Slug already exists", code="slug_taken")
-    c = Category(**body.model_dump())
+    fields = body.model_dump()
+    translations = fields.pop("translations", {})
+    c = Category(**fields)
+    _apply_translations(c, translations)
     db.add(c)
     await db.commit()
-    return AdminCategoryOut.model_validate(c)
+    return _category_out(c)
 
 
 @router.put("/categories/{category_id}", response_model=AdminCategoryOut)
@@ -306,10 +355,16 @@ async def update_category(category_id: uuid.UUID, body: CategoryIn, db: DB) -> A
     c = await db.get(Category, category_id)
     if c is None:
         raise NotFound("Category")
-    for k, v in body.model_dump().items():
+    fields = body.model_dump()
+    translations = fields.pop("translations", {})
+    for k, v in fields.items():
         setattr(c, k, v)
+    _apply_translations(c, translations)
     await db.commit()
-    return AdminCategoryOut.model_validate(c)
+    count = await db.scalar(
+        select(func.count()).select_from(SeriesCategory).where(SeriesCategory.category_id == c.id)
+    )
+    return _category_out(c, count or 0)
 
 
 @router.delete("/categories/{category_id}", response_model=Ok)

@@ -65,6 +65,10 @@ async def current_admin(db: DB, creds: Annotated[HTTPAuthorizationCredentials | 
     admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
     if admin is None or not admin.is_active:
         raise Unauthorized("Unknown admin")
+    # A token minted before the account's sessions were revoked is refused, which is what makes
+    # "sign out everywhere" mean anything against a stateless eight-hour token.
+    if int(payload.get("tv", 0)) != admin.token_version:
+        raise Unauthorized("Session was revoked. Sign in again.", code="session_revoked")
     return admin
 
 

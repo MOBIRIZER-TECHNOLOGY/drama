@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Query, Request
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
@@ -13,7 +14,8 @@ from app.core.errors import AppError, NotFound
 from app.core.ratelimit import limiter
 from app.core.redis import redis_client
 from app.models.catalog import Episode, Series
-from app.models.engagement import ContactMessage, Report
+from app.models.engagement import ContactMessage, Favorite, Report, WatchProgress
+from app.models.wallet import CoinLedger, Purchase
 from app.schemas.common import Ok
 from app.schemas.engagement import ContactIn, HistoryItem, MyListOut, ProgressIn, ReportIn, ToggleOut
 from app.services import engagement as eng
@@ -95,6 +97,108 @@ async def my_list(ctx: CurrentUser, db: DB, lang: Lang = "en") -> MyListOut:
     )
 
 
+class ExportOut(BaseModel):
+    """Everything this account holds, in one document.
+
+    A viewer could delete their account and could not see what deleting it would remove — which is the wrong
+    way round, and the wrong way round for India's DPDP Act and the Play policy alike. Deliberately built from
+    the caller's own token: there is no user id parameter, so this endpoint cannot be pointed at anyone else.
+
+    Money rows are included because they are the ones people actually dispute; nothing here is a secret the
+    account does not already own.
+    """
+
+    generated_at: datetime
+    profile: dict
+    coin_ledger: list[dict]
+    purchases: list[dict]
+    watch_history: list[dict]
+    favourites: list[dict]
+
+
+@router.get("/me/export", response_model=ExportOut)
+@limiter.limit("3/hour")
+async def export_me(request: Request, ctx: CurrentUser, db: DB) -> ExportOut:
+    """The caller's own data as JSON. Rate-limited because it is a wide read, not because it is sensitive."""
+    user = ctx.user
+
+    ledger = (
+        await db.scalars(
+            select(CoinLedger).where(CoinLedger.user_id == user.id).order_by(CoinLedger.created_at.desc())
+        )
+    ).all()
+    purchases = (
+        await db.scalars(select(Purchase).where(Purchase.user_id == user.id).order_by(Purchase.created_at.desc()))
+    ).all()
+    history = (
+        await db.execute(
+            select(WatchProgress, Series.slug)
+            .join(Episode, Episode.id == WatchProgress.episode_id)
+            .join(Series, Series.id == Episode.series_id)
+            .where(WatchProgress.user_id == user.id)
+            .order_by(WatchProgress.updated_at.desc())
+        )
+    ).all()
+    favourites = (
+        await db.execute(
+            select(Favorite, Series.slug)
+            .join(Series, Series.id == Favorite.series_id)
+            .where(Favorite.user_id == user.id)
+            .order_by(Favorite.created_at.desc())
+        )
+    ).all()
+
+    return ExportOut(
+        generated_at=datetime.now(UTC),
+        profile={
+            "public_id": user.public_id,
+            "display_name": user.display_name,
+            "email": user.email,
+            "phone": user.phone,
+            "locale": user.locale,
+            "country": user.country,
+            "coin_balance": user.coin_balance,
+            "referral_code": user.referral_code,
+            "created_at": user.created_at.isoformat() if user.created_at else None,
+        },
+        coin_ledger=[
+            {
+                "at": row.created_at.isoformat() if row.created_at else None,
+                "kind": row.kind.value if hasattr(row.kind, "value") else str(row.kind),
+                "delta": row.delta,
+                "balance_after": row.balance_after,
+                "note": row.note,
+            }
+            for row in ledger
+        ],
+        purchases=[
+            {
+                "at": row.created_at.isoformat() if row.created_at else None,
+                "status": row.status.value if hasattr(row.status, "value") else str(row.status),
+                "gateway": row.gateway,
+                "currency": row.currency,
+                "amount": float(row.amount),
+                "coins_granted": row.coins_granted,
+                "paid_at": row.paid_at.isoformat() if row.paid_at else None,
+            }
+            for row in purchases
+        ],
+        watch_history=[
+            {
+                "series": slug,
+                "position_sec": row.position_sec,
+                "completed": bool(row.completed_at),
+                "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+            }
+            for row, slug in history
+        ],
+        favourites=[
+            {"series": slug, "added_at": row.created_at.isoformat() if row.created_at else None}
+            for row, slug in favourites
+        ],
+    )
+
+
 @router.delete("/me/history", response_model=Ok)
 async def clear_history(ctx: CurrentUser, db: DB, series_id: uuid.UUID | None = None) -> Ok:
     await eng.clear_history(db, ctx.user.id, series_id)
@@ -122,14 +226,27 @@ async def report(request: Request, body: ReportIn, ctx: CurrentUser, db: DB) -> 
     return Ok()
 
 
-@router.post("/contact", response_model=Ok)
+class ContactOut(BaseModel):
+    """A short reference the sender can quote.
+
+    The form said "we got it" and gave the sender nothing to hold, so a follow-up email started with "I wrote
+    to you last week about something". Eight characters of the message id is enough to find the row and short
+    enough to read over the phone.
+    """
+
+    ok: bool = True
+    reference: str
+
+
+@router.post("/contact", response_model=ContactOut)
 @limiter.limit("5/minute")
-async def contact(request: Request, body: ContactIn, db: DB) -> Ok:
+async def contact(request: Request, body: ContactIn, db: DB) -> ContactOut:
     s = get_settings()
     if s.turnstile_secret_key:
         ip = request.client.host if request.client else None
         if not body.captcha_token or not await verify_turnstile(body.captcha_token, s.turnstile_secret_key, ip):
             raise AppError("Captcha failed", status_code=400, code="captcha_failed")
-    db.add(ContactMessage(name=body.name, email=body.email, subject=body.subject, message=body.message))
+    message = ContactMessage(name=body.name, email=body.email, subject=body.subject, message=body.message)
+    db.add(message)
     await db.commit()
-    return Ok()
+    return ContactOut(reference=message.id.hex[:8].upper())

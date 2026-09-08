@@ -13,10 +13,10 @@ from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
 from app.models.engagement import AnalyticsEvent
 from app.models.identity import User
-from app.models.ops import Experiment, ExperimentAssignment, FeatureFlag
+from app.models.ops import AuditLog, Experiment, ExperimentAssignment, FeatureFlag
 from app.models.wallet import CoinLedger, Coupon, EpisodeUnlock, Offer, Purchase, PurchaseStatus
 from app.schemas.common import Ok
-from app.services import audit
+from app.services import audit, stats
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.finance, AdminRole.editor)])
 
@@ -128,6 +128,16 @@ class VariantResult(BaseModel):
     purchases: int
     revenue: dict[str, float]
     coins_spent: int
+    """Buyers over assigned users. The outcome the test is run on."""
+    conversion: float = 0.0
+    """True for the variant every other one is measured against — the first declared."""
+    is_control: bool = False
+    """Relative lift over the control, e.g. 12.0 for "12% better". None until both arms are large enough."""
+    lift_pct: float | None = None
+    p_value: float | None = None
+    significant: bool = False
+    """Why there is no verdict yet, when there isn't one."""
+    note: str | None = None
 
 
 @router.get("/experiments/{key}/results", response_model=list[VariantResult])
@@ -189,18 +199,33 @@ async def experiment_results(key: str, db: DB) -> list[VariantResult]:
     for variant in e.variants:
         n = users_by_variant.get(variant, 0)
         u = unlocks.get(variant, 0)
+        buyers = purchasers.get(variant, 0)
         out.append(
             VariantResult(
                 variant=variant,
                 users=n,
                 unlocks=u,
                 unlock_rate=(u / n) if n else 0.0,
-                purchasers=purchasers.get(variant, 0),
+                purchasers=buyers,
                 purchases=purchases.get(variant, 0),
                 revenue=revenue.get(variant, {}),
                 coins_spent=int(spent.get(variant, 0)),
+                conversion=(buyers / n) if n else 0.0,
             )
         )
+
+    # Significance against the first declared variant. Computed here rather than in the console because the
+    # definition of "converted" belongs with the query that produces it, and two clients must not disagree
+    # about whether a price change won.
+    if out:
+        control = out[0]
+        control.is_control = True
+        for row in out[1:]:
+            verdict = stats.compare(control.purchasers, control.users, row.purchasers, row.users)
+            row.lift_pct = verdict.lift_pct
+            row.p_value = verdict.p_value
+            row.significant = verdict.significant
+            row.note = verdict.note
     return out
 
 
@@ -219,12 +244,42 @@ class FlagOut(BaseModel):
     enabled: bool
     rules: dict | None
     updated_at: datetime
+    # Who last touched it. A flag is a production kill switch, and "who turned this on" was answerable only by
+    # leaving this screen for the audit log — which support and finance roles cannot open at all.
+    updated_by: str | None = None
 
 
 @router.get("/flags", response_model=list[FlagOut])
 async def flags(db: DB) -> list[FlagOut]:
-    rows = await db.scalars(select(FeatureFlag).order_by(FeatureFlag.key))
-    return [FlagOut(key=f.key, enabled=f.enabled, rules=f.rules, updated_at=f.updated_at) for f in rows.all()]
+    """Flags with the admin who last set each one, in one grouped query rather than a lookup per row."""
+    rows = list((await db.scalars(select(FeatureFlag).order_by(FeatureFlag.key))).all())
+    last_by_key: dict[str, str] = {}
+    if rows:
+        # The most recent audit row per flag: rank inside the partition rather than fetching the whole log.
+        ranked = (
+            select(
+                AuditLog.target_id,
+                AuditLog.admin_email,
+                func.row_number()
+                .over(partition_by=AuditLog.target_id, order_by=AuditLog.created_at.desc())
+                .label("rn"),
+            )
+            .where(AuditLog.target_type == "flag", AuditLog.target_id.in_([f.key for f in rows]))
+            .subquery()
+        )
+        latest = await db.execute(select(ranked.c.target_id, ranked.c.admin_email).where(ranked.c.rn == 1))
+        last_by_key = {k: email for k, email in latest.all() if email}
+
+    return [
+        FlagOut(
+            key=f.key,
+            enabled=f.enabled,
+            rules=f.rules,
+            updated_at=f.updated_at,
+            updated_by=last_by_key.get(f.key),
+        )
+        for f in rows
+    ]
 
 
 @router.put("/flags/{key}", response_model=FlagOut)

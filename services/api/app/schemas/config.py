@@ -1,5 +1,7 @@
 """Typed remote config. Namespaces keep an open shape (admins add keys), but their known fields are declared."""
 
+import uuid
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -75,6 +77,29 @@ class ConfigLanguage(BaseModel):
     rtl: bool = False
 
 
+class AdPlacementConfig(BaseModel):
+    """One placement the client on this platform may render.
+
+    Unit ids are the provider's public identifiers — an AdMob unit ships inside every APK — so serving them here
+    exposes nothing. What the client cannot be trusted to decide is *whether* a placement is live, what a
+    rewarded view pays, or how often it may run; all three come from here.
+    """
+
+    id: uuid.UUID
+    slot: str
+    provider: str
+    unit_id: str
+    reward_coins: int | None = None
+    frequency_cap_sec: int = 0
+
+
+class AdsConfig(BaseModel):
+    """`enabled` is false when nothing is live, so a client can skip loading an ad SDK at all."""
+
+    enabled: bool = False
+    placements: list[AdPlacementConfig] = []
+
+
 class ConfigOut(BaseModel):
     platform: str
     site: SiteConfig
@@ -87,5 +112,6 @@ class ConfigOut(BaseModel):
     notifications: NotificationsConfig = NotificationsConfig()
     mobile: MobileConfig
     languages: list[ConfigLanguage]
+    ads: AdsConfig = AdsConfig()
     flags: dict[str, bool]
     variants: dict[str, str]

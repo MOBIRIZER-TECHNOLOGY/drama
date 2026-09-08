@@ -1,8 +1,9 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Annotated
 
 from fastapi import APIRouter, Query
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
@@ -11,6 +12,7 @@ from app.models.ops import Setting
 from app.models.wallet import CoinPack, PackPrice, Purchase, RewardTask
 from app.schemas.admin import (
     AdminPackOut,
+    AdminPurchasePage,
     AdminRewardTaskOut,
     PackIn,
     PackPriceIn,
@@ -93,19 +95,70 @@ async def delete_pack(pack_id: uuid.UUID, db: DB) -> Ok:
     return Ok()
 
 
-@router.get("/purchases", response_model=list[PurchaseAdminOut])
+@router.get("/purchases", response_model=AdminPurchasePage)
 async def purchases(
-    db: DB, status: str | None = None, limit: int = Query(100, le=500), offset: int = 0
-) -> list[PurchaseAdminOut]:
+    db: DB,
+    status: str | None = None,
+    q: Annotated[str | None, Query(max_length=160)] = None,
+    date_from: Annotated[date | None, Query()] = None,
+    date_to: Annotated[date | None, Query()] = None,
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+) -> AdminPurchasePage:
+    """Purchases, searchable, with a count and a per-currency sum over the whole filtered set.
+
+    Search and date filtering used to happen in the browser over one loaded page, which meant a dispute that
+    arrived quoting an order id could only be found if that order happened to be on screen — and the "collected"
+    figure beside it was a subtotal of whatever had loaded. Both now run in the database.
+
+    `q` matches our own purchase id, either gateway identifier, and the buyer's public id or email, because a
+    dispute arrives quoting whichever of those the other party happens to hold.
+    """
     stmt = (
-        select(Purchase, User.public_id, CoinPack.name)
+        select(Purchase, User.public_id, CoinPack.name, User.email)
         .join(User, User.id == Purchase.user_id)
         .join(CoinPack, CoinPack.id == Purchase.pack_id)
     )
+    count_stmt = select(func.count()).select_from(Purchase).join(User, User.id == Purchase.user_id)
+    sum_stmt = (
+        select(Purchase.currency, func.sum(Purchase.amount))
+        .join(User, User.id == Purchase.user_id)
+        .group_by(Purchase.currency)
+    )
+
+    filters = []
     if status:
-        stmt = stmt.where(Purchase.status == status)
+        filters.append(Purchase.status == status)
+    if q:
+        needle = f"%{q.strip()}%"
+        matches = [
+            Purchase.gateway_payment_id.ilike(needle),
+            Purchase.external_id.ilike(needle),
+            User.public_id.ilike(needle),
+            User.email.ilike(needle),
+            Purchase.coupon_code.ilike(needle),
+        ]
+        # An id pasted whole should match exactly rather than relying on a LIKE over a uuid cast.
+        try:
+            matches.append(Purchase.id == uuid.UUID(q.strip()))
+        except ValueError:
+            pass
+        filters.append(or_(*matches))
+    if date_from:
+        filters.append(Purchase.created_at >= datetime.combine(date_from, time.min, tzinfo=UTC))
+    if date_to:
+        # Inclusive of the end date: an operator asking for "to the 5th" means through the 5th.
+        filters.append(Purchase.created_at < datetime.combine(date_to, time.min, tzinfo=UTC) + timedelta(days=1))
+
+    for f in filters:
+        stmt = stmt.where(f)
+        count_stmt = count_stmt.where(f)
+        sum_stmt = sum_stmt.where(f)
+
+    total = await db.scalar(count_stmt) or 0
+    sums = {cur: float(amount or 0) for cur, amount in (await db.execute(sum_stmt)).all()}
     rows = await db.execute(stmt.order_by(Purchase.created_at.desc()).limit(limit).offset(offset))
-    return [
+    items = [
         PurchaseAdminOut(
             id=p.id,
             user_id=p.user_id,
@@ -118,9 +171,13 @@ async def purchases(
             coins_granted=p.coins_granted,
             paid_at=p.paid_at,
             created_at=p.created_at,
+            gateway_payment_id=p.gateway_payment_id,
+            external_id=p.external_id,
+            user_email=email,
         )
-        for p, pub, name in rows.all()
+        for p, pub, name, email in rows.all()
     ]
+    return AdminPurchasePage(items=items, total=total, totals_by_currency=sums)
 
 
 @router.get("/reward-tasks", response_model=list[AdminRewardTaskOut])

@@ -13,7 +13,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.identity import AdminUser
@@ -61,6 +61,24 @@ def record(
     )
     session.add(row)
     return row
+
+
+async def count(
+    session: AsyncSession,
+    *,
+    action: str | None = None,
+    target_type: str | None = None,
+    target_id: str | None = None,
+) -> int:
+    """How many rows the same filters match. A log you can only page blindly through is not evidence."""
+    stmt = select(func.count()).select_from(AuditLog)
+    if action:
+        stmt = stmt.where(AuditLog.action == action)
+    if target_type:
+        stmt = stmt.where(AuditLog.target_type == target_type)
+    if target_id:
+        stmt = stmt.where(AuditLog.target_id == target_id)
+    return await session.scalar(stmt) or 0
 
 
 async def recent(

@@ -53,12 +53,16 @@ async def page(slug: str, db: DB, lang: str = "en") -> CmsPageOut:
         .where(CmsPage.slug == slug, CmsPage.is_published.is_(True), CmsPageTranslation.lang.in_([lang, "en"]))
     )
     chosen = None
-    for _page, tr in rows.all():
+    updated_at = None
+    for page_row, tr in rows.all():
         if chosen is None or tr.lang == lang:
             chosen = tr
+            updated_at = page_row.updated_at
     if chosen is None:
         raise NotFound("Page")
-    return CmsPageOut(slug=slug, title=chosen.title, body_html=chosen.body_html, lang=chosen.lang)
+    return CmsPageOut(
+        slug=slug, title=chosen.title, body_html=chosen.body_html, lang=chosen.lang, updated_at=updated_at
+    )
 
 
 class SitemapEntry(BaseModel):

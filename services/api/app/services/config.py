@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.models.ops import Experiment, ExperimentAssignment, FeatureFlag, Language, Setting
+from app.models.ops import AdPlacement, Experiment, ExperimentAssignment, FeatureFlag, Language, Setting
 from app.services import push
 
 DEFAULT_NAMESPACES: dict[str, dict] = {
@@ -113,6 +113,34 @@ async def variant_map(session: AsyncSession, user_id: uuid.UUID | None) -> dict[
     return result
 
 
+async def _ads(session: AsyncSession, platform: str) -> dict:
+    """Active placements this platform may render, in the operator's order.
+
+    Filtered server-side by platform: a web client has no business receiving the Android rewarded unit, and
+    leaving the filtering to the client is how a placement ends up live somewhere it was never enabled.
+    """
+    rows = (
+        await session.scalars(
+            select(AdPlacement)
+            .where(AdPlacement.is_active.is_(True))
+            .order_by(AdPlacement.sort_order, AdPlacement.name)
+        )
+    ).all()
+    placements = [
+        {
+            "id": p.id,
+            "slot": p.slot,
+            "provider": p.provider,
+            "unit_id": p.unit_id,
+            "reward_coins": p.reward_coins,
+            "frequency_cap_sec": p.frequency_cap_sec,
+        }
+        for p in rows
+        if platform in (p.platforms or [])
+    ]
+    return {"enabled": bool(placements), "placements": placements}
+
+
 async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: str) -> dict:
     s = get_settings()
     flags = {f.key: f.enabled for f in (await session.scalars(select(FeatureFlag))).all()}
@@ -167,6 +195,7 @@ async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: s
         "notifications": {"channels": list(push.CHANNELS)},
         "mobile": await namespace(session, "mobile"),
         "languages": languages,
+        "ads": await _ads(session, platform),
         "flags": flags,
         "variants": await variant_map(session, user_id),
     }

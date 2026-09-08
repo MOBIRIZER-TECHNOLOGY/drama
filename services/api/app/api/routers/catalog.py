@@ -57,6 +57,14 @@ def _pick_translation(series: Series, lang: str) -> SeriesTranslation | None:
     )
 
 
+def _category_out(c: Category, lang: str) -> CategoryOut:
+    """A genre name in the viewer's language, falling back to the English name the admin typed."""
+    for tr in c.translations:
+        if tr.lang == lang:
+            return CategoryOut(id=c.id, slug=c.slug, name=tr.name)
+    return CategoryOut(id=c.id, slug=c.slug, name=c.name)
+
+
 def _card(
     series: Series,
     lang: str,
@@ -81,7 +89,7 @@ def _card(
         episode_count=episode_count,
         view_count=series.view_count,
         like_count=series.like_count,
-        categories=[CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in series.categories],
+        categories=[_category_out(c, lang) for c in series.categories],
         released_at=series.released_at,
         content_rating=series.content_rating,
         is_adult=_is_adult(series),
@@ -323,12 +331,42 @@ async def list_series(
     lang: Lang = "en",
     category: str | None = None,
     q: str | None = None,
+    sort: Annotated[str, Query(pattern="^(featured|popular|newest|updated)$")] = "featured",
+    status: Annotated[str | None, Query(pattern="^(ongoing|completed)$")] = None,
+    length: Annotated[str | None, Query(pattern="^(short|medium|long)$")] = None,
     limit: Annotated[int, Query(le=100)] = 40,
     offset: int = 0,
 ) -> list[SeriesCard]:
+    """The catalogue, filtered and ordered.
+
+    `sort` exists because the editorial order was the only order a visitor could have: someone looking for
+    what is popular, or what landed this week, had no way to ask. `featured` keeps the operator's own weighting
+    and stays the default, so nothing about the curated experience changes unless the visitor asks it to.
+
+    `status` and `length` are the two questions this audience actually asks of a short-drama catalogue — "is it
+    finished so I can binge it" and "how much am I committing to" — and neither could be asked at all.
+    """
     stmt = _published_series(lang, country)
     if category:
         stmt = stmt.join(Series.categories).where(Category.slug == category)
+    if status == "completed":
+        stmt = stmt.where(Series.completion_status == "completed")
+    elif status == "ongoing":
+        # NULL means the operator never said, and an unmarked series is far more likely still running than
+        # finished — treating it as completed would promise an ending that may not exist.
+        stmt = stmt.where(func.coalesce(Series.completion_status, "ongoing") != "completed")
+    if length:
+        episodes = (
+            select(func.count())
+            .select_from(Episode)
+            .where(Episode.series_id == Series.id, Episode.status == PublishStatus.published)
+            .correlate(Series)
+            .scalar_subquery()
+        )
+        bounds = {"short": (0, 20), "medium": (20, 60), "long": (60, None)}[length]
+        stmt = stmt.where(episodes >= bounds[0]) if bounds[0] else stmt
+        if bounds[1] is not None:
+            stmt = stmt.where(episodes < bounds[1])
     rows: list[Series] = []
     if q and offset == 0 and (semantic_ids := await _semantic_ids(db, q, limit=limit)):
         found = {s.id: s for s in (await db.scalars(stmt.where(Series.id.in_(semantic_ids)))).all()}
@@ -336,7 +374,14 @@ async def list_series(
     else:
         if q:
             stmt = stmt.join(Series.translations).where(SeriesTranslation.title.ilike(f"%{q}%")).distinct()
-        stmt = stmt.order_by(Series.sort_weight.desc(), Series.released_at.desc()).limit(limit).offset(offset)
+        # A stable tiebreak on id keeps paging deterministic: without it two series with equal weight can
+        # swap places between pages and one of them is never shown.
+        order = {
+            "popular": (Series.view_count.desc(), Series.id),
+            "newest": (Series.released_at.desc().nullslast(), Series.id),
+            "updated": (Series.updated_at.desc(), Series.id),
+        }.get(sort, (Series.sort_weight.desc(), Series.released_at.desc().nullslast(), Series.id))
+        stmt = stmt.order_by(*order).limit(limit).offset(offset)
         rows = list((await db.scalars(stmt)).all())
     ids = [s.id for s in rows]
     counts = await _episode_counts(db, ids)
@@ -345,9 +390,9 @@ async def list_series(
 
 
 @router.get("/categories", response_model=list[CategoryOut])
-async def list_categories(db: DB) -> list[CategoryOut]:
+async def list_categories(db: DB, lang: str = "en") -> list[CategoryOut]:
     rows = await db.scalars(select(Category).order_by(Category.sort_order, Category.name))
-    return [CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in rows.all()]
+    return [_category_out(c, lang) for c in rows.all()]
 
 
 BROWSE_SERIES_CAP = 400
@@ -605,7 +650,7 @@ async def shorts(
                     title=tr.title if tr else series.slug,
                     synopsis=tr.synopsis if tr else None,
                     cover_url=series.cover_url,
-                    categories=[CategoryOut(id=c.id, slug=c.slug, name=c.name) for c in series.categories],
+                    categories=[_category_out(c, lang) for c in series.categories],
                     episode_count=counts.get(series.id, 0),
                     free_episodes=series.free_episodes,
                     content_rating=series.content_rating,

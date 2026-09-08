@@ -8,6 +8,7 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.routers import (
+    admin_ads,
     admin_ai,
     admin_auth,
     admin_catalog,
@@ -16,6 +17,7 @@ from app.api.routers import (
     admin_monetization,
     admin_ops,
     admin_users,
+    ads,
     auth,
     catalog,
     config,
@@ -103,10 +105,12 @@ def create_app() -> FastAPI:
         admin_users.router,
         admin_ops.router,
         admin_ai.router,
+        admin_ads.router,
         admin_growth.router,
         uploads.router,
         events.router,
         media.router,
+        ads.router,
     ):
         app.include_router(r, prefix=api)
     telemetry.init("api", app=app, engine=engine)

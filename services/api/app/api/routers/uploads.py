@@ -3,8 +3,9 @@
 import asyncio
 import uuid
 from datetime import datetime
+from typing import Annotated
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
 from app.api.deps import DB, CurrentAdmin
@@ -43,6 +44,20 @@ class VideoAssetOut(BaseModel):
     created_at: datetime | None = None
 
 
+class VideoAssetPage(BaseModel):
+    """Assets with a total and a per-status tally.
+
+    The screen took the newest 200 rows and said nothing about the rest, so on a library with real volume the
+    one failed transcode an operator was looking for could sit permanently below the cut. `counts` puts the
+    failure tally in front of them without having to change the filter to find out whether there is anything
+    to change the filter for.
+    """
+
+    items: list[VideoAssetOut]
+    total: int
+    counts: dict[str, int]
+
+
 @router.post("/presign", response_model=PresignOut)
 async def presign(body: PresignIn, admin: CurrentAdmin) -> PresignOut:
     allowed = {"image": storage.IMAGE_TYPES, "video": storage.VIDEO_TYPES, "subtitle": storage.SUBTITLE_TYPES}[
@@ -78,29 +93,50 @@ async def register_video(body: RegisterVideoIn, admin: CurrentAdmin, db: DB) -> 
     )
 
 
-@router.get("/videos", response_model=list[VideoAssetOut])
+@router.get("/videos", response_model=VideoAssetPage)
 async def list_videos(
-    admin: CurrentAdmin, db: DB, status: AssetStatus | None = None, limit: int = 100
-) -> list[VideoAssetOut]:
-    from sqlalchemy import select
+    admin: CurrentAdmin,
+    db: DB,
+    status: AssetStatus | None = None,
+    q: Annotated[str | None, Query(max_length=200)] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> VideoAssetPage:
+    """Assets, paged and searchable by source key, with a per-status tally over the whole table."""
+    from sqlalchemy import func, select
 
     stmt = select(VideoAsset)
+    count_stmt = select(func.count()).select_from(VideoAsset)
     if status:
         stmt = stmt.where(VideoAsset.status == status)
-    rows = await db.scalars(stmt.order_by(VideoAsset.created_at.desc()).limit(min(limit, 500)))
-    return [
-        VideoAssetOut(
-            id=a.id,
-            status=a.status,
-            source_key=a.source_key,
-            hls_master_key=a.hls_master_key,
-            duration_sec=a.duration_sec,
-            size_bytes=a.size_bytes,
-            error=a.error,
-            created_at=a.created_at,
-        )
-        for a in rows.all()
-    ]
+        count_stmt = count_stmt.where(VideoAsset.status == status)
+    if q:
+        needle = f"%{q.strip()}%"
+        stmt = stmt.where(VideoAsset.source_key.ilike(needle))
+        count_stmt = count_stmt.where(VideoAsset.source_key.ilike(needle))
+
+    total = await db.scalar(count_stmt) or 0
+    # Tallied over everything, unfiltered: this is the signal that says whether a filter is worth applying.
+    tally = await db.execute(select(VideoAsset.status, func.count()).group_by(VideoAsset.status))
+    counts = {str(getattr(row_status, "value", row_status)): n for row_status, n in tally.all()}
+    rows = await db.scalars(stmt.order_by(VideoAsset.created_at.desc()).offset(offset).limit(limit))
+    return VideoAssetPage(
+        items=[
+            VideoAssetOut(
+                id=a.id,
+                status=a.status,
+                source_key=a.source_key,
+                hls_master_key=a.hls_master_key,
+                duration_sec=a.duration_sec,
+                size_bytes=a.size_bytes,
+                error=a.error,
+                created_at=a.created_at,
+            )
+            for a in rows.all()
+        ],
+        total=total,
+        counts=counts,
+    )
 
 
 @router.delete("/videos/{asset_id}")

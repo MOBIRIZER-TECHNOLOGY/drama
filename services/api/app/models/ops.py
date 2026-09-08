@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.db import Base
@@ -92,15 +92,32 @@ class CmsPageTranslation(Base):
 
 
 class AdPlacement(UUIDPrimaryKey, TimestampMixin, Base):
-    __tablename__ = "ad_placements"
-    __table_args__ = (UniqueConstraint("platform", "slot", "network", name="uq_ad_placement"),)
+    """Where an ad may run, and what a rewarded view is worth.
 
-    platform: Mapped[str] = mapped_column(String(16), nullable=False)
-    slot: Mapped[str] = mapped_column(String(32), nullable=False)  # banner_home | interstitial_exit
-    network: Mapped[str] = mapped_column(String(32), nullable=False)  # admob | applovin
+    The original shape was one row per (platform, slot, network), which forced the same AdMob unit to be entered
+    once per platform and had nowhere to record a reward value or a frequency cap — the two numbers that decide
+    whether rewarded ads strangle coin revenue. A placement now spans the platforms it applies to and carries
+    both.
+
+    Unit ids here are the provider's *public* identifiers (an AdMob ad unit is embedded in every shipped APK);
+    no secret belongs in this table, which is why it can be served to clients through /v1/config.
+    """
+
+    __tablename__ = "ad_placements"
+    __table_args__ = (UniqueConstraint("slot", "provider", "unit_id", name="uq_ad_placement"),)
+
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    slot: Mapped[str] = mapped_column(String(32), nullable=False)  # home_rail | player_pre | unlock_rewarded | …
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)  # admob | meta | house
     unit_id: Mapped[str] = mapped_column(String(160), nullable=False)
-    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    weight: Mapped[int] = mapped_column(Integer, default=100, nullable=False)
+    # Which clients may request it. Empty means none, which is why the API rejects an empty list.
+    platforms: Mapped[list[str]] = mapped_column(ARRAY(String(16)), default=list, nullable=False)
+    # Coins for a completed rewarded view; meaningless (and stored as NULL) on non-rewarded slots.
+    reward_coins: Mapped[int | None] = mapped_column(Integer)
+    # Seconds one viewer must wait between two impressions of this placement.
+    frequency_cap_sec: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
 
 class Notification(UUIDPrimaryKey, TimestampMixin, Base):

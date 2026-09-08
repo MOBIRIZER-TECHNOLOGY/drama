@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel
 
 
@@ -18,6 +20,9 @@ class CmsPageOut(BaseModel):
     title: str
     body_html: str
     lang: str
+    # Terms and privacy pages are read to find out what changed and when; a policy with no date is one a
+    # reader cannot tell from a stale copy.
+    updated_at: datetime | None = None
 
 
 class FooterLink(BaseModel):

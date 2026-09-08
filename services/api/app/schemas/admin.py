@@ -118,6 +118,8 @@ class CategoryIn(BaseModel):
     name: str = Field(max_length=80)
     show_on_home: bool = True
     sort_order: int = 0
+    # lang -> name. Blank values delete that language's row, so clearing a field in the console clears it here.
+    translations: dict[str, str] = Field(default_factory=dict)
 
 
 class AdminCategoryOut(ORMModel):
@@ -126,6 +128,10 @@ class AdminCategoryOut(ORMModel):
     name: str
     show_on_home: bool
     sort_order: int
+    # How many series carry this genre. Deleting one detaches it from every series silently, and an empty
+    # category still renders an empty rail on home — neither was visible from the list.
+    series_count: int = 0
+    translations: dict[str, str] = Field(default_factory=dict)
 
 
 # ---- monetisation ----
@@ -202,6 +208,10 @@ class SettingsIn(BaseModel):
 
 
 class PurchaseAdminOut(BaseModel):
+    # Surfaced so a dispute that arrives quoting the gateway's own id can be matched without opening the row.
+    gateway_payment_id: str | None = None
+    external_id: str | None = None
+    user_email: str | None = None
     id: uuid.UUID
     user_id: uuid.UUID
     user_public_id: str | None
@@ -237,6 +247,48 @@ class AdminUserOut(ORMModel):
 class AdminUserPage(BaseModel):
     items: list[AdminUserOut]
     total: int
+
+
+class AdminSeriesPage(BaseModel):
+    """The catalogue list, with the number of series in it.
+
+    Without a total the console could only say "showing 1-20" — an operator could not tell whether the library
+    held 40 series or 4,000, and the pager could not offer page numbers, so reaching the end of a large
+    catalogue meant clicking Next until it stopped.
+    """
+
+    items: list["AdminSeriesOut"]
+    total: int
+
+
+class AdminPurchasePage(BaseModel):
+    """Purchases, with the total and the money in the filtered set.
+
+    Finance reconciles against a number; a page of rows with no count and no sum is not something you can
+    reconcile against, and exporting the visible page silently exported a sample.
+    """
+
+    items: list["PurchaseAdminOut"]
+    total: int
+    totals_by_currency: dict[str, float]
+
+
+class AdminReportPage(BaseModel):
+    """Reports with a real total.
+
+    The screen used to take the first N rows and say nothing about the rest, so a review-bomb produced silent
+    truncation on exactly the day the page mattered — an operator working a spike had no way to know they were
+    seeing a fraction of it.
+    """
+
+    items: list["AdminReportOut"]
+    total: int
+
+
+class AdminContactPage(BaseModel):
+    items: list["AdminContactOut"]
+    total: int
+    unread: int
 
 
 class UserStatusIn(BaseModel):
@@ -279,6 +331,13 @@ class AdminLanguageOut(ORMModel):
     is_active: bool
     is_rtl: bool
     sort_order: int
+    # How much of the English source this language actually covers. Without it nobody could tell a finished
+    # language from one that is 12% done — and a half-translated language shipped as active shows English on
+    # the rails that matter, which reads to a viewer as a broken app rather than a missing translation.
+    ui_translated: int = 0
+    ui_total: int = 0
+    pages_translated: int = 0
+    pages_total: int = 0
 
 
 class TranslationsIn(BaseModel):
@@ -309,6 +368,29 @@ class AdminCmsPageOut(BaseModel):
     show_in_footer: bool
     is_published: bool
     translations: list[CmsTranslationIn]
+
+
+class AdminCmsPageSummary(BaseModel):
+    """A row in the pages list, without the bodies.
+
+    The list used to return every page with the full `body_html` of every translation — a query per page on top
+    of it — so opening the screen downloaded the entire CMS corpus, in every language, to render a table of
+    slugs. A help centre of forty pages in six languages is several megabytes of HTML nobody looks at.
+    """
+
+    id: uuid.UUID
+    slug: str
+    show_in_footer: bool
+    is_published: bool
+    """Language codes this page has a translation for, so the gaps are visible from the list."""
+    languages: list[str]
+    """Title in the default language, falling back to any translation there is."""
+    title: str | None = None
+
+
+class AdminCmsPagePage(BaseModel):
+    items: list[AdminCmsPageSummary]
+    total: int
 
 
 class AdminReportOut(BaseModel):
@@ -359,6 +441,8 @@ class AdminAccountOut(ORMModel):
     role: AdminRole
     is_active: bool
     last_login_at: datetime | None
+    """Whether this account has a second factor. An owner cannot enrol on someone's behalf, but can see who has."""
+    totp_enabled: bool = False
 
 
 # ---- dashboard ----

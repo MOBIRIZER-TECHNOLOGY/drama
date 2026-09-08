@@ -164,6 +164,29 @@ class Category(UUIDPrimaryKey, TimestampMixin, Base):
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     series: Mapped[list[Series]] = relationship(secondary="series_categories", back_populates="categories")
+    # Loaded eagerly: the table is tiny and every catalogue response needs it, so a lazy load here would be an
+    # N+1 in the hot path — or, in async, a MissingGreenlet.
+    translations: Mapped[list["CategoryTranslation"]] = relationship(
+        back_populates="category", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class CategoryTranslation(Base):
+    """A genre name in one language.
+
+    Category names were a single string, so a Hindi or Tamil viewer browsing a fully localised catalogue still
+    saw "Revenge" and "Billionaire" in English on the very rails that decide what they open.
+    """
+
+    __tablename__ = "category_translations"
+
+    category_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True
+    )
+    lang: Mapped[str] = mapped_column(String(10), primary_key=True)
+    name: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    category: Mapped[Category] = relationship(back_populates="translations")
 
 
 class SeriesCategory(Base):
