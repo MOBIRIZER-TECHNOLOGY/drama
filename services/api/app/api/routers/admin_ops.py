@@ -11,7 +11,7 @@ from app.core.errors import Conflict, NotFound
 from app.models.catalog import Series, SeriesTranslation
 from app.models.engagement import ContactMessage, Report, ReportStatus
 from app.models.identity import User
-from app.models.ops import CmsPage, CmsPageTranslation, Language, UiTranslation
+from app.models.ops import CmsPage, CmsPageTranslation, Language, Notification, UiTranslation
 from app.schemas.admin import (
     AdminCmsPageOut,
     AdminCmsPagePage,
@@ -584,3 +584,78 @@ async def audit_log(
     )
     total = await audit.count(db, action=action, target_type=target_type, target_id=target_id)
     return AdminAuditPage(items=[AuditRow.model_validate(r, from_attributes=True) for r in rows], total=total)
+
+
+# ---- push notifications ----
+#
+# The `notifications` table and the worker's `send_push` job both existed and were unreachable: nothing in the
+# product could create a row, so a composed announcement was impossible and the job never had an argument.
+# This is the missing half.
+
+
+class NotificationIn(BaseModel):
+    title: str = Field(min_length=1, max_length=160)
+    body: str = Field(min_length=1, max_length=1000)
+    # Mirrors the worker's `_resolve_segment`, which resolves an unknown segment to nobody rather than to
+    # everybody. Keeping the shapes named here means a typo is a 422 instead of a silent send to no one.
+    segment: dict = Field(default_factory=lambda: {"all": True})
+    payload: dict | None = None
+
+    @model_validator(mode="after")
+    def _known_segment(self) -> "NotificationIn":
+        if not any(k in self.segment for k in ("all", "user_id", "locale")):
+            raise ValueError("segment must be one of: {'all': true}, {'user_id': ...}, {'locale': ...}")
+        return self
+
+
+class NotificationRow(BaseModel):
+    id: uuid.UUID
+    title: str
+    body: str
+    segment: dict | None
+    sent_at: datetime | None
+    delivered: int
+    failed: int
+    created_at: datetime
+
+
+@router.get("/notifications", response_model=list[NotificationRow])
+async def list_notifications(db: DB, limit: Annotated[int, Query(ge=1, le=100)] = 50) -> list[NotificationRow]:
+    rows = (await db.scalars(select(Notification).order_by(Notification.created_at.desc()).limit(limit))).all()
+    return [NotificationRow.model_validate(r, from_attributes=True) for r in rows]
+
+
+# Owner only. A broadcast reaches every active install at once and cannot be recalled, which is a different
+# order of blast radius from anything else in this console.
+@router.post(
+    "/notifications",
+    response_model=NotificationRow,
+    status_code=201,
+    dependencies=[require_role(AdminRole.owner)],
+)
+async def create_notification(body: NotificationIn, db: DB, admin: CurrentAdmin) -> NotificationRow:
+    """Compose an announcement and hand it to the worker. Delivery is the worker's; this only records intent."""
+    row = Notification(
+        title=body.title.strip(),
+        body=body.body.strip(),
+        segment=body.segment,
+        payload=body.payload,
+        created_by=admin.id,
+    )
+    db.add(row)
+    await db.flush()
+    # Snapshot before the commit: reading server-defaulted columns off an expired instance afterwards is an
+    # IO call in async context, and the response is already fully determined here.
+    out = NotificationRow.model_validate(row, from_attributes=True)
+    audit.record(
+        db,
+        admin=admin,
+        action="notification.send",
+        target_type="notification",
+        target_id=str(row.id),
+        after={"title": row.title, "segment": row.segment},
+    )
+    await db.commit()
+    # Enqueued after the commit so the worker cannot read a row that is not there yet.
+    await jobs.enqueue("send_push", str(row.id), job_id=f"send-push:{row.id}")
+    return out

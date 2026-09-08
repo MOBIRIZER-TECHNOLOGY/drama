@@ -23,7 +23,7 @@ import {
   Tabs,
 } from "@/components/ui";
 
-const NAMESPACES = ["auth", "economy", "rewards", "mobile", "site", "seo", "ads"] as const;
+const NAMESPACES = ["auth", "economy", "rewards", "mobile", "site", "seo", "ads", "payments"] as const;
 type Namespace = (typeof NAMESPACES)[number];
 
 const DESCRIPTIONS: Record<Namespace, string> = {
@@ -34,6 +34,9 @@ const DESCRIPTIONS: Record<Namespace, string> = {
   site: "Site name, support email, social links.",
   seo: "Default titles, descriptions and social images.",
   ads: "Ad unit IDs and rewarded-ad flags (public IDs only).",
+  // The API has always accepted this namespace; the console simply never listed it, so turning a gateway off
+  // meant editing the database by hand. Credentials still live in the environment: these are on/off switches.
+  payments: "Which checkout gateways are offered. Turning one off hides it from every client.",
 };
 
 type Kind = "text" | "json";

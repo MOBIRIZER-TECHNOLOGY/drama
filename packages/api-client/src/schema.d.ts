@@ -1741,6 +1741,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Notifications */
+        get: operations["list_notifications_v1_admin_notifications_get"];
+        put?: never;
+        /**
+         * Create Notification
+         * @description Compose an announcement and hand it to the worker. Delivery is the worker's; this only records intent.
+         */
+        post: operations["create_notification_v1_admin_notifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/admin/ai/series-metadata": {
         parameters: {
             query?: never;
@@ -3967,6 +3988,48 @@ export interface components {
             favorites: components["schemas"]["SeriesCard"][];
             /** History */
             history: components["schemas"]["HistoryItem"][];
+        };
+        /** NotificationIn */
+        NotificationIn: {
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Segment */
+            segment?: {
+                [key: string]: unknown;
+            };
+            /** Payload */
+            payload?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** NotificationRow */
+        NotificationRow: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /** Body */
+            body: string;
+            /** Segment */
+            segment: {
+                [key: string]: unknown;
+            } | null;
+            /** Sent At */
+            sent_at: string | null;
+            /** Delivered */
+            delivered: number;
+            /** Failed */
+            failed: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** NotificationsConfig */
         NotificationsConfig: {
@@ -8662,6 +8725,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminAuditPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notifications_v1_admin_notifications_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRow"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_notification_v1_admin_notifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationRow"];
                 };
             };
             /** @description Validation Error */

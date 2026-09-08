@@ -31,6 +31,8 @@ export const NAV: NavItem[] = [
   { href: "/flags", label: "Feature Flags", icon: "toggle", roles: ["owner", "finance"], section: "Growth" },
   { href: "/offers", label: "Offers & Coupons", icon: "ticket", roles: ["owner", "finance"], section: "Growth" },
   { href: "/ads", label: "Ad Placements", icon: "megaphone", roles: ["owner", "finance"], section: "Growth" },
+  // Owner-only, matching the endpoint: a broadcast reaches every active install and cannot be recalled.
+  { href: "/notifications", label: "Notifications", icon: "megaphone", roles: ["owner"], section: "Growth" },
   { href: "/moderation", label: "Moderation", icon: "eye", roles: ["owner", "editor", "support"], section: "Support" },
   { href: "/reports", label: "Reports", icon: "flag", roles: ["owner", "support"], section: "Support" },
   { href: "/inbox", label: "Inbox", icon: "inbox", roles: ["owner", "support"], section: "Support" },

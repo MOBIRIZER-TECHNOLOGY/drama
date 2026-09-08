@@ -48,6 +48,7 @@ LIST_ENDPOINTS = [
     "/v1/admin/purchases?limit=5",
     "/v1/admin/series?limit=5",
     "/v1/admin/users?limit=5",
+    "/v1/admin/notifications?limit=5",
 ]
 
 
@@ -136,3 +137,44 @@ async def test_moderation_kind_filter_narrows_the_page_not_the_counts(admin_clie
     assert {row["kind"] for row in only["items"]} <= {"report"}
     assert only["reports"] == both["reports"]
     assert only["flagged"] == both["flagged"]
+
+
+async def test_composing_a_notification_records_it_and_queues_the_send(admin_client, monkeypatch):
+    """The table and the worker job both existed with nothing able to create a row between them.
+
+    Delivery is the worker's job and is not exercised here; what matters is that the row is written, the send
+    is queued with that row's id, and the queueing happens after the commit — a job that starts before the
+    transaction lands reads a notification that does not exist yet.
+    """
+    from app.api.routers import admin_ops
+
+    queued: list[tuple] = []
+
+    async def fake_enqueue(name: str, *args, **kwargs):
+        queued.append((name, args))
+        return "job-1"
+
+    monkeypatch.setattr(admin_ops.jobs, "enqueue", fake_enqueue)
+
+    res = await admin_client.post(
+        "/v1/admin/notifications",
+        json={"title": "New episodes tonight", "body": "Three new episodes at 8pm.", "segment": {"all": True}},
+    )
+    assert res.status_code == 201, res.text
+    row = res.json()
+    assert row["title"] == "New episodes tonight"
+    assert row["sent_at"] is None and row["delivered"] == 0
+    assert queued == [("send_push", (row["id"],))]
+
+    listed = await admin_client.get("/v1/admin/notifications?limit=5")
+    assert listed.status_code == 200
+    assert any(n["id"] == row["id"] for n in listed.json())
+
+
+async def test_an_unknown_segment_is_refused_rather_than_sent_to_everyone(admin_client):
+    """The worker resolves an unrecognised segment to nobody. A typo should fail loudly, not send silently."""
+    res = await admin_client.post(
+        "/v1/admin/notifications",
+        json={"title": "Oops", "body": "Body", "segment": {"contry": "IN"}},
+    )
+    assert res.status_code == 422
