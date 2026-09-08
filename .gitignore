@@ -45,3 +45,8 @@ ref/
 .playwright/
 test-results/
 playwright-report/
+
+# Locally generated placeholder video for the seeded episodes (scripts/seed-assets/gen-hls.py).
+# Regenerate rather than commit: it is a few megabytes of test pattern, not content.
+services/api/scripts/seed-assets/media/
+services/api/scripts/seed-assets/_hls-font.ttf

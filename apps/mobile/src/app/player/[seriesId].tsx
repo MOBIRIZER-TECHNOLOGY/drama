@@ -117,6 +117,16 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
   const currentGrant = current ? grants[current.id] : undefined;
   /** The episode in view failed to load, so the screen is showing its error rather than a video. */
   const currentError = current ? (errors[current.id] ?? null) : null;
+  /**
+   * The video has the screen to itself.
+   *
+   * Several things cover it: the unlock sheet, the episode grid, the age gate, the auto-advance countdown and
+   * an episode's own load error. Each of them is either the viewer's next action or the reason the video is
+   * not playing, and all of them can be true the moment the player opens. The same idea gates playback below
+   * and gates the countdown; the coach mark is the one overlay here that is never urgent, so it waits for all
+   * of them rather than stacking on top and burying their buttons.
+   */
+  const playerUnobstructed = sheet === null && !showEpisodes && ageGateFor === null && !pendingNext && !currentError;
   const subtitleTracks = useMemo(() => currentGrant?.subtitles ?? [], [currentGrant]);
   const subtitleTrack = useMemo(() => selectTrack(subtitleTracks, subtitlePref), [subtitleTracks, subtitlePref]);
   const cycleSubtitles = useCallback(() => chooseSubtitles(nextTrackLang(subtitleTracks, subtitleTrack)), [chooseSubtitles, subtitleTracks, subtitleTrack]);
@@ -467,7 +477,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
         </View>
       ) : null}
 
-      {coach && !currentError ? (
+      {coach && playerUnobstructed ? (
         <Pressable style={styles.coach} onPress={dismissCoach} accessibilityRole="button" accessibilityLabel={t("player.coach_got_it")}>
           <View style={styles.coachBody}>
             <Icon name="swipe-up" size={30} />
