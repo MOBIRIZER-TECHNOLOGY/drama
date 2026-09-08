@@ -11,18 +11,31 @@ export const colors = {
   // has to read as an edge (inputs, table rules, focus outlines).
   line: "#3E3338",
   lineStrong: "#554750",
-  accent: "#F05A72",
-  accentHover: "#F37286",
-  accentInk: "#1A0D11",
-  gold: "#E0B44A",
-  goldHover: "#E9C46B",
+  /**
+   * Taken from the brand mark, which runs amber to red.
+   *
+   * The mark's deep red (#D40A2C) only reaches 3.5:1 on `ground`, well under the 4.5 body text needs, so the
+   * accent is the gradient's midpoint rather than either end — still a colour that is literally in the logo,
+   * and comfortable at 6.1:1. The two ends are kept below for anywhere the gradient itself is drawn.
+   */
+  accent: "#F0692A",
+  accentHover: "#F47A3C",
+  accentInk: "#1A0A10",
+  /** VIP and premium: the amber body of the mark's left page. */
+  gold: "#F5A31A",
+  goldHover: "#FDC125",
+  /** The mark's own gradient, for the logo and the few places the brand is drawn rather than referenced. */
+  brandFrom: "#FDC125",
+  brandTo: "#D40A2C",
   success: "#8ED1AE",
-  warning: "#E9A968",
+  // Pushed yellow, away from the accent. An amber warning sat 11 degrees from an orange brand, which on a
+  // badge beside a button reads as the same colour; at 45 degrees it reads as a different thing entirely.
+  warning: "#F2CE5E",
   danger: "#F09AA6",
   // Semantic roles every component was previously inventing inline as bg-black/40, rgba(0,0,0,0.45), and so on.
   scrim: "rgba(20, 16, 19, 0.72)",
   overlay: "rgba(0, 0, 0, 0.45)",
-  focus: "#F05A72",
+  focus: "#F0692A",
   disabled: "#6B5C62",
 } as const;
 

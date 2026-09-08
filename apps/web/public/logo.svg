@@ -1,15 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 140" role="img" aria-label="Katha">
   <title>Katha</title>
+  <desc>The Katha wordmark: an open book whose pages form a play triangle, beside the name.</desc>
   <defs>
-    <linearGradient id="k" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="rgb(240, 90, 114)"/>
-      <stop offset="1" stop-color="rgb(176, 43, 74)"/>
+    <linearGradient id="katha-wm-l" x1="0" y1="0" x2="1" y2="0.35">
+      <stop offset="0" stop-color="#FDC125"/>
+      <stop offset="1" stop-color="#F0692A"/>
     </linearGradient>
+    <linearGradient id="katha-wm-r" x1="0" y1="0.35" x2="1" y2="0">
+      <stop offset="0" stop-color="#F0692A"/>
+      <stop offset="1" stop-color="#D40A2C"/>
+    </linearGradient>
+    <mask id="katha-wm-play">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M212 172 L212 340 L336 256 Z" fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"/>
+    </mask>
   </defs>
-  <rect x="0" y="0" width="140" height="140" rx="31" fill="url(#k)"/>
-  <rect x="52.6" y="26" width="34.8" height="61.9" rx="9.9" fill="none" stroke="#fff" stroke-width="5.3"
-        transform="translate(0 13)"/>
-  <path d="M63.9 55.4v25.2l14-12.6z" fill="#fff" transform="translate(0 13)"/>
-  <text x="172" y="97" font-family="Bricolage Grotesque, Trebuchet MS, sans-serif" font-size="86"
-        font-weight="700" letter-spacing="-3" fill="currentColor">Katha<tspan fill="rgb(240, 90, 114)">.</tspan></text>
+
+  <!-- The mark, scaled from its 512 canvas into the 140-tall lockup. -->
+  <g transform="translate(-8 -8) scale(0.305)" mask="url(#katha-wm-play)">
+    <path fill="url(#katha-wm-l)"
+          d="M256 128 C256 128 224 96 168 96 L104 96 L104 400 C104 400 152 380 200 400 C232 413 256 416 256 416 Z"/>
+    <path fill="url(#katha-wm-r)"
+          d="M256 128 C256 128 288 96 344 96 L408 96 L408 400 C408 400 360 380 312 400 C280 413 256 416 256 416 Z"/>
+  </g>
+
+  <!-- `currentColor` so the wordmark inherits the surrounding text colour in either theme. -->
+  <text x="150" y="97" font-family="Bricolage Grotesque, Trebuchet MS, sans-serif" font-size="86"
+        font-weight="700" letter-spacing="-3" fill="currentColor">Katha</text>
 </svg>

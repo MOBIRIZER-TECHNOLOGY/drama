@@ -30,7 +30,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
         }}
       >
         <div style={{ display: "flex", fontSize: 116, fontWeight: 700, letterSpacing: -3 }}>
-          Katha<span style={{ color: "#F05A72" }}>.</span>
+          Katha<span style={{ color: "#F0692A" }}>.</span>
         </div>
         <div style={{ display: "flex", fontSize: 40, color: "#A29398", marginTop: 20, maxWidth: 900 }}>{tagline}</div>
         <div style={{ display: "flex", gap: 16, marginTop: 56 }}>

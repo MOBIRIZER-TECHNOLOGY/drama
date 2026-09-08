@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import { canAccess, navSectionsFor } from "@/lib/nav";
+import { Logo } from "@/components/logo";
 import { Icon } from "./icons";
 import { Button, LoadingState } from "./ui";
 
@@ -123,9 +124,7 @@ export function Shell({ children }: { children: ReactNode }) {
 function Brand() {
   return (
     <div className="flex h-14 items-center gap-2 border-b border-line px-5">
-      <span aria-hidden className="grid h-7 w-7 place-items-center rounded-lg bg-accent font-display text-sm font-bold text-white">
-        K
-      </span>
+      <Logo size={26} />
       <span className="font-display text-lg font-semibold">Katha Admin</span>
     </div>
   );

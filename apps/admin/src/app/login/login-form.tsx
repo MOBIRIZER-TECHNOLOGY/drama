@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { api, ApiError, call } from "@/lib/api";
 import { setToken } from "@/lib/token";
+import { Logo } from "@/components/logo";
 import { Button, Field, Input } from "@/components/ui";
 
 /** Only same-origin paths (never /login itself) are honoured; anything else falls back to the dashboard. */
@@ -64,9 +65,7 @@ export function LoginForm() {
   return (
     <form onSubmit={submit} className="w-full max-w-sm rounded-card border border-line bg-surface p-6" noValidate>
       <div className="mb-6 flex items-center gap-2">
-        <span aria-hidden className="grid h-8 w-8 place-items-center rounded-lg bg-accent font-display text-base font-bold text-white">
-          K
-        </span>
+        <Logo size={32} />
         <div>
           <h1 className="text-xl font-semibold leading-tight">Katha Admin</h1>
           <p className="text-xs text-muted">Sign in with your admin account</p>

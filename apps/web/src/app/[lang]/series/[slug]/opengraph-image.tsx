@@ -54,7 +54,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 28 }}>
             <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: -0.5 }}>Katha</div>
-            <div style={{ width: 8, height: 8, borderRadius: 8, background: "#F05A72" }} />
+            <div style={{ width: 8, height: 8, borderRadius: 8, background: "#F0692A" }} />
             <div style={{ fontSize: 22, color: "#A29398" }}>Short dramas</div>
           </div>
           <div
@@ -91,7 +91,7 @@ export default async function Image({ params }: { params: Promise<{ lang: string
                   fontSize: 28,
                   padding: "10px 22px",
                   borderRadius: 999,
-                  background: "#F05A72",
+                  background: "#F0692A",
                   color: "#2A0F16",
                   fontWeight: 600,
                 }}

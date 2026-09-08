@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Katha">
+  <title>Katha</title>
+  <desc>An open book whose pages form a play triangle.</desc>
+  <defs>
+    <!-- The brand gradient: amber at the outer edge of the left page, red at the outer edge of the right. -->
+    <linearGradient id="katha-page-l" x1="0" y1="0" x2="1" y2="0.35">
+      <stop offset="0" stop-color="#FDC125"/>
+      <stop offset="1" stop-color="#F0692A"/>
+    </linearGradient>
+    <linearGradient id="katha-page-r" x1="0" y1="0.35" x2="1" y2="0">
+      <stop offset="0" stop-color="#F0692A"/>
+      <stop offset="1" stop-color="#D40A2C"/>
+    </linearGradient>
+    <!-- The triangle is knocked out of both pages rather than drawn over them, so the mark works on any
+         background and the counter-shape stays exact when the icon is masked to a circle. -->
+    <mask id="katha-play">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M212 172 L212 340 L336 256 Z" fill="#000" stroke="#000" stroke-width="26" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#katha-play)">
+    <!-- Left page. The spine is the vertical centre; the outer edge curves in at top and bottom, and the
+         bottom sweeps up to the spine so the two pages meet in a V. -->
+    <path fill="url(#katha-page-l)"
+          d="M256 128
+             C256 128 224 96 168 96
+             L104 96
+             L104 400
+             C104 400 152 380 200 400
+             C232 413 256 416 256 416
+             Z"/>
+    <!-- Right page, mirrored. -->
+    <path fill="url(#katha-page-r)"
+          d="M256 128
+             C256 128 288 96 344 96
+             L408 96
+             L408 400
+             C408 400 360 380 312 400
+             C280 413 256 416 256 416
+             Z"/>
+  </g>
+</svg>

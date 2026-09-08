@@ -8,6 +8,7 @@ import { useApp, useHref, useT } from "@/lib/app-context";
 import { useAuth } from "@/lib/auth-context";
 import { formatCoins } from "@/lib/format";
 import { stripLang } from "@/lib/languages";
+import { Logo } from "./Logo";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { SearchBox } from "./SearchBox";
 import { Button } from "./ui/Button";
@@ -57,8 +58,9 @@ function HeaderInner({ pathname }: { pathname: string }) {
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-ground/90 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:h-16 sm:px-6 lg:px-8">
-        <Link href={href("/")} className="font-display flex items-center gap-1 text-2xl font-bold tracking-tight text-ink" aria-label="Katha home">
-          Katha<span className="text-accent">.</span>
+        <Link href={href("/")} className="font-display flex items-center gap-2 text-2xl font-bold tracking-tight text-ink" aria-label="Katha home">
+          <Logo size={26} />
+          Katha
         </Link>
 
         <nav className="ms-4 hidden items-center gap-1 md:flex" aria-label="Primary">
