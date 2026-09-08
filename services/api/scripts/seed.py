@@ -1,5 +1,15 @@
 """Seed a local database: owner admin, languages, categories, packs with INR and USD prices, one sample series.
 
+The sample series carries real artwork. Without it every card in both apps renders an empty poster frame, so a
+fresh checkout looks broken rather than empty — and none of the cover, rail or hero layouts can be judged.
+`scripts/seed-assets/` holds the art already cropped to the shapes the clients actually use: 9:16 for a cover
+(the source poster is 2:3, so the crop takes the sides, and 136px off the bottom because the poster's lower
+third is empty city and a card is mostly seen 120px wide) and 16:9 for the hero banner.
+
+The art is uploaded to the configured bucket under fixed keys, so re-seeding overwrites rather than piling up
+objects. If object storage is not reachable — no MinIO running, say — seeding continues without covers and
+says so, because a missing demo image is not a reason to fail the whole seed.
+
 Usage: uv run python scripts/seed.py --admin-email you@example.com --admin-password 'strong'
 """
 
@@ -13,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select  # noqa: E402
 
+from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.core.security import hash_password
 from app.models.catalog import Category, Episode, PublishStatus, Series, SeriesTranslation
@@ -30,12 +41,48 @@ LANGUAGES = [
     ("ar", "Arabic", "العربية", True),
 ]
 CATEGORIES = ["Romance", "Revenge", "Drama", "Fantasy", "Comedy", "Thriller"]
+ASSETS = Path(__file__).resolve().parent / "seed-assets"
+# Fixed keys rather than the random ones `storage.object_key` mints for real uploads: seeding twice should
+# replace the demo art, not leave an orphan behind every time.
+SEED_ART = {
+    "cover": ("images/seed/heiress-cover.webp", "heiress-cover.webp"),
+    "banner": ("images/seed/heiress-banner.webp", "heiress-banner.webp"),
+}
 PACKS = [
     ("coins_100", "Starter", PackKind.coins, 100, 0, None, {"INR": 99, "USD": 1.99}),
     ("coins_550", "Popular", PackKind.coins, 500, 50, None, {"INR": 449, "USD": 7.99}),
     ("coins_1200", "Best Value", PackKind.coins, 1000, 200, None, {"INR": 799, "USD": 14.99}),
     ("vip_30", "VIP Monthly", PackKind.vip, 0, 0, 30, {"INR": 299, "USD": 4.99}),
 ]
+
+
+def upload_seed_art() -> dict[str, str]:
+    """Put the demo artwork in the bucket and hand back public URLs, or `{}` if storage is unavailable."""
+    from app.services import storage
+
+    urls: dict[str, str] = {}
+    try:
+        client = storage._client()  # noqa: SLF001 - the seed is the one caller that uploads without a presign
+        bucket = get_settings().s3_bucket
+        for role, (key, filename) in SEED_ART.items():
+            path = ASSETS / filename
+            if not path.exists():
+                print(f"  seed art missing: {path}")
+                continue
+            client.put_object(
+                Bucket=bucket,
+                Key=key,
+                Body=path.read_bytes(),
+                ContentType="image/webp",
+                CacheControl="public, max-age=31536000, immutable",
+            )
+            urls[role] = storage.public_url(key)
+        if urls:
+            print(f"  uploaded {len(urls)} seed images to {bucket}")
+    except Exception as exc:  # noqa: BLE001 - any storage failure is a warning, never a failed seed
+        print(f"  skipping seed artwork ({type(exc).__name__}: {exc}); covers will be empty")
+        return {}
+    return urls
 
 
 async def main(email: str, password: str) -> None:
@@ -78,9 +125,17 @@ async def main(email: str, password: str) -> None:
                 await db.flush()
                 for cur, amount in prices.items():
                     db.add(PackPrice(pack_id=pack.id, currency=cur, country="*", amount=amount))
-        if not await db.scalar(select(Series).where(Series.slug == "sample-series")):
+        art = upload_seed_art()
+        existing = await db.scalar(select(Series).where(Series.slug == "sample-series"))
+        if existing is not None and art:
+            # Re-seeding an existing database should still pick up artwork added since it was first seeded.
+            existing.cover_url = art.get("cover")
+            existing.banner_url = art.get("banner")
+        if existing is None:
             s = Series(
                 slug="sample-series",
+                cover_url=art.get("cover"),
+                banner_url=art.get("banner"),
                 free_episodes=2,
                 is_featured=True,
                 status=PublishStatus.published,

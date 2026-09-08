@@ -104,7 +104,11 @@ class AdPlacement(UUIDPrimaryKey, TimestampMixin, Base):
     """
 
     __tablename__ = "ad_placements"
-    __table_args__ = (UniqueConstraint("slot", "provider", "unit_id", name="uq_ad_placement"),)
+    __table_args__ = (
+        UniqueConstraint("slot", "provider", "unit_id", name="uq_ad_placement"),
+        # /v1/config asks for "active placements for this platform" on every cold start.
+        Index("ix_ad_placements_active", "is_active", "sort_order"),
+    )
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     slot: Mapped[str] = mapped_column(String(32), nullable=False)  # home_rail | player_pre | unlock_rewarded | …

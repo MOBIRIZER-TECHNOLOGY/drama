@@ -179,6 +179,9 @@ class CategoryTranslation(Base):
     """
 
     __tablename__ = "category_translations"
+    # Declared here as well as in the migration: `alembic check` compares the two, and an index that exists in
+    # only one of them shows up as permanent drift.
+    __table_args__ = (Index("ix_category_translations_lang", "lang"),)
 
     category_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True
