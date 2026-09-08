@@ -16,13 +16,18 @@ import {
   completeStripeCheckout,
   isCouponError,
   pollPurchase,
-  startStripeCheckout,
+  startCheckout,
+  type CheckoutGateway,
   type CheckoutSession,
   type PurchaseResult,
 } from "@/lib/purchases";
 import type { Offer, Pack } from "@/lib/types";
 import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
+
+
+/** Shown on the chooser and in the footnote. Keys are the gateways the checkout endpoint accepts. */
+const GATEWAY_LABEL: Record<CheckoutGateway, string> = { stripe: "Card", razorpay: "Razorpay" };
 
 export default function WalletScreen() {
   const t = useT();
@@ -41,7 +46,20 @@ export default function WalletScreen() {
   const { config, country } = useConfig();
   const { status, requireAuth, setBalance, refreshUser } = useAuth();
   const currency = config.economy.currency ?? "INR";
-  const stripeEnabled = config.payments.gateways.includes("stripe");
+  /**
+   * Which gateways the server is offering, in its order.
+   *
+   * Never a client-side list. On Android with Play billing configured the API returns Play alone, because
+   * Google requires digital goods to go through Play billing and offering a card checkout beside it is what
+   * gets a build rejected. The chooser below therefore only appears when the server actually offers a choice.
+   */
+  const gateways = useMemo(
+    () => config.payments.gateways.filter((g): g is CheckoutGateway => g === "stripe" || g === "razorpay"),
+    [config.payments.gateways],
+  );
+  const [gateway, setGateway] = useState<CheckoutGateway | null>(null);
+  const activeGateway = gateway ?? gateways[0] ?? null;
+  const canCheckout = activeGateway !== null;
   const symbol = config.economy.currency_symbol;
   const [buying, setBuying] = useState<string | null>(null);
   const [message, setMessage] = useState<{ tone: "success" | "error" | "info"; text: string } | null>(null);
@@ -58,6 +76,8 @@ export default function WalletScreen() {
   const offers = useQuery(async () => unwrap(await api.GET("/v1/wallet/offers")), [country], { enabled: status === "signed_in" });
 
   // Cancels an in-flight purchase poll when the screen unmounts.
+  /** A purchase the webhook had not settled by the time polling gave up. */
+  const [unsettled, setUnsettled] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   useEffect(() => () => abortRef.current?.abort(), []);
 
@@ -69,6 +89,7 @@ export default function WalletScreen() {
     async (result: PurchaseResult) => {
       setBuying(null);
       setPending(null);
+      setUnsettled(null);
       if (result.status === "paid") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         track("checkout_return", { status: "paid", coins: result.purchase.coins_granted });
@@ -78,6 +99,9 @@ export default function WalletScreen() {
         await refreshUser();
       } else if (result.status === "pending") {
         track("checkout_return", { status: "pending" });
+        // Polling gave up before the webhook landed. Without somewhere to press, the only recovery was to
+        // guess that pulling the screen down might help, so the purchase id is kept and offered instead.
+        setUnsettled(result.purchaseId);
         setMessage({ tone: "info", text: t("wallet.payment_pending") });
       } else if (result.status === "failed") {
         track("checkout_return", { status: "failed" });
@@ -90,12 +114,30 @@ export default function WalletScreen() {
     [refetchWallet, refetchOffers, refreshUser, t],
   );
 
+  const [rechecking, setRechecking] = useState(false);
+
+  /** "I paid" — ask the server once more rather than waiting for the next poll that is not coming. */
+  const recheck = useCallback(async () => {
+    if (!unsettled) return;
+    setRechecking(true);
+    try {
+      const purchase = unwrap(await api.GET("/v1/purchases/{purchase_id}", { params: { path: { purchase_id: unsettled } } }));
+      if (purchase.status === "paid") await finish({ status: "paid", purchase });
+      else if (purchase.status === "failed" || purchase.status === "refunded") await finish({ status: "failed", purchase });
+      else setMessage({ tone: "info", text: t("wallet.payment_pending") });
+    } catch (e) {
+      setMessage({ tone: "error", text: errorMessage(e) });
+    } finally {
+      setRechecking(false);
+    }
+  }, [unsettled, finish, t]);
+
   /** Price the purchase server-side first: the viewer sees the discounted amount before the browser opens. */
   const buy = useCallback(
     async (pack: Pack) => {
       if (!requireAuth()) return;
-      if (!stripeEnabled) {
-        setMessage({ tone: "error", text: "Card payments are not enabled for this region yet." });
+      if (!activeGateway) {
+        setMessage({ tone: "error", text: t("wallet.no_gateway") });
         return;
       }
       setBuying(pack.id);
@@ -106,7 +148,8 @@ export default function WalletScreen() {
       try {
         abortRef.current?.abort();
         abortRef.current = new AbortController();
-        const session = await startStripeCheckout({
+        const session = await startCheckout({
+          gateway: activeGateway,
           packId: pack.id,
           currency,
           country,
@@ -128,25 +171,48 @@ export default function WalletScreen() {
         setBuying(null);
       }
     },
-    [requireAuth, stripeEnabled, currency, country, coupon, appliedCoupon, selectedOffer],
+    [requireAuth, activeGateway, currency, country, coupon, appliedCoupon, selectedOffer, t],
   );
 
-  /** Second step: the viewer accepted the priced checkout, so hand off to Stripe and poll. */
+  /**
+   * Second step: the viewer accepted the priced checkout, so hand off to the gateway and poll.
+   *
+   * Stripe has a hosted page, so it opens in a system browser auth session — better than a WebView, because
+   * the viewer gets real browser chrome and their saved cards. Razorpay hands back an order instead of a URL
+   * and expects its own script, so that one opens the in-app checkout screen. Either way the outcome is
+   * decided by polling the purchase, never by what the page said.
+   */
   const confirm = useCallback(async () => {
     if (!pending) return;
     const { session } = pending;
     setBuying(pending.pack.id);
-    setMessage({ tone: "info", text: "Opening secure checkout…" });
+    setMessage({ tone: "info", text: t("wallet.opening_checkout") });
     try {
       abortRef.current?.abort();
       abortRef.current = new AbortController();
+      if (session.gateway === "razorpay" && session.order) {
+        setPending(null);
+        router.push({
+          pathname: "/checkout/razorpay",
+          params: {
+            order_id: session.order.orderId,
+            key_id: session.order.keyId,
+            amount_minor: String(session.order.amountMinor),
+            currency: session.currency,
+            name: config.site.name ?? "Katha",
+          },
+        });
+        // The checkout screen only closes itself; settlement is the webhook's, so poll from here.
+        await finish(await pollPurchase(session.purchaseId, abortRef.current.signal));
+        return;
+      }
       await finish(await completeStripeCheckout(session, abortRef.current.signal));
     } catch (e) {
       setBuying(null);
       setPending(null);
       setMessage({ tone: "error", text: errorMessage(e) });
     }
-  }, [pending, finish]);
+  }, [pending, finish, router, config.site.name, t]);
 
   useEffect(() => {
     if (wallet.data) setBalance(wallet.data.coin_balance);
@@ -240,6 +306,23 @@ export default function WalletScreen() {
           </Text>
         ) : null}
 
+        {/* Something to press while a payment is still settling, rather than a sentence and a dead end. */}
+        {unsettled ? (
+          <View style={styles.recovery}>
+            <Button title={t("wallet.i_paid")} variant="secondary" small loading={rechecking} onPress={recheck} />
+            <Button
+              title={t("wallet.i_cancelled")}
+              variant="secondary"
+              small
+              disabled={rechecking}
+              onPress={() => {
+                setUnsettled(null);
+                setMessage(null);
+              }}
+            />
+          </View>
+        ) : null}
+
         {(offers.data?.length ?? 0) > 0 ? (
           <View style={styles.offers}>
             <Text variant="heading">{t("wallet.offers_title")}</Text>
@@ -302,7 +385,32 @@ export default function WalletScreen() {
         ) : (packs.data?.length ?? 0) === 0 ? (
           <EmptyState title={t("wallet.packs_empty")} />
         ) : (
-          <View style={styles.grid}>
+          <View>
+            {/*
+              Only when the server offers a choice. One gateway needs no question, and on Android with Play
+              billing configured the API deliberately returns Play alone.
+            */}
+            {gateways.length > 1 ? (
+              <View style={styles.gateways}>
+                {gateways.map((g) => {
+                  const active = g === activeGateway;
+                  return (
+                    <Pressable
+                      key={g}
+                      onPress={() => setGateway(g)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: active }}
+                      style={[styles.gateway, active && styles.gatewayActive]}
+                    >
+                      <Text variant="label" color={active ? colors.accentInk : colors.ink}>
+                        {GATEWAY_LABEL[g]}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : null}
+            <View style={styles.grid}>
             {packs.data?.map((pack) => (
               <PackCard
                 key={pack.id}
@@ -310,18 +418,19 @@ export default function WalletScreen() {
                 currency={currency}
                 symbol={symbol}
                 busy={buying === pack.id}
-                disabled={buying !== null || pending !== null || !stripeEnabled}
+                disabled={buying !== null || pending !== null || !canCheckout}
                 discountPct={selectedOffer && (!selectedOffer.pack_id || selectedOffer.pack_id === pack.id) ? selectedOffer.discount_pct : null}
                 highlighted={packParam === pack.id}
                 episodePrice={config.economy.episode_price}
                 onBuy={() => buy(pack)}
               />
             ))}
+            </View>
           </View>
         )}
         <Text variant="caption" style={styles.footnote}>
-          {stripeEnabled ? "Payments are processed by Stripe." : "Payments are not available in this build yet."} Coins are credited once the payment is confirmed. In-app purchases and Razorpay are coming in a later
-          release.
+          {activeGateway ? t("wallet.processed_by", { gateway: GATEWAY_LABEL[activeGateway] }) : t("wallet.no_gateway")}{" "}
+          {t("wallet.credited_on_confirm")}
         </Text>
       </ScrollView>
 
@@ -519,6 +628,17 @@ const styles = StyleSheet.create({
   couponCard: { gap: spacing.sm },
   couponRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   sectionTitle: { marginTop: spacing.sm },
+  recovery: { flexDirection: "row", gap: spacing.sm, justifyContent: "center", marginBottom: spacing.lg },
+  gateways: { flexDirection: "row", gap: spacing.sm, marginBottom: spacing.lg },
+  gateway: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.line,
+  },
+  gatewayActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
   pack: { width: "48%", flexGrow: 1, gap: spacing.xs },
   packVip: { borderColor: colors.gold },

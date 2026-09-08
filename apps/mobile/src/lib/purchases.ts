@@ -49,19 +49,37 @@ export type CheckoutOptions = {
   signal?: AbortSignal;
 };
 
-/** Everything the wallet needs to show the price it is about to charge before the browser opens. */
-export type CheckoutSession = { purchaseId: string; url: string; amount: number | null; discountPct: number | null; currency: string };
+/** The gateways `POST /v1/purchases/checkout` accepts. `Gateway` below is the wider store-billing set. */
+export type CheckoutGateway = "stripe" | "razorpay";
+
+/**
+ * Everything the wallet needs to show the price it is about to charge before the payment page opens.
+ *
+ * The two gateways hand back different things: Stripe a hosted URL, Razorpay an order to open its own
+ * checkout against. Both are carried here so the wallet's pricing step is identical either way.
+ */
+export type CheckoutSession = {
+  purchaseId: string;
+  gateway: CheckoutGateway;
+  /** Stripe: the hosted checkout page. */
+  url: string | null;
+  /** Razorpay: the order to open checkout against. */
+  order: { orderId: string; keyId: string; amountMinor: number } | null;
+  amount: number | null;
+  discountPct: number | null;
+  currency: string;
+};
 
 /**
  * `POST /v1/purchases/checkout`. Separate from opening the browser so the wallet can show the discounted
  * `amount` the server calculated (coupon and offer discounts are applied there, never client-side).
  */
-export async function startStripeCheckout(opts: CheckoutOptions): Promise<CheckoutSession> {
+export async function startCheckout(opts: CheckoutOptions & { gateway: CheckoutGateway }): Promise<CheckoutSession> {
   const checkout = unwrap(
     await api.POST("/v1/purchases/checkout", {
       body: {
         pack_id: opts.packId,
-        gateway: "stripe",
+        gateway: opts.gateway,
         currency: opts.currency,
         country: opts.country,
         success_url: PURCHASE_RETURN_URL,
@@ -71,20 +89,34 @@ export async function startStripeCheckout(opts: CheckoutOptions): Promise<Checko
       },
     }),
   );
-  if (!checkout.checkout_url) {
+  if (opts.gateway === "stripe" && !checkout.checkout_url) {
     throw new RequestError({ code: "no_checkout_url", message: "Checkout is unavailable right now" });
+  }
+  if (opts.gateway === "razorpay" && !(checkout.order_id && checkout.key_id)) {
+    throw new RequestError({ code: "no_checkout_order", message: "Checkout is unavailable right now" });
   }
   return {
     purchaseId: checkout.purchase_id,
-    url: checkout.checkout_url,
+    gateway: opts.gateway,
+    url: checkout.checkout_url ?? null,
+    order:
+      checkout.order_id && checkout.key_id
+        ? { orderId: checkout.order_id, keyId: checkout.key_id, amountMinor: checkout.amount_minor ?? 0 }
+        : null,
     amount: checkout.amount ?? null,
     discountPct: checkout.discount_pct ?? null,
     currency: checkout.currency,
   };
 }
 
+/** Back-compat alias: most callers only ever wanted a card checkout. */
+export async function startStripeCheckout(opts: CheckoutOptions): Promise<CheckoutSession> {
+  return startCheckout({ ...opts, gateway: "stripe" });
+}
+
 /** Open a started checkout in an auth session so the `katha://purchase` return closes it, then poll. */
 export async function completeStripeCheckout(session: CheckoutSession, signal?: AbortSignal): Promise<PurchaseResult> {
+  if (!session.url) throw new RequestError({ code: "no_checkout_url", message: "Checkout is unavailable right now" });
   const checkout = { checkout_url: session.url, purchase_id: session.purchaseId };
   const result = await WebBrowser.openAuthSessionAsync(checkout.checkout_url, PURCHASE_RETURN_URL);
   if (result.type === "cancel" || result.type === "dismiss") {
