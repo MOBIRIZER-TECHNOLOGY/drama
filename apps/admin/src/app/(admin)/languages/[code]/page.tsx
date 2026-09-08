@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { memo, useCallback, useMemo, useState } from "react";
 import { api, call } from "@/lib/api";
-import { downloadCsv, parseCsv } from "@/lib/editing";
+import { downloadCsv, parseCsv, useUnsavedChanges } from "@/lib/editing";
 import { checkPlaceholders, describeProblem, tooLong, type PlaceholderProblem } from "@/lib/placeholders";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
@@ -83,6 +83,8 @@ export default function TranslationsPage() {
     return out;
   }, [drafts, data]);
   const dirtyCount = Object.keys(dirty).length;
+  // A translator can have a hundred edited strings in flight here; losing them to a stray click is a day's work.
+  useUnsavedChanges(dirtyCount > 0, "You have unsaved translations. Leave without saving?");
 
   // Stable handler so memoised rows only re-render when their own value changes.
   const onRowChange = useCallback((key: string, value: string) => {

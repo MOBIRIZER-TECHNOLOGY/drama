@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, call } from "@/lib/api";
 import { downloadCsv } from "@/lib/editing";
 import { fmtDateTime, fmtMoney, shortId } from "@/lib/format";
@@ -27,6 +27,7 @@ import {
 export default function PurchasesPage() {
   const [status, setStatus] = useState("");
   const [query, setQuery] = useState("");
+  const [debounced, setDebounced] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [offset, setOffset] = useState(0);
@@ -34,35 +35,48 @@ export default function PurchasesPage() {
 
   const reset = () => setOffset(0);
 
-  const { data, loading, error, refetch } = useQuery(`purchases:${status}:${offset}:${limit}`, async () => {
-    const rows = await call(
-      api.GET("/v1/admin/purchases", { params: { query: { status: status || undefined, limit: limit + 1, offset } } }),
-    );
-    return { items: rows.slice(0, limit), hasNext: rows.length > limit };
-  });
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
 
   /**
-   * Order id, user and date filtering happen here rather than server-side.
+   * Everything filters server-side now.
    *
-   * A Stripe dispute arrives with an order id or an email and neither could be looked up at all, which made the
-   * screen useless for the job it exists for. Filtering the loaded page is a real improvement over nothing;
-   * server-side search is logged in docs/frontend-gaps.md as the proper fix, and this narrows scope to one page
-   * rather than pretending to search the whole table.
+   * The search box and the date range used to run over the rows already loaded, so a dispute quoting an order
+   * id could only be found if that order happened to be on the current page — and the "collected" figure
+   * beside it was a subtotal of whatever had loaded rather than of what was asked for.
    */
-  const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    const after = from ? new Date(from).getTime() : null;
-    const before = to ? new Date(to).getTime() + 86_400_000 : null;
-    return (data?.items ?? []).filter((p) => {
-      if (q && !`${p.id} ${p.user_public_id ?? ""} ${p.user_id} ${p.pack_name}`.toLowerCase().includes(q)) return false;
-      const created = new Date(p.created_at).getTime();
-      if (after != null && created < after) return false;
-      if (before != null && created >= before) return false;
-      return true;
-    });
-  }, [data, query, from, to]);
+  const { data, loading, error, refetch } = useQuery(
+    `purchases:${status}:${debounced}:${from}:${to}:${offset}:${limit}`,
+    async () => {
+      const page = await call(
+        api.GET("/v1/admin/purchases", {
+          params: {
+            query: {
+              status: status || undefined,
+              q: debounced || undefined,
+              date_from: from || undefined,
+              date_to: to || undefined,
+              limit,
+              offset,
+            },
+          },
+        }),
+      );
+      return {
+        items: page.items,
+        total: page.total,
+        totalsByCurrency: page.totals_by_currency,
+        hasNext: offset + page.items.length < page.total,
+      };
+    },
+  );
 
-  /** Per-currency subtotals of what was actually collected — finance's first question, previously unanswerable. */
+  // Memoised because the CSV export and the per-page subtotals both depend on it.
+  const rows = useMemo(() => data?.items ?? [], [data]);
+
+  /** Per-currency subtotals for the rows on screen, shown beside the server's whole-set figure. */
   const totals = useMemo(() => {
     const acc = new Map<string, { amount: number; coins: number; count: number }>();
     for (const p of rows) {
@@ -100,8 +114,8 @@ export default function PurchasesPage() {
         title="Purchases"
         description="Coin pack and VIP orders across Stripe, Razorpay and Google Play."
         actions={
-          <Button size="sm" onClick={exportCsv} disabled={rows.length === 0}>
-            Export CSV
+          <Button size="sm" onClick={exportCsv} disabled={rows.length === 0} title="Exports the rows currently on screen">
+            Export page ({rows.length})
           </Button>
         }
       />
@@ -113,7 +127,7 @@ export default function PurchasesPage() {
               setQuery(v);
               reset();
             }}
-            placeholder="Order id, user or pack"
+            placeholder="Order id, payment id, user or email"
           />
           <Select
             aria-label="Status filter"
@@ -132,7 +146,15 @@ export default function PurchasesPage() {
           </Select>
           <label className="flex items-center gap-2 text-xs text-muted">
             From
-            <Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8 w-36" />
+            <Input
+              type="date"
+              value={from}
+              onChange={(e) => {
+                setFrom(e.target.value);
+                reset();
+              }}
+              className="h-8 w-36"
+            />
           </label>
           <label className="flex items-center gap-2 text-xs text-muted">
             To
@@ -141,17 +163,33 @@ export default function PurchasesPage() {
           {loading && data && <span className="text-xs text-muted">Refreshing…</span>}
         </div>
 
-        {totals.length > 0 && (
-          <div className="flex flex-wrap gap-4 border-b border-line bg-surface-2/40 px-4 py-2.5 text-sm">
-            {totals.map(([currency, t]) => (
-              <span key={currency} className="text-ink">
-                <span className="text-muted">Collected ({currency}):</span>{" "}
-                <strong className="tabular-nums">{fmtMoney(t.amount, currency)}</strong>{" "}
+        {(totals.length > 0 || data) && (
+          <div className="flex flex-col gap-1.5 border-b border-line bg-surface-2/40 px-4 py-2.5 text-sm">
+            {totals.length > 0 && (
+              <div className="flex flex-wrap gap-4">
+                {totals.map(([currency, t]) => (
+                  <span key={currency} className="text-ink">
+                    <span className="text-muted">On this page ({currency}):</span>{" "}
+                    <strong className="tabular-nums">{fmtMoney(t.amount, currency)}</strong>{" "}
+                    <span className="text-muted">
+                      · {t.count} order{t.count === 1 ? "" : "s"} · {t.coins.toLocaleString()} coins
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
+            {data && Object.keys(data.totalsByCurrency).length > 0 && (
+              <div className="flex flex-wrap gap-4 text-xs">
                 <span className="text-muted">
-                  · {t.count} order{t.count === 1 ? "" : "s"} · {t.coins.toLocaleString()} coins
+                  All {data.total} {status ? `${status} ` : ""}order{data.total === 1 ? "" : "s"}:
                 </span>
-              </span>
-            ))}
+                {Object.entries(data.totalsByCurrency).map(([currency, amount]) => (
+                  <span key={currency} className="tabular-nums text-ink-2">
+                    {fmtMoney(amount, currency)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -164,10 +202,10 @@ export default function PurchasesPage() {
           <>
             {rows.length === 0 ? (
               <EmptyState
-                title={query || from || to ? "No matches on this page" : offset > 0 ? "Nothing on this page" : "No purchases"}
+                title={debounced || from || to ? "No matches" : offset > 0 ? "Nothing on this page" : "No purchases"}
                 description={
-                  query || from || to
-                    ? "Filters apply to the rows loaded on this page. Try another page, or widen the range."
+                  debounced || from || to
+                    ? "Nothing in the whole table matches these filters. Try a different id, email or date range."
                     : offset > 0
                       ? "Go back a page."
                       : status
@@ -199,8 +237,16 @@ export default function PurchasesPage() {
                     <tr key={p.id} className="hover:bg-surface-2/50">
                       <Td className="font-mono text-xs text-muted" title={p.id}>
                         {shortId(p.id)}
+                        {p.gateway_payment_id && (
+                          <span className="block text-[11px] text-muted" title={p.gateway_payment_id}>
+                            {p.gateway_payment_id}
+                          </span>
+                        )}
                       </Td>
-                      <Td className="font-mono text-xs">{p.user_public_id ?? shortId(p.user_id)}</Td>
+                      <Td className="font-mono text-xs">
+                        {p.user_public_id ?? shortId(p.user_id)}
+                        {p.user_email && <span className="block font-sans text-[11px] text-muted">{p.user_email}</span>}
+                      </Td>
                       <Td className="font-medium">{p.pack_name}</Td>
                       <Td className="capitalize">{p.gateway}</Td>
                       <Td>

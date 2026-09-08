@@ -1,12 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { api, call, type Schemas } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
-import { Badge, Button, Card, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageHeader, Toggle, InlineError } from "@/components/ui";
+import {
+  Badge,
+  Button,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  ErrorState,
+  InlineError,
+  LoadingState,
+  PageHeader,
+  Pagination,
+  SearchInput,
+  Toggle,
+} from "@/components/ui";
 
 type Message = Schemas["AdminContactOut"];
 
@@ -16,17 +29,41 @@ export default function InboxPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Message | null>(null);
   const [busy, setBusy] = useState(false);
-  const { data, loading, error, refetch, setData } = useQuery(`inbox:${unreadOnly}`, () =>
-    call(api.GET("/v1/admin/inbox", { params: { query: { unread_only: unreadOnly, limit: 200 } } })),
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(25);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, loading, error, refetch, setData } = useQuery(`inbox:${unreadOnly}:${debounced}:${offset}:${limit}`, () =>
+    call(
+      api.GET("/v1/admin/inbox", {
+        params: { query: { unread_only: unreadOnly, q: debounced || undefined, limit, offset } },
+      }),
+    ),
   );
+  const rows = data?.items ?? [];
 
   async function markRead(m: Message) {
     if (m.is_read) return;
-    setData((prev) => (prev ?? []).map((x) => (x.id === m.id ? { ...x, is_read: true } : x)));
+    // Optimistic on both the row and the unread badge; a failure below puts both back.
+    setData((prev) =>
+      prev
+        ? { ...prev, items: prev.items.map((x) => (x.id === m.id ? { ...x, is_read: true } : x)), unread: Math.max(0, prev.unread - 1) }
+        : prev!,
+    );
     try {
       await call(api.PUT("/v1/admin/inbox/{message_id}/read", { params: { path: { message_id: m.id } } }));
     } catch (e) {
-      setData((prev) => (prev ?? []).map((x) => (x.id === m.id ? { ...x, is_read: false } : x)));
+      setData((prev) =>
+        prev
+          ? { ...prev, items: prev.items.map((x) => (x.id === m.id ? { ...x, is_read: false } : x)), unread: prev.unread + 1 }
+          : prev!,
+      );
       toast.error(e instanceof Error ? e.message : "Could not mark as read");
     }
   }
@@ -53,26 +90,49 @@ export default function InboxPage() {
     }
   }
 
-  const unread = (data ?? []).filter((m) => !m.is_read).length;
-
   return (
     <>
       <PageHeader
         title="Inbox"
-        description={data ? `${unread} unread of ${data.length}` : "Messages from the contact form."}
-        actions={<Toggle label="Unread only" checked={unreadOnly} onChange={setUnreadOnly} />}
+        // Counted server-side over the whole table: computing it from the loaded page made the badge wrong the
+        // moment the list was truncated, which was exactly when someone needed it to be right.
+        description={data ? `${data.unread} unread · ${data.total} messages` : "Messages from the contact form."}
+        actions={
+          <Toggle
+            label="Unread only"
+            checked={unreadOnly}
+            onChange={(v) => {
+              setUnreadOnly(v);
+              setOffset(0);
+            }}
+          />
+        }
       />
       <Card>
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+          <SearchInput
+            value={q}
+            onChange={(v) => {
+              setQ(v);
+              setOffset(0);
+            }}
+            placeholder="Search name, email or message…"
+          />
+          {loading && data && <span className="text-xs text-muted">Searching…</span>}
+        </div>
         {error && data && <InlineError message={error} onRetry={refetch} />}
         {error && !data ? (
           <ErrorState message={error} onRetry={refetch} />
         ) : !data ? (
           <LoadingState />
-        ) : data.length === 0 ? (
-          <EmptyState title={unreadOnly ? "No unread messages" : "Inbox is empty"} />
+        ) : rows.length === 0 ? (
+          <EmptyState
+            title={debounced ? "No matches" : unreadOnly ? "No unread messages" : "Inbox is empty"}
+            description={debounced ? `Nothing matches “${debounced}”.` : undefined}
+          />
         ) : (
           <ul className={loading ? "opacity-70" : undefined}>
-            {data.map((m) => {
+            {rows.map((m) => {
               const open = openId === m.id;
               return (
                 <li key={m.id} className="border-b border-line last:border-b-0">
@@ -112,6 +172,20 @@ export default function InboxPage() {
               );
             })}
           </ul>
+        )}
+        {data && (rows.length > 0 || offset > 0) && (
+          <Pagination
+            offset={offset}
+            limit={limit}
+            count={rows.length}
+            hasNext={offset + rows.length < data.total}
+            total={data.total}
+            onChange={setOffset}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setOffset(0);
+            }}
+          />
         )}
       </Card>
 

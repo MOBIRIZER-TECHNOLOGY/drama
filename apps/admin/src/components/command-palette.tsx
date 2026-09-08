@@ -68,7 +68,7 @@ export function CommandPalette({ role }: { role: Role }) {
       // A late response for an earlier query must not replace the current one.
       if (latest.current !== q) return;
       setRemote([
-        ...(series ?? []).map((s) => ({
+        ...(series?.items ?? []).map((s) => ({
           id: `series:${s.id}`,
           label: seriesTitle(s),
           hint: s.status,

@@ -465,6 +465,8 @@ function ResultsDialog({ experiment, onClose }: { experiment: Experiment; onClos
                 <Th className="text-right">Unlocks</Th>
                 <Th className="text-right">Unlock rate</Th>
                 <Th className="text-right">Purchasers</Th>
+                <Th className="text-right">Conversion</Th>
+                <Th>Verdict</Th>
                 <Th className="text-right">Purchases</Th>
                 <Th className="text-right">Revenue</Th>
                 <Th className="text-right">Coins spent</Th>
@@ -473,11 +475,18 @@ function ResultsDialog({ experiment, onClose }: { experiment: Experiment; onClos
             <tbody>
               {data.map((r: VariantResult) => (
                 <tr key={r.variant}>
-                  <Td className="font-mono text-sm font-medium">{r.variant}</Td>
+                  <Td className="font-mono text-sm font-medium">
+                    {r.variant}
+                    {r.is_control && <span className="ml-2 text-[11px] font-normal text-muted">control</span>}
+                  </Td>
                   <Td className="text-right tabular-nums">{fmtNumber(r.users)}</Td>
                   <Td className="text-right tabular-nums">{fmtNumber(r.unlocks)}</Td>
                   <Td className="text-right tabular-nums">{(r.unlock_rate * 100).toFixed(1)}%</Td>
                   <Td className="text-right tabular-nums">{fmtNumber(r.purchasers)}</Td>
+                  <Td className="text-right tabular-nums">{(r.conversion * 100).toFixed(2)}%</Td>
+                  <Td>
+                    <Verdict row={r} />
+                  </Td>
                   <Td className="text-right tabular-nums">{fmtNumber(r.purchases)}</Td>
                   <Td className="text-right tabular-nums">
                     {currencies.length === 0 ? (
@@ -512,5 +521,47 @@ function ResultsDialog({ experiment, onClose }: { experiment: Experiment; onClos
         </div>
       )}
     </Modal>
+  );
+}
+
+/**
+ * Whether a difference is real, rather than two percentages side by side.
+ *
+ * The table showed conversion per variant and left the reader to eyeball it, which reliably declares a winner
+ * on a hundred users and ships a price change on noise. The server runs a two-proportion z-test against the
+ * control and reports the p-value; the line drawn at 0.05 is stated on screen rather than implied.
+ */
+function Verdict({ row }: { row: VariantResult }) {
+  if (row.is_control) return <span className="text-xs text-muted">baseline</span>;
+
+  if (row.note) {
+    return (
+      <span className="block max-w-[16rem] text-xs text-muted" title={row.note}>
+        {row.note}
+      </span>
+    );
+  }
+  if (row.p_value == null) return <span className="text-xs text-muted">—</span>;
+
+  const lift = row.lift_pct;
+  const better = (lift ?? 0) >= 0;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span className="flex items-center gap-1.5">
+        <Badge tone={row.significant ? (better ? "success" : "danger") : "neutral"}>
+          {row.significant ? (better ? "winning" : "losing") : "no call yet"}
+        </Badge>
+        {lift != null && (
+          <span className={`text-xs tabular-nums ${row.significant ? (better ? "text-success" : "text-danger") : "text-muted"}`}>
+            {better ? "+" : ""}
+            {lift.toFixed(1)}%
+          </span>
+        )}
+      </span>
+      <span className="text-[11px] text-muted" title="Two-proportion z-test against the control">
+        p = {row.p_value < 0.001 ? "<0.001" : row.p_value.toFixed(3)}
+        {row.significant ? "" : " (needs < 0.05)"}
+      </span>
+    </span>
   );
 }

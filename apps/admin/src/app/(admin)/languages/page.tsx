@@ -79,6 +79,7 @@ export default function LanguagesPage() {
                 <Th>Code</Th>
                 <Th>Name</Th>
                 <Th>Native name</Th>
+                <Th>Coverage</Th>
                 <Th>Flags</Th>
                 <Th className="text-right">Order</Th>
                 <Th className="text-right">Actions</Th>
@@ -94,6 +95,9 @@ export default function LanguagesPage() {
                     </Link>
                   </Td>
                   <Td>{l.native_name ?? <span className="text-muted">—</span>}</Td>
+                  <Td>
+                    <Coverage lang={l} />
+                  </Td>
                   <Td>
                     <span className="flex gap-1">
                       {l.is_active ? <Badge tone="success">active</Badge> : <Badge>inactive</Badge>}
@@ -245,5 +249,28 @@ function LanguageDialog({
         <Toggle label="Right-to-left" checked={form.is_rtl ?? false} onChange={(v) => set("is_rtl", v)} />
       </form>
     </Modal>
+  );
+}
+
+/**
+ * How far this language has actually got.
+ *
+ * The list showed a language was "active" and nothing else, so a language enabled at 12% translated looked
+ * exactly like a finished one — and to a viewer, a half-translated app reads as broken rather than incomplete.
+ * English is the source, so it is complete by definition.
+ */
+function Coverage({ lang }: { lang: Schemas["AdminLanguageOut"] }) {
+  if (lang.code === "en") return <span className="text-xs text-muted">source</span>;
+  const ui = lang.ui_total > 0 ? Math.round((lang.ui_translated / lang.ui_total) * 100) : 0;
+  const pages = lang.pages_total > 0 ? Math.round((lang.pages_translated / lang.pages_total) * 100) : 0;
+  const tone = ui >= 95 ? "success" : ui >= 60 ? "warning" : "danger";
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      <Badge tone={tone}>{ui}% UI</Badge>
+      <span className="text-xs text-muted">
+        {lang.ui_translated}/{lang.ui_total} strings
+        {lang.pages_total > 0 ? ` · ${pages}% pages` : ""}
+      </span>
+    </span>
   );
 }

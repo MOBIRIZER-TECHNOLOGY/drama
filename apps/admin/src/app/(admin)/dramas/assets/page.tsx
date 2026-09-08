@@ -18,6 +18,8 @@ import {
   InlineError,
   LoadingState,
   PageHeader,
+  Pagination,
+  SearchInput,
   Select,
   Table,
   Td,
@@ -27,7 +29,6 @@ import {
 
 const STATUSES: Schemas["AssetStatus"][] = ["uploaded", "queued", "transcoding", "ready", "failed"];
 const PENDING = new Set<Schemas["AssetStatus"]>(["uploaded", "queued", "transcoding"]);
-const LIMIT = 200;
 
 export default function VideoAssetsPage() {
   const toast = useToast();
@@ -36,17 +37,37 @@ export default function VideoAssetsPage() {
   const [busy, setBusy] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(50);
 
-  const { data, loading, error, refetch, setData } = useQuery(`video-assets:${status}`, () =>
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, loading, error, refetch, setData } = useQuery(`video-assets:${status}:${debounced}:${offset}:${limit}`, () =>
     call(
       api.GET("/v1/admin/uploads/videos", {
-        params: { query: { status: (status || undefined) as Schemas["AssetStatus"] | undefined, limit: LIMIT } },
+        params: {
+          query: {
+            status: (status || undefined) as Schemas["AssetStatus"] | undefined,
+            q: debounced || undefined,
+            limit,
+            offset,
+          },
+        },
       }),
     ),
   );
+  const rows = data?.items ?? [];
+  const counts = data?.counts ?? {};
+  const failed = counts.failed ?? 0;
 
   // Keep transcoding rows fresh without the admin having to reload (paused while the tab is hidden).
-  const pending = (data ?? []).some((a) => PENDING.has(a.status));
+  // Driven by the tally rather than the page: a transcode running on page 3 still deserves a live view.
+  const pending = STATUSES.some((s) => PENDING.has(s) && (counts[s] ?? 0) > 0);
   useEffect(() => {
     if (!pending) return;
     return startPolling({
@@ -62,7 +83,7 @@ export default function VideoAssetsPage() {
     setRetrying(a.id);
     try {
       const updated = await retryVideo(a.id);
-      setData((prev) => (prev ?? []).map((x) => (x.id === a.id ? updated : x)));
+      setData((prev) => (prev ? { ...prev, items: prev.items.map((x) => (x.id === a.id ? updated : x)) } : prev!));
       toast.info("Transcode re-queued");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Retry failed");
@@ -99,21 +120,53 @@ export default function VideoAssetsPage() {
         title="Video assets"
         description="Every uploaded source video and its transcode state. Delete orphans; assets attached to an episode are protected."
         actions={
-          <Link href="/dramas" className="text-sm text-muted hover:text-ink">
-            ← Back to dramas
-          </Link>
+          <div className="flex items-center gap-3">
+            {/* A failure that only shows up once you think to filter for it is a failure nobody sees. */}
+            {failed > 0 && status !== "failed" && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setStatus("failed");
+                  setOffset(0);
+                }}
+              >
+                <Badge tone="danger">{failed} failed</Badge>
+              </Button>
+            )}
+            <Link href="/dramas" className="text-sm text-muted hover:text-ink">
+              ← Back to dramas
+            </Link>
+          </div>
         }
       />
       <Card>
         <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
-          <Select aria-label="Status filter" value={status} onChange={(e) => setStatus(e.target.value)} className="w-40">
-            <option value="">All statuses</option>
+          <Select
+            aria-label="Status filter"
+            value={status}
+            onChange={(e) => {
+              setStatus(e.target.value);
+              setOffset(0);
+            }}
+            className="w-48"
+          >
+            <option value="">All statuses{data ? ` (${sum(counts)})` : ""}</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>
                 {s}
+                {data ? ` (${counts[s] ?? 0})` : ""}
               </option>
             ))}
           </Select>
+          <SearchInput
+            value={q}
+            onChange={(v) => {
+              setQ(v);
+              setOffset(0);
+            }}
+            placeholder="Search source key…"
+          />
           <Button size="sm" variant="ghost" onClick={refetch} loading={loading && Boolean(data)}>
             <Icon name="refresh" size={13} /> Refresh
           </Button>
@@ -124,10 +177,14 @@ export default function VideoAssetsPage() {
           <ErrorState message={error} onRetry={refetch} />
         ) : !data ? (
           <LoadingState />
-        ) : data.length === 0 ? (
+        ) : rows.length === 0 ? (
           <EmptyState
-            title={status ? `No ${status} assets` : "No video assets"}
-            description="Assets appear here after an episode video is uploaded."
+            title={debounced ? "No matches" : status ? `No ${status} assets` : "No video assets"}
+            description={
+              debounced
+                ? `No source key contains “${debounced}”.`
+                : "Assets appear here after an episode video is uploaded."
+            }
           />
         ) : (
           <Table minWidth={820}>
@@ -142,7 +199,7 @@ export default function VideoAssetsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.map((a) => (
+              {rows.map((a) => (
                 <tr key={a.id} className="align-top hover:bg-surface-2/50">
                   <Td>
                     <Badge tone={statusTone(a.status)}>{a.status}</Badge>
@@ -181,6 +238,20 @@ export default function VideoAssetsPage() {
             </tbody>
           </Table>
         )}
+        {data && (rows.length > 0 || offset > 0) && (
+          <Pagination
+            offset={offset}
+            limit={limit}
+            count={rows.length}
+            hasNext={offset + rows.length < data.total}
+            total={data.total}
+            onChange={setOffset}
+            onLimitChange={(n) => {
+              setLimit(n);
+              setOffset(0);
+            }}
+          />
+        )}
       </Card>
 
       <ConfirmDialog
@@ -200,6 +271,10 @@ export default function VideoAssetsPage() {
       />
     </>
   );
+}
+
+function sum(counts: Record<string, number>) {
+  return Object.values(counts).reduce((a, b) => a + b, 0);
 }
 
 function formatDuration(sec: number) {

@@ -8,16 +8,13 @@ import {
   isRewardedSlot,
   PROVIDER_LABEL,
   SLOT_LABEL,
-  stubCreate,
-  stubDelete,
-  stubList,
-  stubUpdate,
   type AdPlacement,
   type AdPlacementIn,
   type AdPlatform,
   type AdProvider,
   type AdSlot,
 } from "@/lib/ad-placements";
+import { api, call } from "@/lib/api";
 import { fmtDateTime } from "@/lib/format";
 import { useFieldErrors } from "@/lib/forms";
 import { useQuery } from "@/lib/use-query";
@@ -44,24 +41,38 @@ import {
 
 export default function AdsPage() {
   const toast = useToast();
-  const { data, loading, error, refetch, setData } = useQuery("ad-placements", stubList);
+  const { data, loading, error, refetch, setData } = useQuery("ad-placements", () =>
+    call(api.GET("/v1/admin/ad-placements")),
+  );
   const [editing, setEditing] = useState<AdPlacement | "new" | null>(null);
   const [deleting, setDeleting] = useState<AdPlacement | null>(null);
   const [busy, setBusy] = useState(false);
 
   const upsert = (saved: AdPlacement) =>
     setData((prev) => {
-      const list = prev ?? [];
-      return list.some((p) => p.id === saved.id) ? list.map((p) => (p.id === saved.id ? saved : p)) : [...list, saved];
+      if (!prev) return { items: [saved], total: 1, active: saved.is_active ? 1 : 0 };
+      const items = prev.items.some((p) => p.id === saved.id)
+        ? prev.items.map((p) => (p.id === saved.id ? saved : p))
+        : [...prev.items, saved];
+      return { ...prev, items, total: items.length, active: items.filter((p) => p.is_active).length };
     });
 
   async function toggleActive(p: AdPlacement) {
     const next = { ...p, is_active: !p.is_active };
-    setData((prev) => (prev ?? []).map((x) => (x.id === p.id ? next : x)));
+    // Optimistic, because flipping a placement is the action an operator takes most and a round trip on every
+    // toggle makes the switch feel broken. Rolled back below if the write is refused.
+    upsert(next);
     try {
-      upsert(await stubUpdate(p.id, toIn(next)));
+      upsert(
+        await call(
+          api.PUT("/v1/admin/ad-placements/{placement_id}", {
+            params: { path: { placement_id: p.id } },
+            body: toIn(next),
+          }),
+        ),
+      );
     } catch (e) {
-      setData((prev) => (prev ?? []).map((x) => (x.id === p.id ? p : x)));
+      upsert(p);
       toast.error(e instanceof Error ? e.message : "Update failed");
     }
   }
@@ -71,8 +82,15 @@ export default function AdsPage() {
     const victim = deleting;
     setBusy(true);
     try {
-      await stubDelete(victim.id);
-      setData((prev) => (prev ?? []).filter((p) => p.id !== victim.id));
+      await call(api.DELETE("/v1/admin/ad-placements/{placement_id}", { params: { path: { placement_id: victim.id } } }));
+      setData((prev) =>
+        prev
+          ? (() => {
+              const items = prev.items.filter((p) => p.id !== victim.id);
+              return { ...prev, items, total: items.length, active: items.filter((p) => p.is_active).length };
+            })()
+          : prev!,
+      );
       toast.success(`Deleted “${victim.name}”`);
       setDeleting(null);
     } catch (e) {
@@ -94,20 +112,25 @@ export default function AdsPage() {
         }
       />
 
-      <div role="status" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink-2">
-        <Icon name="megaphone" size={16} className="text-warning" />
-        <span className="flex-1">
-          <strong>Preview only.</strong> The API has no <code className="font-mono text-xs">/v1/admin/ad-placements</code> endpoints yet, so changes here live in
-          the browser tab and are lost on reload. This page is hidden from the sidebar until the API exists.
-        </span>
-      </div>
+      {/* An operator's first question here is whether anything is live at all, and it should not require
+          reading every row to answer. */}
+      {data && (
+        <div role="status" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2 text-sm text-ink-2">
+          <Icon name="megaphone" size={16} className={data.active > 0 ? "text-warning" : "text-muted"} />
+          <span className="flex-1">
+            {data.active === 0
+              ? "No placements are live. Apps will not request ads."
+              : `${data.active} of ${data.total} placement${data.total === 1 ? "" : "s"} live. Apps request these on their next config refresh.`}
+          </span>
+        </div>
+      )}
 
       <Card>
         {error && !data ? (
           <ErrorState message={error} onRetry={refetch} />
         ) : !data ? (
           <LoadingState />
-        ) : data.length === 0 ? (
+        ) : data.items.length === 0 ? (
           <EmptyState title="No placements" description="Define a slot, a provider unit id and the platforms it may serve on." />
         ) : (
           <Table minWidth={900}>
@@ -124,7 +147,7 @@ export default function AdsPage() {
               </tr>
             </thead>
             <tbody>
-              {data.map((p) => (
+              {data.items.map((p) => (
                 <tr key={p.id} className={`hover:bg-surface-2/50 ${loading ? "opacity-70" : ""}`}>
                   <Td>
                     <span className="block font-medium">{p.name}</span>
@@ -167,10 +190,10 @@ export default function AdsPage() {
             </tbody>
           </Table>
         )}
-        {data && data.length > 0 && (
+        {data && data.items.length > 0 && (
           <p className="border-t border-line px-4 py-2 text-xs text-muted">
             Rewarded placements only serve while the <code className="font-mono">rewarded_ads</code> feature flag is on.
-            {data[0] && ` Last change ${fmtDateTime(data.map((p) => p.updated_at).sort().at(-1))}.`}
+            {` Last change ${fmtDateTime(data.items.map((p) => p.updated_at).filter(Boolean).sort().at(-1) ?? null)}.`}
           </p>
         )}
       </Card>
@@ -269,8 +292,15 @@ function PlacementDialog({
     };
     setSaving(true);
     try {
-      const saved = placement ? await stubUpdate(placement.id, body) : await stubCreate(body);
-      toast.success(placement ? "Placement saved (preview only)" : "Placement created (preview only)");
+      const saved = placement
+        ? await call(
+            api.PUT("/v1/admin/ad-placements/{placement_id}", {
+              params: { path: { placement_id: placement.id } },
+              body,
+            }),
+          )
+        : await call(api.POST("/v1/admin/ad-placements", { body }));
+      toast.success(placement ? "Placement saved" : "Placement created");
       onSaved(saved);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Save failed");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useId, useMemo, useState, type FormEvent } from "react";
 import { api, call, type Schemas } from "@/lib/api";
 import { slugify } from "@/lib/format";
 import { useFieldErrors } from "@/lib/forms";
@@ -19,6 +19,8 @@ import {
   LoadingState,
   Modal,
   PageHeader,
+  Pagination,
+  SearchInput,
   TabPanel,
   Table,
   Tabs,
@@ -29,15 +31,44 @@ import {
 } from "@/components/ui";
 
 type Page = Schemas["AdminCmsPageOut"];
+type PageSummary = Schemas["AdminCmsPageSummary"];
 type PageIn = Schemas["CmsPageIn"];
+const LIMIT = 25;
 
 export default function PagesPage() {
   const toast = useToast();
-  const { data, loading, error, refetch, setData } = useQuery("pages", () => call(api.GET("/v1/admin/pages")));
+  const [q, setQ] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [offset, setOffset] = useState(0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(q.trim()), 300);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const { data, loading, error, refetch, setData } = useQuery(`pages:${debounced}:${offset}`, () =>
+    call(api.GET("/v1/admin/pages", { params: { query: { q: debounced || undefined, limit: LIMIT, offset } } })),
+  );
   const languages = useQuery("languages", () => call(api.GET("/v1/admin/languages")));
+  /**
+   * The list carries no bodies, so opening a row fetches the page itself. That is the whole point of the
+   * split: rendering a table of slugs used to download every translation of every page.
+   */
   const [editing, setEditing] = useState<Page | "new" | null>(null);
-  const [deleting, setDeleting] = useState<Page | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<PageSummary | null>(null);
   const [busy, setBusy] = useState(false);
+
+  async function open(row: PageSummary) {
+    setOpening(row.id);
+    try {
+      setEditing(await call(api.GET("/v1/admin/pages/{page_id}", { params: { path: { page_id: row.id } } })));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open that page");
+    } finally {
+      setOpening(null);
+    }
+  }
 
   async function remove() {
     if (!deleting) return;
@@ -45,7 +76,9 @@ export default function PagesPage() {
     const victim = deleting;
     try {
       await call(api.DELETE("/v1/admin/pages/{page_id}", { params: { path: { page_id: victim.id } } }));
-      setData((prev) => (prev ?? []).filter((p) => p.id !== victim.id));
+      setData((prev) =>
+        prev ? { items: prev.items.filter((p) => p.id !== victim.id), total: Math.max(0, prev.total - 1) } : prev!,
+      );
       toast.success(`Deleted /${victim.slug}`);
       setDeleting(null);
     } catch (e) {
@@ -72,12 +105,27 @@ export default function PagesPage() {
         }
       />
       <Card>
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-3">
+          <SearchInput
+            value={q}
+            onChange={(v) => {
+              setQ(v);
+              setOffset(0);
+            }}
+            placeholder="Search slug or title…"
+          />
+          {data && <span className="text-xs text-muted">{data.total} pages</span>}
+          {loading && data && <span className="text-xs text-muted">Refreshing…</span>}
+        </div>
         {error && !data ? (
           <ErrorState message={error} onRetry={refetch} />
         ) : !data ? (
           <LoadingState />
-        ) : data.length === 0 ? (
-          <EmptyState title="No pages" description="Create Terms of Service and Privacy Policy first." />
+        ) : data.items.length === 0 ? (
+          <EmptyState
+            title={debounced ? "No matches" : "No pages"}
+            description={debounced ? `Nothing matches “${debounced}”.` : "Create Terms of Service and Privacy Policy first."}
+          />
         ) : (
           <Table minWidth={640}>
             <thead>
@@ -90,14 +138,23 @@ export default function PagesPage() {
               </tr>
             </thead>
             <tbody>
-              {data.map((p) => (
+              {data.items.map((p) => (
                 <tr key={p.id} className={`hover:bg-surface-2/50 ${loading ? "opacity-70" : ""}`}>
                   <Td className="font-mono text-xs">/{p.slug}</Td>
-                  <Td className="font-medium">{p.translations.find((t) => t.lang === "en")?.title ?? p.translations[0]?.title ?? "—"}</Td>
+                  <Td className="font-medium">{p.title ?? <span className="text-muted">—</span>}</Td>
                   <Td>
                     <span className="flex flex-wrap gap-1">
-                      {p.translations.map((t) => (
-                        <Badge key={t.lang}>{t.lang}</Badge>
+                      {p.languages.length === 0 ? (
+                        <Badge tone="warning">none</Badge>
+                      ) : (
+                        p.languages.map((code) => <Badge key={code}>{code}</Badge>)
+                      )}
+                      {/* A published page missing a language renders in English to that audience, and the
+                          list is the only place anyone would notice. */}
+                      {missing(p, langCodes).map((code) => (
+                        <Badge key={`missing-${code}`} tone="warning">
+                          {code}?
+                        </Badge>
                       ))}
                     </span>
                   </Td>
@@ -109,7 +166,7 @@ export default function PagesPage() {
                   </Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
+                      <Button size="sm" variant="ghost" loading={opening === p.id} onClick={() => void open(p)}>
                         Edit
                       </Button>
                       <Button size="sm" variant="ghost" aria-label={`Delete ${p.slug}`} onClick={() => setDeleting(p)}>
@@ -122,6 +179,16 @@ export default function PagesPage() {
             </tbody>
           </Table>
         )}
+        {data && (data.items.length > 0 || offset > 0) && (
+          <Pagination
+            offset={offset}
+            limit={LIMIT}
+            count={data.items.length}
+            hasNext={offset + data.items.length < data.total}
+            total={data.total}
+            onChange={setOffset}
+          />
+        )}
       </Card>
 
       {editing && (
@@ -130,9 +197,13 @@ export default function PagesPage() {
           langCodes={langCodes}
           onClose={() => setEditing(null)}
           onSaved={(saved) => {
+            const row = summarise(saved);
             setData((prev) => {
-              const list = prev ?? [];
-              return list.some((p) => p.id === saved.id) ? list.map((p) => (p.id === saved.id ? saved : p)) : [...list, saved];
+              if (!prev) return { items: [row], total: 1 };
+              const items = prev.items.some((p) => p.id === row.id)
+                ? prev.items.map((p) => (p.id === row.id ? row : p))
+                : [...prev.items, row];
+              return { items, total: prev.items.some((p) => p.id === row.id) ? prev.total : prev.total + 1 };
             });
             setEditing(null);
           }}
@@ -152,6 +223,24 @@ export default function PagesPage() {
 }
 
 type Draft = { title: string; body_html: string };
+
+/** Which active languages this page has no translation for. */
+function missing(page: PageSummary, active: string[]): string[] {
+  return active.filter((code) => !page.languages.includes(code));
+}
+
+/** The saved detail collapsed back into a row, so the list updates without a refetch. */
+function summarise(saved: Page): PageSummary {
+  const byLang = Object.fromEntries(saved.translations.map((t) => [t.lang, t.title]));
+  return {
+    id: saved.id,
+    slug: saved.slug,
+    show_in_footer: saved.show_in_footer,
+    is_published: saved.is_published,
+    languages: Object.keys(byLang).sort(),
+    title: byLang.en ?? Object.values(byLang)[0] ?? null,
+  };
+}
 
 function PageDialog({
   page,

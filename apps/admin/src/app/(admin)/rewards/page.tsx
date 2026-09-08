@@ -80,6 +80,10 @@ export default function RewardsPage() {
         }
       />
 
+      {/* A rewarded task pays out only when AdMob's signed callback reaches us, and the operator setting up
+          the ad unit is the person who has to paste that URL into the AdMob console. Nowhere else says it. */}
+      {(data ?? []).some((t) => t.kind === "rewarded_ad") && <SsvHint />}
+
       {error && !data ? (
         <Card>
           <ErrorState message={error} onRetry={refetch} />
@@ -355,5 +359,40 @@ function TaskDialog({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Where AdMob has to call.
+ *
+ * A rewarded task grants nothing until Google's server-side verification callback reaches the API and is
+ * verified against Google's published keys — no callback, no coins, and no error anywhere to explain why.
+ * The person configuring the ad unit is the person reading this screen, so the URL belongs here.
+ */
+function SsvHint() {
+  const [copied, setCopied] = useState(false);
+  const base = process.env.NEXT_PUBLIC_API_URL ?? "";
+  const url = `${base}/v1/ads/admob/ssv`;
+
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface-2/50 px-3 py-2.5 text-sm text-ink-2">
+      <Icon name="megaphone" size={16} className="text-muted" />
+      <span className="flex-1 min-w-[16rem]">
+        Rewarded tasks pay out only when AdMob&rsquo;s verification callback reaches us. Set this as the
+        server-side verification URL on the ad unit:
+        <code className="ms-2 rounded bg-surface px-1.5 py-0.5 font-mono text-xs">{url}</code>
+      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => {
+          void navigator.clipboard.writeText(url);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </Button>
+    </div>
   );
 }

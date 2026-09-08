@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent } from "react";
 import { api, call, type Schemas } from "@/lib/api";
+import { economics, warnings } from "@/lib/pack-economics";
+import { fmtMoney } from "@/lib/format";
 import { useFieldErrors } from "@/lib/forms";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
@@ -66,6 +68,12 @@ export default function PacksPage() {
   }
 
   const sorted = [...(data ?? [])].sort((a, b) => a.sort_order - b.sort_order || a.coins - b.coins);
+  // The one number that connects coins to rupees. Read from the live economy rather than assumed, because it
+  // is the setting that decides what every pack on this screen is actually worth.
+  const settings = useQuery("settings:economy", () =>
+    call(api.GET("/v1/admin/settings/{namespace}", { params: { path: { namespace: "economy" } } })),
+  );
+  const episodePrice = Number((settings.data as Record<string, unknown> | undefined)?.episode_price ?? 0);
 
   return (
     <>
@@ -93,6 +101,7 @@ export default function PacksPage() {
                 <Th>Kind</Th>
                 <Th className="text-right">Coins</Th>
                 <Th>Prices</Th>
+                <Th>Value</Th>
                 <Th>Store IDs</Th>
                 <Th>Active</Th>
                 <Th className="text-right">Actions</Th>
@@ -130,6 +139,10 @@ export default function PacksPage() {
                         ))}
                       </span>
                     )}
+                  </Td>
+                  <Td className="text-xs">
+                    {/* What the viewer is really deciding on. The operator setting the price could not see it. */}
+                    <PackValue pack={p} all={sorted} episodePrice={episodePrice} />
                   </Td>
                   <Td className="font-mono text-xs text-muted">
                     {p.google_product_id && <span className="block">G: {p.google_product_id}</span>}
@@ -447,5 +460,41 @@ function PackDialog({ pack, onClose, onSaved }: { pack: Pack | null; onClose: ()
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * Per-episode price, bonus, and anything wrong that only shows when the packs are compared with each other.
+ *
+ * Advisory rather than blocking: a promotional pack that is briefly poor value is a legitimate decision, and
+ * an operator who has decided that does not need to be argued with — only told.
+ */
+function PackValue({ pack, all, episodePrice }: { pack: Pack; all: Pack[]; episodePrice: number }) {
+  const e = economics(pack, episodePrice);
+  const issues = warnings(pack, all, episodePrice);
+
+  if (!e && issues.length === 0) return <span className="text-muted">—</span>;
+
+  return (
+    <span className="flex flex-col gap-1">
+      {e ? (
+        <>
+          <span className="tabular-nums text-ink">
+            {fmtMoney(Math.round(e.perEpisode * 100) / 100, e.currency)}
+            <span className="text-muted"> / episode</span>
+          </span>
+          <span className="text-muted">
+            {e.episodes} episode{e.episodes === 1 ? "" : "s"}
+            {e.bonusPct > 0 ? ` · +${e.bonusPct}% bonus` : ""}
+          </span>
+        </>
+      ) : null}
+      {issues.map((w) => (
+        <span key={w.kind} className="flex max-w-[18rem] items-start gap-1 text-warning">
+          <Icon name="flag" size={12} className="mt-0.5 shrink-0" />
+          <span>{w.message}</span>
+        </span>
+      ))}
+    </span>
   );
 }

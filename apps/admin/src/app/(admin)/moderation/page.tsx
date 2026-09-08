@@ -10,6 +10,7 @@ import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
 import {
   Badge,
+  BulkBar,
   Button,
   Card,
   ConfirmDialog,
@@ -20,6 +21,8 @@ import {
   LoadingState,
   Modal,
   PageHeader,
+  Pagination,
+  SelectCell,
   Select,
   TabPanel,
   Tabs,
@@ -28,31 +31,60 @@ import {
   Textarea,
   Th,
   statusTone,
+  useSelection,
 } from "@/components/ui";
 
 type Item = Schemas["ModerationItem"];
 type Filter = "all" | "report" | "flagged_series";
+type BulkAction = "resolved" | "dismissed" | "clear_flags";
 
 export default function ModerationPage() {
   const toast = useToast();
   const tabsId = useId();
   const [filter, setFilter] = useState<Filter>("all");
-  const { data, loading, error, refetch, setData } = useQuery("moderation", () => call(api.GET("/v1/admin/moderation")));
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(50);
+  const { data, loading, error, refetch, setData } = useQuery(`moderation:${filter}:${offset}:${limit}`, () =>
+    call(
+      api.GET("/v1/admin/moderation", {
+        params: {
+          query: {
+            // "All" sends no kind; the server still returns both counts, so the badges stay honest.
+            kind: filter === "all" ? undefined : filter,
+            limit,
+            offset,
+          },
+        },
+      }),
+    ),
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ item: Item; action: "unpublish" | "clear_flags" } | null>(null);
   const [rating, setRating] = useState<Item | null>(null);
+  const [bulkConfirm, setBulkConfirm] = useState<BulkAction | null>(null);
+  const [bulkRunning, setBulkRunning] = useState(false);
 
-  const items = (data ?? []).filter((i) => filter === "all" || i.kind === filter).sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const counts = { report: (data ?? []).filter((i) => i.kind === "report").length, flagged: (data ?? []).filter((i) => i.kind === "flagged_series").length };
+  // Server-ordered (oldest first) and server-filtered; the counts are over the whole table, not this page.
+  const items = data?.items ?? [];
+  const counts = { report: data?.reports ?? 0, flagged: data?.flagged ?? 0 };
+
+  // Reports and series ids live in different tables, so the row key carries the kind to keep them apart.
+  const rows = items.map((i) => ({ id: `${i.kind}:${i.id}`, item: i }));
+  const sel = useSelection(rows);
+  const chosen = rows.filter((r) => sel.has(r.id)).map((r) => r.item);
+  const chosenReports = chosen.filter((i) => i.kind === "report");
+  const chosenFlagged = chosen.filter((i) => i.kind === "flagged_series" && i.series_id);
 
   async function resolveReport(item: Item, status: "resolved" | "dismissed") {
     setBusy(item.id);
-    setData((prev) => (prev ?? []).filter((x) => x.id !== item.id));
+    setData((prev) =>
+      prev ? { ...prev, items: prev.items.filter((x) => x.id !== item.id), total: Math.max(0, prev.total - 1) } : prev!,
+    );
     try {
       await call(api.PUT("/v1/admin/reports/{report_id}", { params: { path: { report_id: item.id } }, body: { status } }));
       toast.success(`Report ${status}`);
     } catch (e) {
-      setData((prev) => [item, ...(prev ?? [])]);
+      setData((prev) => (prev ? { ...prev, items: [item, ...prev.items], total: prev.total + 1 } : prev!));
       toast.error(e instanceof Error ? e.message : "Update failed");
     } finally {
       setBusy(null);
@@ -65,7 +97,10 @@ export default function ModerationPage() {
     try {
       await call(api.POST("/v1/admin/moderation/series/{series_id}", { params: { path: { series_id: item.series_id } }, body }));
       toast.success(successText);
-      if (body.action === "clear_flags") setData((prev) => (prev ?? []).filter((x) => x.id !== item.id));
+      if (body.action === "clear_flags")
+        setData((prev) =>
+          prev ? { ...prev, items: prev.items.filter((x) => x.id !== item.id), total: Math.max(0, prev.total - 1) } : prev!,
+        );
       else refetch();
       return true;
     } catch (e) {
@@ -74,6 +109,45 @@ export default function ModerationPage() {
     } finally {
       setBusy(null);
     }
+  }
+
+  /**
+   * Works the queue in bulk.
+   *
+   * A review-bomb or a bad ingest puts dozens of near-identical items in here at once, and clearing them one
+   * at a time was the whole job. Each item is still its own API call — there is no batch endpoint and inventing
+   * one would hide partial failure — so the run reports exactly how many landed and leaves the rest selected.
+   */
+  async function runBulk(action: BulkAction) {
+    const targets = action === "clear_flags" ? chosenFlagged : chosenReports;
+    if (targets.length === 0) return;
+    setBulkRunning(true);
+    const failed: Item[] = [];
+    for (const item of targets) {
+      try {
+        if (action === "clear_flags") {
+          await call(
+            api.POST("/v1/admin/moderation/series/{series_id}", {
+              params: { path: { series_id: item.series_id as string } },
+              body: { action: "clear_flags" },
+            }),
+          );
+        } else {
+          await call(api.PUT("/v1/admin/reports/{report_id}", { params: { path: { report_id: item.id } }, body: { status: action } }));
+        }
+      } catch {
+        failed.push(item);
+      }
+    }
+    const done = targets.length - failed.length;
+    if (done > 0) toast.success(`${done} ${done === 1 ? "item" : "items"} ${action === "clear_flags" ? "cleared" : action}`);
+    if (failed.length > 0) toast.error(`${failed.length} could not be updated and stay selected.`);
+    // Keep only what failed selected, so a retry acts on exactly the remainder.
+    sel.clear();
+    for (const item of failed) sel.toggle(`${item.kind}:${item.id}`, true);
+    setBulkRunning(false);
+    setBulkConfirm(null);
+    refetch();
   }
 
   async function runConfirm() {
@@ -104,9 +178,13 @@ export default function ModerationPage() {
             id={tabsId}
             label="Queue filter"
             value={filter}
-            onChange={setFilter}
+            onChange={(v) => {
+              setFilter(v);
+              setOffset(0);
+              sel.clear();
+            }}
             tabs={[
-              { value: "all", label: "All", badge: data ? <Badge>{data.length}</Badge> : undefined },
+              { value: "all", label: "All", badge: data ? <Badge>{data.reports + data.flagged}</Badge> : undefined },
               { value: "report", label: "Reports", badge: data ? <Badge tone={counts.report ? "warning" : "neutral"}>{counts.report}</Badge> : undefined },
               { value: "flagged_series", label: "AI-flagged", badge: data ? <Badge tone={counts.flagged ? "danger" : "neutral"}>{counts.flagged}</Badge> : undefined },
             ]}
@@ -124,6 +202,13 @@ export default function ModerationPage() {
             <Table minWidth={900}>
               <thead>
                 <tr>
+                  <SelectCell
+                    header
+                    label="Select all in this queue"
+                    checked={sel.allSelected}
+                    indeterminate={sel.someSelected}
+                    onChange={sel.toggleAll}
+                  />
                   <Th>When</Th>
                   <Th>Type</Th>
                   <Th>Series</Th>
@@ -134,6 +219,11 @@ export default function ModerationPage() {
               <tbody>
                 {items.map((i) => (
                   <tr key={`${i.kind}:${i.id}`} className="align-top hover:bg-surface-2/50">
+                    <SelectCell
+                      label={`Select ${i.series_title ?? i.reason}`}
+                      checked={sel.has(`${i.kind}:${i.id}`)}
+                      onChange={(next) => sel.toggle(`${i.kind}:${i.id}`, next)}
+                    />
                     <Td className="whitespace-nowrap text-xs text-muted">{fmtDateTime(i.created_at)}</Td>
                     <Td>
                       <Badge tone={i.kind === "report" ? "warning" : "danger"}>{i.kind === "report" ? "report" : "AI flag"}</Badge>
@@ -211,8 +301,60 @@ export default function ModerationPage() {
               </tbody>
             </Table>
           )}
+          {data && (items.length > 0 || offset > 0) && (
+            <Pagination
+              offset={offset}
+              limit={limit}
+              count={items.length}
+              hasNext={offset + items.length < data.total}
+              total={data.total}
+              onChange={(next) => {
+                setOffset(next);
+                sel.clear();
+              }}
+              onLimitChange={(n) => {
+                setLimit(n);
+                setOffset(0);
+              }}
+            />
+          )}
+          <BulkBar count={sel.count} onClear={sel.clear}>
+            {chosenReports.length > 0 && (
+              <>
+                <Button size="sm" variant="primary" loading={bulkRunning} onClick={() => setBulkConfirm("resolved")}>
+                  Resolve {chosenReports.length}
+                </Button>
+                <Button size="sm" loading={bulkRunning} onClick={() => setBulkConfirm("dismissed")}>
+                  Dismiss {chosenReports.length}
+                </Button>
+              </>
+            )}
+            {chosenFlagged.length > 0 && (
+              <Button size="sm" loading={bulkRunning} onClick={() => setBulkConfirm("clear_flags")}>
+                Clear flags on {chosenFlagged.length}
+              </Button>
+            )}
+            {/* Mixed selections are normal here, and each button says which slice it touches. */}
+            {chosenReports.length > 0 && chosenFlagged.length > 0 && (
+              <span className="text-xs text-muted">Each action applies to its own type only.</span>
+            )}
+          </BulkBar>
         </TabPanel>
       </Card>
+
+      <ConfirmDialog
+        open={bulkConfirm != null}
+        title={bulkConfirm === "clear_flags" ? "Clear flags in bulk" : bulkConfirm === "resolved" ? "Resolve reports" : "Dismiss reports"}
+        message={
+          bulkConfirm === "clear_flags"
+            ? `Clear AI flags on ${chosenFlagged.length} series? They leave the queue; moderation notes are kept.`
+            : `Mark ${chosenReports.length} ${chosenReports.length === 1 ? "report" : "reports"} as ${bulkConfirm}? This cannot be undone from here.`
+        }
+        confirmLabel={bulkConfirm === "clear_flags" ? "Clear flags" : bulkConfirm === "resolved" ? "Resolve" : "Dismiss"}
+        loading={bulkRunning}
+        onConfirm={() => bulkConfirm && runBulk(bulkConfirm)}
+        onCancel={() => setBulkConfirm(null)}
+      />
 
       <ConfirmDialog
         open={confirm != null}

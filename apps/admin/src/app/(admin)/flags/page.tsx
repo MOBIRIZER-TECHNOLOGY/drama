@@ -122,7 +122,12 @@ export default function FlagsPage() {
                       <span className="text-xs text-muted">everyone</span>
                     )}
                   </Td>
-                  <Td className="whitespace-nowrap text-xs text-muted">{fmtDateTime(f.updated_at)}</Td>
+                  <Td className="whitespace-nowrap text-xs text-muted">
+                    {fmtDateTime(f.updated_at)}
+                    {/* A flag is a production kill switch. "Who turned this on" used to mean leaving for the
+                        audit log, which support and finance roles cannot open at all. */}
+                    {f.updated_by && <span className="block text-[11px]">by {f.updated_by}</span>}
+                  </Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setEditing(f)}>

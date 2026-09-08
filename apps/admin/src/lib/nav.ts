@@ -30,8 +30,7 @@ export const NAV: NavItem[] = [
   { href: "/experiments", label: "Experiments", icon: "flask", roles: ["owner", "finance"], section: "Growth" },
   { href: "/flags", label: "Feature Flags", icon: "toggle", roles: ["owner", "finance"], section: "Growth" },
   { href: "/offers", label: "Offers & Coupons", icon: "ticket", roles: ["owner", "finance"], section: "Growth" },
-  // Ad placements: no API yet (see docs/frontend-gaps.md). Route works against a local stub; unlisted until then.
-  { href: "/ads", label: "Ad Placements", icon: "megaphone", roles: ["owner", "finance"], section: "Growth", hidden: true },
+  { href: "/ads", label: "Ad Placements", icon: "megaphone", roles: ["owner", "finance"], section: "Growth" },
   { href: "/moderation", label: "Moderation", icon: "eye", roles: ["owner", "editor", "support"], section: "Support" },
   { href: "/reports", label: "Reports", icon: "flag", roles: ["owner", "support"], section: "Support" },
   { href: "/inbox", label: "Inbox", icon: "inbox", roles: ["owner", "support"], section: "Support" },

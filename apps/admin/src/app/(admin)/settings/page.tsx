@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
+import { useSaveShortcut, useUnsavedChanges } from "@/lib/editing";
 import { useFieldErrors } from "@/lib/forms";
 import { coerce, specFor, validate } from "@/lib/settings-schema";
 import { api, call } from "@/lib/api";
@@ -135,6 +136,9 @@ function RowsEditor({
 
   const flat = (rs: Row[]) => JSON.stringify(rs.map(({ key, value, kind }) => [key, value, kind]));
   const dirty = flat(rows) !== flat(toRows(initial));
+  // Editing a namespace is ten minutes of careful work; a sidebar click used to discard it silently.
+  useUnsavedChanges(dirty && !saving, "You have unsaved settings. Leave without saving?");
+  useSaveShortcut(review, dirty && !saving);
 
   /** Validate, coerce to the declared type, and work out what is actually changing. */
   function review() {

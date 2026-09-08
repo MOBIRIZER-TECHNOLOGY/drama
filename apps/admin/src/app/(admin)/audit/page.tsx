@@ -47,10 +47,10 @@ export default function AuditPage() {
   const [limit, setLimit] = useState(50);
 
   const { data, loading, error, refetch } = useQuery(`audit:${action}:${offset}:${limit}`, async () => {
-    const rows = await call(
-      api.GET("/v1/admin/audit", { params: { query: { action: action || undefined, limit: limit + 1, offset } } }),
+    const page = await call(
+      api.GET("/v1/admin/audit", { params: { query: { action: action || undefined, limit, offset } } }),
     );
-    return { items: rows.slice(0, limit), hasNext: rows.length > limit };
+    return { items: page.items, total: page.total, hasNext: offset + page.items.length < page.total };
   });
 
   const q = query.trim().toLowerCase();

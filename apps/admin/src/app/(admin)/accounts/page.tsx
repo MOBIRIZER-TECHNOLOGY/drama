@@ -8,6 +8,7 @@ import { useFieldErrors } from "@/lib/forms";
 import { useQuery } from "@/lib/use-query";
 import { Icon } from "@/components/icons";
 import { useToast } from "@/components/toast";
+import { TwoFactorCard } from "@/components/two-factor";
 import {
   Badge,
   Button,
@@ -47,6 +48,11 @@ export default function AccountsPage() {
   const [disabling, setDisabling] = useState<Account | null>(null);
   const [busy, setBusy] = useState(false);
   const [enabling, setEnabling] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [revokeTarget, setRevokeTarget] = useState<Account | null>(null);
+  // Seeded from the signed-in admin and kept in step as they enrol or disable, so the card and the roster row
+  // never disagree about the same account.
+  const [twoFactor, setTwoFactor] = useState(me.totp_enabled);
 
   function replace(saved: Account) {
     setData((prev) => (prev ?? []).map((a) => (a.id === saved.id ? saved : a)));
@@ -64,6 +70,21 @@ export default function AccountsPage() {
       toast.error(e instanceof Error ? e.message : "Enable failed");
     } finally {
       setEnabling(null);
+    }
+  }
+
+  async function revokeSessions() {
+    if (!revokeTarget) return;
+    const target = revokeTarget;
+    setRevoking(target.id);
+    try {
+      replace(await call(api.POST("/v1/admin/accounts/{account_id}/revoke-sessions", { params: { path: { account_id: target.id } } })));
+      toast.success(`Signed ${target.email} out everywhere`);
+      setRevokeTarget(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not revoke sessions");
+    } finally {
+      setRevoking(null);
     }
   }
 
@@ -95,6 +116,18 @@ export default function AccountsPage() {
           </Button>
         }
       />
+      {/* The signed-in admin's own security sits above the roster: it is the only part of this screen that
+          protects the person reading it. */}
+      <div className="mb-6">
+        <TwoFactorCard
+          enabled={twoFactor}
+          onChange={(on) => {
+            setTwoFactor(on);
+            refetch();
+          }}
+        />
+      </div>
+
       <Card>
         {error && !data ? (
           <ErrorState message={error} onRetry={refetch} />
@@ -109,6 +142,7 @@ export default function AccountsPage() {
                 <Th>Account</Th>
                 <Th>Role</Th>
                 <Th>Status</Th>
+                <Th>2FA</Th>
                 <Th>Last login</Th>
                 <Th className="text-right">Actions</Th>
               </tr>
@@ -127,12 +161,28 @@ export default function AccountsPage() {
                     <Badge tone={a.role === "owner" ? "gold" : "neutral"}>{a.role}</Badge>
                   </Td>
                   <Td>{a.is_active ? <Badge tone="success">active</Badge> : <Badge tone="danger">disabled</Badge>}</Td>
+                  <Td>
+                    {/* An owner cannot enrol on someone's behalf, but "who is unprotected" is exactly the
+                        question this screen exists to answer. */}
+                    {a.totp_enabled ? <Badge tone="success">on</Badge> : <Badge tone="warning">off</Badge>}
+                  </Td>
                   <Td className="whitespace-nowrap text-xs text-muted">{fmtDateTime(a.last_login_at)}</Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setEditing(a)}>
                         Edit
                       </Button>
+                      {a.id !== me.id && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          loading={revoking === a.id}
+                          title="Ends every session for this account without removing their access"
+                          onClick={() => setRevokeTarget(a)}
+                        >
+                          Sign out
+                        </Button>
+                      )}
                       {a.id !== me.id &&
                         (a.is_active ? (
                           <Button size="sm" variant="ghost" onClick={() => setDisabling(a)}>
@@ -173,6 +223,16 @@ export default function AccountsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={revokeTarget != null}
+        title="Sign out everywhere"
+        message={`End every session for ${revokeTarget?.email ?? ""}? They keep their access and can sign in again — this only kills the tokens already issued.`}
+        confirmLabel="Sign out"
+        loading={revoking === revokeTarget?.id}
+        onConfirm={revokeSessions}
+        onCancel={() => setRevokeTarget(null)}
+      />
 
       <ConfirmDialog
         open={disabling != null}

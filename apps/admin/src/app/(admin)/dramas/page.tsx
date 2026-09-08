@@ -51,19 +51,21 @@ export default function DramasPage() {
   const key = `series:${debounced}:${status}:${offset}`;
   const { data, loading, error, refetch } = useQuery(key, async () => {
     // One extra row tells us whether a next page exists.
-    const rows = await call(
+    const page = await call(
       api.GET("/v1/admin/series", {
         params: {
           query: {
             q: debounced || undefined,
             status: (status || undefined) as Schemas["PublishStatus"] | undefined,
-            limit: LIMIT + 1,
+            limit: LIMIT,
             offset,
           },
         },
       }),
     );
-    return { items: rows.slice(0, LIMIT), hasNext: rows.length > LIMIT };
+    // The endpoint returns a real total now, so hasNext is derived from it rather than from over-fetching by
+    // one row — and the pager can offer page numbers instead of only Next.
+    return { items: page.items, total: page.total, hasNext: offset + page.items.length < page.total };
   });
 
   async function remove() {
@@ -141,6 +143,7 @@ export default function DramasPage() {
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </Select>
+          {data && <span className="text-xs text-muted">{data.total} series</span>}
           {loading && data && <span className="text-xs text-muted">Refreshing…</span>}
         </div>
 
@@ -214,7 +217,7 @@ export default function DramasPage() {
               </Table>
             )}
             {(data.items.length > 0 || offset > 0) && (
-              <Pagination offset={offset} limit={LIMIT} count={data.items.length} hasNext={data.hasNext} onChange={setOffset} />
+              <Pagination offset={offset} limit={LIMIT} count={data.items.length} hasNext={data.hasNext} total={data.total} onChange={setOffset} />
             )}
           </>
         )}

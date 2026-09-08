@@ -11,10 +11,19 @@ api.use({
     if (response.status === 401 && typeof window !== "undefined") {
       const { pathname, search } = window.location;
       if (!pathname.startsWith("/login")) {
+        // "Expired" and "someone ended your session" call for different reassurance on the sign-in screen.
+        // The body is read from a clone so the caller still gets an unconsumed stream.
+        let reason = "expired";
+        try {
+          const body = await response.clone().json();
+          if (body?.detail?.code === "session_revoked") reason = "revoked";
+        } catch {
+          /* a 401 without a JSON body is still an expiry as far as the viewer is concerned */
+        }
         clearToken();
         const url = new URL("/login", window.location.origin);
         url.searchParams.set("next", pathname + search);
-        url.searchParams.set("reason", "expired");
+        url.searchParams.set("reason", reason);
         window.location.href = url.toString();
       }
     }

@@ -77,7 +77,9 @@ export default function CategoriesPage() {
               <tr>
                 <Th>Name</Th>
                 <Th>Slug</Th>
+                <Th>Languages</Th>
                 <Th>Home</Th>
+                <Th className="text-right">Series</Th>
                 <Th className="text-right">Order</Th>
                 <Th className="text-right">Actions</Th>
               </tr>
@@ -87,7 +89,25 @@ export default function CategoriesPage() {
                 <tr key={c.id} className={`hover:bg-surface-2/50 ${loading ? "opacity-70" : ""}`}>
                   <Td className="font-medium">{c.name}</Td>
                   <Td className="font-mono text-xs text-muted">{c.slug}</Td>
+                  <Td>
+                    {/* An untranslated genre shows in English on a fully localised rail, which reads as a bug
+                        to the viewer; naming the missing languages here is how an editor ever finds out. */}
+                    {Object.keys(c.translations ?? {}).length === 0 ? (
+                      <span className="text-xs text-muted">en only</span>
+                    ) : (
+                      <span className="text-xs text-ink-2">{["en", ...Object.keys(c.translations ?? {}).sort()].join(", ")}</span>
+                    )}
+                  </Td>
                   <Td>{c.show_on_home ? <Badge tone="success">shown</Badge> : <Badge>hidden</Badge>}</Td>
+                  <Td className="text-right tabular-nums">
+                    {c.series_count === 0 ? (
+                      <span title="An empty category still renders an empty rail on home.">
+                        <Badge tone="warning">empty</Badge>
+                      </span>
+                    ) : (
+                      c.series_count
+                    )}
+                  </Td>
                   <Td className="text-right tabular-nums">{c.sort_order}</Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
@@ -123,7 +143,11 @@ export default function CategoriesPage() {
       <ConfirmDialog
         open={deleting != null}
         title="Delete category"
-        message={`Delete “${deleting?.name ?? ""}”? Series keep their other categories.`}
+        message={
+          deleting && (deleting.series_count ?? 0) > 0
+            ? `Delete “${deleting.name}”? It will be removed from ${deleting.series_count} series, which keep their other categories. This cannot be undone.`
+            : `Delete “${deleting?.name ?? ""}”? Nothing is using it.`
+        }
         loading={busy}
         onConfirm={remove}
         onCancel={() => setDeleting(null)}
@@ -147,7 +171,10 @@ function CategoryDialog({
     slug: category?.slug ?? "",
     show_on_home: category?.show_on_home ?? true,
     sort_order: category?.sort_order ?? 0,
+    translations: { ...(category?.translations ?? {}) },
   });
+  // Only languages the site actually serves; a name in a language nobody can select is dead data.
+  const langs = useQuery("languages", () => call(api.GET("/v1/admin/languages")));
   const [saving, setSaving] = useState(false);
   const [slugTouched, setSlugTouched] = useState(Boolean(category));
   const { errors, setErrors, clearError, formRef } = useFieldErrors<"name" | "slug">();
@@ -220,6 +247,34 @@ function CategoryDialog({
           <Input type="number" value={form.sort_order} onChange={(e) => setForm((f) => ({ ...f, sort_order: Number(e.target.value) || 0 }))} />
         </Field>
         <Toggle label="Show on home" description="Render a rail for this category on the home screen." checked={form.show_on_home} onChange={(v) => setForm((f) => ({ ...f, show_on_home: v }))} />
+
+        <div className="border-t border-line pt-4">
+          <h3 className="text-sm font-semibold text-ink">Names by language</h3>
+          <p className="mb-3 text-xs text-muted">
+            Left blank, a viewer in that language sees the English name above on an otherwise translated rail.
+          </p>
+          {!langs.data ? (
+            <p className="text-xs text-muted">Loading languages…</p>
+          ) : (
+            <div className="grid gap-3">
+              {langs.data
+                .filter((l) => l.code !== "en")
+                .map((l) => (
+                  <Field key={l.code} label={`${l.name} (${l.code})`}>
+                    <Input
+                      value={form.translations?.[l.code] ?? ""}
+                      maxLength={80}
+                      dir={l.is_rtl ? "rtl" : undefined}
+                      placeholder={form.name || "Same as English"}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, translations: { ...(f.translations ?? {}), [l.code]: e.target.value } }))
+                      }
+                    />
+                  </Field>
+                ))}
+            </div>
+          )}
+        </div>
       </form>
     </Modal>
   );
