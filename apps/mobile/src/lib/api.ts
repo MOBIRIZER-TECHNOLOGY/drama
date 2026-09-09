@@ -8,9 +8,35 @@ const extra = (Constants.expoConfig?.extra ?? {}) as { apiUrl?: string; appEnv?:
 
 export const baseUrl: string = process.env.EXPO_PUBLIC_API_URL ?? extra.apiUrl ?? "http://10.0.2.2:8000";
 
-// Release builds must never talk to a plaintext API: fail fast at startup rather than leak tokens.
+/**
+ * Hosts that cannot be reached from outside the network the device is on: loopback, the RFC 1918 ranges,
+ * link-local, and the emulator's alias for its host. Plaintext to one of these is a build wired to a machine
+ * on the same LAN — there is no path over which a stranger could read it.
+ */
+function isPrivateHost(hostname: string): boolean {
+  if (hostname === "localhost" || hostname === "::1" || hostname.endsWith(".local")) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(hostname);
+  if (!v4) return false;
+  const [a, b] = [Number(v4[1]), Number(v4[2])];
+  return a === 127 || a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254);
+}
+
+// A shipped build must never talk to a plaintext API: fail fast at startup rather than put every token on the
+// wire in the clear. The check is on reachability rather than on the build variant, because the thing that
+// leaks is plaintext crossing the internet — a build pointed at a private address is someone testing against
+// their own machine, and refusing that only pushes them towards weakening the check for the real case too.
+// A store build aimed at a public host over http still refuses, which is the case this exists for.
 if (!__DEV__ && !baseUrl.startsWith("https://")) {
-  throw new Error(`Refusing to start: API base URL must use https in release builds (got ${baseUrl}).`);
+  const host = (() => {
+    try {
+      return new URL(baseUrl).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  if (!isPrivateHost(host)) {
+    throw new Error(`Refusing to start: API base URL must use https outside a private network (got ${baseUrl}).`);
+  }
 }
 
 export const platform: "android" | "ios" = Platform.OS === "ios" ? "ios" : "android";

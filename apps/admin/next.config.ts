@@ -17,7 +17,10 @@ const csp = [
   `connect-src 'self' ${[apiOrigin, ...uploadOrigins].filter(Boolean).join(" ")}`.trim(),
   `img-src 'self' https: data: blob:${isProd ? "" : " http:"}`,
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src https://fonts.gstatic.com",
+  // `'self'` is not optional here: `next/font` serves the console's own faces from this origin — from
+  // `/__nextjs_font/` in development and `/_next/static/media/` in a build — so a policy naming only the
+  // Google host blocks every font the app actually ships and silently falls back to system faces.
+  "font-src 'self' data: https://fonts.gstatic.com",
   "frame-ancestors 'none'",
   "base-uri 'none'",
   "form-action 'self'",

@@ -350,6 +350,12 @@ async def create_category(body: CategoryIn, db: DB) -> AdminCategoryOut:
     _apply_translations(c, translations)
     db.add(c)
     await db.commit()
+    # `Category.translations` is `lazy="selectin"`, which loads eagerly for objects that came out of a query
+    # — and this one never did, it was just inserted. Serialising it therefore triggers a lazy load on an
+    # async session outside its greenlet and the request dies with MissingGreenlet. It only bites when the
+    # category is created with no translations: supply one and `_apply_translations` populates the collection
+    # in memory, which is why creating a category by hand looked fine and creating an untranslated one 500'd.
+    await db.refresh(c, ["translations"])
     return _category_out(c)
 
 

@@ -50,3 +50,18 @@ playwright-report/
 # Regenerate rather than commit: it is a few megabytes of test pattern, not content.
 services/api/scripts/seed-assets/media/
 services/api/scripts/seed-assets/_hls-font.ttf
+
+# Expo prebuild regenerates apps/mobile/android and apps/mobile/ios from app.json, app.config.ts and the
+# plugins in apps/mobile/plugins. Committing them would mean two sources of truth for the same settings, and
+# the generated copy is the one that silently wins.
+apps/mobile/android/
+apps/mobile/ios/
+
+# Built APKs.
+apps/mobile/dist/
+
+# E2E run artifacts: minted sessions, traces and screenshots.
+e2e/.auth/
+e2e/test-results/
+e2e/playwright-report/
+apps/web/test-results/

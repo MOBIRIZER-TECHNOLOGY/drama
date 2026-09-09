@@ -1,6 +1,19 @@
+# Windows + React Native: the CMake object paths generated for the native modules run past
+# the 250-character limit under pnpm's default `node_modules/.pnpm/<pkg>@<ver>_<hash>/
+# node_modules/<pkg>` layout. That prefix costs ~92 characters and appears twice in every
+# object path — once in the build directory, and again in the name CMake mangles out of the
+# source's absolute path — so the Android build dies with "ninja: manifest 'build.ninja'
+# still dirty after 100 tries", which names nothing about the real cause.
+#
+# Hoisting removes both copies (~184 characters) and brings the longest path back to ~180.
+# It is also what React Native expects of a monorepo: Metro and the Gradle plugin both
+# resolve modules by walking node_modules upwards, not through pnpm's symlink farm.
+nodeLinker: hoisted
+
 packages:
   - "apps/*"
   - "packages/*"
+  - "e2e"
 
 allowBuilds:
   unrs-resolver: true

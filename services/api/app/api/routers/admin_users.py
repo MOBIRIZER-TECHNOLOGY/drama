@@ -48,14 +48,6 @@ async def users(
     return AdminUserPage(items=[AdminUserOut.model_validate(u) for u in rows.all()], total=total or 0)
 
 
-@router.get("/users/{user_id}", response_model=AdminUserOut)
-async def get_user(user_id: uuid.UUID, db: DB) -> AdminUserOut:
-    u = await db.get(User, user_id)
-    if u is None:
-        raise NotFound("User")
-    return AdminUserOut.model_validate(u)
-
-
 @router.put("/users/{user_id}/status", response_model=AdminUserOut)
 async def set_status(user_id: uuid.UUID, body: UserStatusIn, db: DB, admin: CurrentAdmin) -> AdminUserOut:
     u = await db.get(User, user_id)
@@ -168,10 +160,18 @@ async def user_detail(user_id: uuid.UUID, db: DB) -> AdminUserDetail:
         or 0
     )
 
-    detail = AdminUserDetail.model_validate(u)
-    detail.is_vip = vip is not None
-    detail.vip_ends_at = vip.ends_at if vip else None
-    detail.sessions = active_sessions
+    # Built from the base model's fields rather than `AdminUserDetail.model_validate(u)`. The detail model
+    # adds a `sessions` count, and `User` already has a `sessions` relationship: validating from attributes
+    # reads that relationship, which lazy-loads, which is IO on an async session outside its greenlet — the
+    # request fails with MissingGreenlet before any of this runs. The field names collide on purpose (the
+    # console wants "how many sessions"), so the fix is to stop reading the extras off the ORM object.
+    detail = AdminUserDetail(
+        **AdminUserOut.model_validate(u).model_dump(),
+        is_vip=vip is not None,
+        vip_ends_at=vip.ends_at if vip else None,
+        sessions=active_sessions,
+        purchases=[],
+    )
     detail.purchases = [
         AdminUserPurchase(
             id=p.id,

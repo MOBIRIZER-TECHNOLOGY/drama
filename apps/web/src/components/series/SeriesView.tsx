@@ -78,6 +78,9 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const inFlight = useRef(new Set<string>());
   const viewed = useRef(false);
   const hydratedFor = useRef<string | null>(null);
+  // Bumped whenever the viewer changes something the hydration refetch below also sets, so that a
+  // response assembled before their change cannot land afterwards and undo it.
+  const engagementEdits = useRef(0);
 
   const current = useMemo(() => episodes.find((e) => e.id === currentId) ?? null, [episodes, currentId]);
   // One beacon collector per episode; the player calls it from the media events.
@@ -147,15 +150,21 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
     if (status !== "authenticated" || !user || hydratedFor.current === user.id) return;
     hydratedFor.current = user.id;
     (async () => {
+      const editsWhenRequested = engagementEdits.current;
       const { data } = await call(() =>
         clientApi.GET("/v1/series/{id_or_slug}", { params: { path: { id_or_slug: series.id }, query: { lang } } }),
       );
       if (!data) return;
       setEpisodes(data.episodes);
+      setContinueNumber(data.continue_episode_number);
+      // Liking or saving during this round trip is easy to do — the buttons are visible from the first paint,
+      // and this fetch only starts once the session resolves. The response was assembled before that tap, so
+      // applying it here turns the button back off a moment after the viewer turned it on, with the change
+      // already saved on the server. It looks exactly like a button that does not work.
+      if (engagementEdits.current !== editsWhenRequested) return;
       setLiked(data.is_liked);
       setLikeCount(data.like_count);
       setFavorite(data.is_favorite);
-      setContinueNumber(data.continue_episode_number);
     })();
   }, [status, user, series.id, lang]);
 
@@ -403,6 +412,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const toggle = async (kind: "like" | "favorite") => {
     if (status !== "authenticated") return openAuth();
     const path = kind === "like" ? "/v1/series/{series_id}/like" : "/v1/series/{series_id}/favorite";
+    engagementEdits.current += 1;
 
     // Flip locally first and revert on failure. Waiting for the round trip meant the heart stayed empty for a
     // second on 3G, which reads as a button that does not work — so people tap it again.

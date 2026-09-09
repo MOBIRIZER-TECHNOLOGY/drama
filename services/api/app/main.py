@@ -78,6 +78,10 @@ def create_app() -> FastAPI:
     )
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limited)
+    # Added first so it ends up innermost of the three: `add_middleware` makes the most recently added the
+    # outermost, and an unhandled error has to become a response *below* CORS for the browser to be told what
+    # actually went wrong rather than that a header was missing.
+    observability.install_error_boundary(app)
     app.add_middleware(SlowAPIMiddleware)
     app.add_middleware(
         CORSMiddleware,

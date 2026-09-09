@@ -38,6 +38,39 @@ src/components/          UI kit on @katha/tokens, rails, cards, player pieces, u
 
 Phase-2 stubs are marked `TODO(phase 2)`: phone OTP (native Firebase), Razorpay, RevenueCat, rewarded ads.
 
+## Local Android builds
+
+EAS needs an Expo account and a network round trip. `scripts/build-android.sh` builds the same APK here, with
+no account and no system JDK install — it finds a JDK under `~/.jdks` (unpack Temurin 17 there; the script
+prints the command if it cannot find one) and the SDK at `$ANDROID_HOME`.
+
+```bash
+pnpm --dir apps/mobile build:android -- --api http://192.168.1.200:8001 --media http://192.168.1.200:8090
+adb install -r apps/mobile/dist/katha-0.1.0-release.apk
+```
+
+The result lands in `apps/mobile/dist/` and is signed with `credentials/release.keystore` — read
+`credentials/README.md` before the first store upload.
+
+| Flag | Default | |
+|---|---|---|
+| `--variant` | `release` | `release` bundles the JS and runs standalone. `debug` is a dev client and needs `expo start` reachable on the network. |
+| `--api` / `--media` | `$EXPO_PUBLIC_API_URL` / `$EXPO_PUBLIC_MEDIA_URL` | Baked in at build time. |
+| `--abis` | `x86_64,arm64-v8a` | The emulator and every current phone. `x86_64` alone roughly halves the build. |
+
+Two things make a LAN build work that would otherwise fail silently:
+
+- **Cleartext.** Android blocks plain http in release builds. `plugins/with-cleartext-hosts.js` writes a network
+  security config naming only the hosts passed to `--api`/`--media`, and only when they are `http` — point a
+  build at `https` and it adds nothing.
+- **The startup guard.** `src/lib/api.ts` refuses to start a non-dev build whose API is plaintext *and* on a
+  public host. A private address is a build talking to someone's own machine, so it is allowed; anything
+  internet-facing over http still refuses, which is the case the guard exists for.
+
+`android/` is generated and gitignored. The script deletes and regenerates it every run, because the API host
+and the cleartext policy are baked in there and a stale tree bakes in the previous run's answers. Metro holds
+a handle on that directory on Windows, so stop `expo start` before building.
+
 ## EAS builds
 
 `eas.json` defines three profiles. `cli.appVersionSource` is `remote`, so EAS owns the build number and the
@@ -64,7 +97,7 @@ is public by design; none of these is a private key.
 
 | Variable | Used by | Notes |
 |---|---|---|
-| `EXPO_PUBLIC_API_URL` | `src/lib/api.ts` | Overrides the per-profile host in `app.config.ts`. Must be `https` in release builds — the app refuses to start otherwise. |
+| `EXPO_PUBLIC_API_URL` | `src/lib/api.ts` | Overrides the per-profile host in `app.config.ts`. Must be `https` for any public host — a non-dev build pointed at plaintext refuses to start. |
 | `EXPO_PUBLIC_FIREBASE_API_KEY` | `src/lib/firebase.ts` | Firebase web app config. Optional when `GET /v1/config` returns `firebase`, which takes precedence. |
 | `EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN` | same | |
 | `EXPO_PUBLIC_FIREBASE_PROJECT_ID` | same | |

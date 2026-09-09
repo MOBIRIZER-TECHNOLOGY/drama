@@ -59,7 +59,11 @@ function contentSecurityPolicy(): string {
     "form-action 'self' https://checkout.stripe.com",
     `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com https://challenges.cloudflare.com https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com`,
     `connect-src 'self' ${API_URL} ${media} https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://challenges.cloudflare.com${IS_DEV ? " ws: wss:" : ""}`,
-    "img-src 'self' data: blob: https:",
+    // `https:` covers the media host in production, which is why the missing origins here went unnoticed:
+    // the moment media is served over http — dev, a LAN preview, a staging box, a production build behind a
+    // proxy that has not terminated TLS yet — every cover and thumbnail is blocked, and the page renders with
+    // holes and a console full of CSP violations rather than anything that points at the cause.
+    `img-src 'self' data: blob: https: ${media}`,
     `media-src 'self' blob: ${media}`,
     "worker-src 'self' blob:",
     "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com https://checkout.razorpay.com https://api.razorpay.com https://challenges.cloudflare.com https://*.firebaseapp.com",

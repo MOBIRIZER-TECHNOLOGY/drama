@@ -2,17 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { isCancelled, MAX_IMAGE_BYTES, uploadImage } from "@/lib/uploads";
+import { mediaSrc } from "@/lib/media";
 import { useToast } from "./toast";
 import { Icon } from "./icons";
 import { Button, Input } from "./ui";
-
-/**
- * Where uploaded images can be read back from, for previews only.
- *
- * The field stores a key, and a key is not something an <img> can load, so the console needs to know the
- * media base to show one. This is display-only: nothing composed here is ever saved.
- */
-const MEDIA_BASE = (process.env.NEXT_PUBLIC_MEDIA_BASE ?? "").replace(/\/$/, "");
 
 /**
  * Image field: presign -> PUT -> public_url. Also accepts a pasted URL.
@@ -43,7 +36,7 @@ export function ImageUpload({
 
   // A stored value is a key; a pasted one may already be a URL. Either way the preview needs something
   // absolute, and a fresh upload has one to hand.
-  const previewSrc = preview ?? (value && /^(https?:)?\/\//.test(value) ? value : value ? `${MEDIA_BASE}/${value.replace(/^\//, "")}` : null);
+  const previewSrc = preview ?? mediaSrc(value);
 
   const frame =
     aspect === "portrait" ? "aspect-[9/16] w-28" : aspect === "wide" ? "aspect-[16/9] w-full max-w-sm" : "aspect-square w-28";

@@ -1,0 +1,17 @@
+{
+  "name": "@katha/e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:web": "playwright test --project=web",
+    "test:admin": "playwright test --project=admin",
+    "report": "playwright show-report",
+    "seed": "node scripts/seed.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^24.10.1",
+    "typescript": "~6.0.3"
+  }
+}

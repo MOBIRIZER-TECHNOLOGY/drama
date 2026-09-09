@@ -43,8 +43,11 @@ test.describe("guest playback", () => {
 
   test("the shorts feed plays the first episode of the first card", async ({ page }) => {
     await page.goto("/shorts");
-    await expect(page.getByRole("link", { name: "Midnight Heiress" }).first()).toBeVisible();
-    await expect(page.locator("video")).toBeVisible();
-    await expect(page.getByRole("link", { name: "Watch full" }).first()).toHaveAttribute("href", /\/series\/midnight-heiress\?ep=1$/);
+    // The feed mounts a card per episode, so every assertion is scoped to the first one — an unscoped
+    // `locator("video")` matches each card in the feed and fails on strict mode rather than on the page.
+    const first = page.getByRole("region", { name: /Midnight Heiress - Episode 1/ });
+    await expect(first).toBeVisible();
+    await expect(first.locator("video")).toBeAttached();
+    await expect(first.getByRole("link", { name: "Watch full" })).toHaveAttribute("href", /\/series\/midnight-heiress\?ep=1$/);
   });
 });

@@ -1,0 +1,50 @@
+# The catalogue, a series, and playback on a device against the real API and AES-128 encrypted media.
+#
+# No `clearState`: this runs after onboarding and reuses its state, which is also how a returning viewer
+# arrives. Run the folder in order, or run 01 first.
+appId: com.mobirizer.katha
+name: Browse and play
+---
+- launchApp
+
+- assertVisible: "Katha"
+- assertVisible:
+    text: ".*(Ashes of Lucknow|Betrayal in Delhi|Family Ties).*"
+
+# The bottom tabs are the whole of the app's navigation.
+- assertVisible: "Home"
+- assertVisible: "Shorts"
+- assertVisible: "My List"
+- assertVisible: "Me"
+
+- tapOn: "Ashes of Lucknow"
+
+# The series screen states the deal before anyone spends anything: how many episodes, how many are free,
+# and what the rest cost.
+- assertVisible: "Ashes of Lucknow"
+# Wrapped in `.*` because Maestro matches the whole text of a node, and this line is one node:
+# "2 episodes · 1 free · 77 views".
+- assertVisible:
+    text: ".*2 episodes.*"
+- assertVisible: "Play"
+- assertVisible: "Episodes"
+- assertVisible: "Free"
+- assertVisible:
+    text: ".*(80 coins each|Unlock all).*"
+
+- tapOn: "Play"
+- tapOn:
+    text: "Got it"
+    optional: true
+
+# The controls are up when the player mounts, so the clock is readable here; it fades a few seconds later,
+# which is why this is asserted immediately rather than after a wait.
+- extendedWaitUntil:
+    visible:
+      text: ".*[0-9]:[0-9][0-9].*"
+    timeout: 40000
+
+# The states a broken stream lands in. The page looks the same either way, so these are the assertions that
+# separate "the player mounted" from "the viewer is watching".
+- assertNotVisible:
+    text: ".*(Playback stopped|Couldn.t load|Try again|Something went wrong).*"

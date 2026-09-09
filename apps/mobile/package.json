@@ -1,7 +1,7 @@
 {
   "name": "mobile",
   "main": "expo-router/entry",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "dependencies": {
     "@expo-google-fonts/noto-sans-bengali": "^0.4.4",
     "@expo-google-fonts/noto-sans-devanagari": "^0.4.1",
@@ -55,12 +55,14 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "i18n:extract": "node scripts/extract-i18n.mjs"
+    "i18n:extract": "node scripts/extract-i18n.mjs",
+    "build:android": "bash scripts/build-android.sh",
+    "e2e:android": "bash scripts/e2e-android.sh"
   },
   "private": true
 }

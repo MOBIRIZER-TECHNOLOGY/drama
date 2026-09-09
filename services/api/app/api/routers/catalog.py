@@ -14,6 +14,7 @@ from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, CurrentUser, OptionalUser, client_country
 from app.core.config import get_settings
+from app.core.db import best_effort
 from app.core.errors import AgeGateRequired, Conflict, Forbidden, NotFound, Unauthorized
 from app.core.ratelimit import limiter
 from app.core.redis import cache_available, note_cache_failure, note_cache_success, redis_client
@@ -222,14 +223,17 @@ async def _semantic_ids(db: AsyncSession, q: str, *, limit: int) -> list[uuid.UU
                 await r.set(cache_key, json.dumps(vector), ex=3600)
             except Exception:  # noqa: BLE001
                 pass
-    rows = await db.scalars(
-        select(Embedding.series_id)
-        .join(Series, Series.id == Embedding.series_id)
-        .where(Embedding.model == model_name(), Series.status == PublishStatus.published)
-        .order_by(Embedding.vector.cosine_distance(vector))
-        .limit(limit)
-    )
-    return list(rows.all())
+    ids: list[uuid.UUID] = []
+    async with best_effort(db, "search.semantic"):
+        rows = await db.scalars(
+            select(Embedding.series_id)
+            .join(Series, Series.id == Embedding.series_id)
+            .where(Embedding.model == model_name(), Series.status == PublishStatus.published)
+            .order_by(Embedding.vector.cosine_distance(vector))
+            .limit(limit)
+        )
+        ids = list(rows.all())
+    return ids
 
 
 def _published_series(lang: str | None = None, country: str | None = None):
@@ -332,10 +336,12 @@ async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> 
             rails.append(HomeRail(key="continue", title="Continue Watching", items=cont))
 
     if ctx is not None:
-        try:
+        # Catching the error is not enough: a failed statement aborts the transaction, and the category
+        # queries below it then fail too, so a missing embeddings table turned the whole home page into a 500
+        # for every signed-in viewer who had watched anything. The savepoint keeps it to a missing rail.
+        ids: list[uuid.UUID] = []
+        async with best_effort(db, "home.for_you"):
             ids = await recommend.for_you_ids(db, ctx.user.id, limit=12)
-        except Exception:  # noqa: BLE001 - embeddings absent or model mismatch
-            ids = []
         picks = [cards[i] for i in ids if i in cards]
         if picks:
             rails.append(HomeRail(key="for_you", title="For You", items=picks))

@@ -1,5 +1,8 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
 
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const withCleartextHosts = require("./plugins/with-cleartext-hosts");
+
 /**
  * Static settings live in app.json; this file layers the per-profile values on top.
  * APP_ENV is set by EAS build profiles (development | preview | production); local `expo start` is development.
@@ -7,7 +10,7 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 type AppEnv = "development" | "preview" | "production";
 
 const API_URLS: Record<AppEnv, string> = {
-  development: "http://10.0.2.2:8000",
+  development: "http://10.0.2.2:8001",
   // TODO(release): replace the placeholders with the real API hosts once DNS is live.
   preview: "https://api-preview.katha.app",
   production: "https://api.katha.app",
@@ -23,7 +26,12 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // Google's iOS URL scheme comes from the iOS OAuth client id (reversed). The plugin only validates the prefix,
   // so a placeholder keeps prebuild working until credentials exist.
   const googleIosUrlScheme = process.env.GOOGLE_IOS_URL_SCHEME ?? "com.googleusercontent.apps.PLACEHOLDER";
-  return {
+  const apiUrl = process.env.EXPO_PUBLIC_API_URL ?? API_URLS[env];
+  // Media is served from its own host, whose address the API hands back at runtime; a build pointed at a
+  // development machine needs cleartext for both, and a production build (https) needs it for neither.
+  const mediaUrl = process.env.EXPO_PUBLIC_MEDIA_URL;
+
+  const base: ExpoConfig = {
     ...config,
     name: config.name ?? "Katha",
     slug: config.slug ?? "katha",
@@ -31,7 +39,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     extra: {
       ...config.extra,
       appEnv: env,
-      apiUrl: process.env.EXPO_PUBLIC_API_URL ?? API_URLS[env],
+      apiUrl,
     },
   };
+  return withCleartextHosts(base, { urls: [apiUrl, mediaUrl] });
 };

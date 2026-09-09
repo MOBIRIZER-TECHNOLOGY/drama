@@ -1,0 +1,33 @@
+# First run: the language picker, and arriving in the catalogue.
+#
+# `clearState` is what makes this repeatable — onboarding shows once per install, so without it every run
+# after the first would silently skip the thing being tested.
+appId: com.mobirizer.katha
+name: Onboarding
+---
+- launchApp:
+    clearState: true
+
+# Every script the catalogue ships in has to render here rather than as tofu boxes. The fonts are bundled
+# per script, and a missing one is invisible on an English device.
+- assertVisible: "Pick your language"
+- assertVisible: "हिन्दी"
+- assertVisible: "தமிழ்"
+- assertVisible: "తెలుగు"
+- assertVisible: "বাংলা"
+- assertVisible: "मराठी"
+- assertVisible: "العربية"
+
+- tapOn: "Continue in English"
+- tapOn:
+    text: "Continue|Next|Get started"
+    optional: true
+
+# The last card offers the first free episode or the catalogue. Take the catalogue: it is where the rest of
+# the suite starts, and it does not depend on a particular series being seeded.
+- assertVisible: "Watch now"
+- tapOn: "Browse everything"
+
+- assertVisible: "Katha"
+- assertVisible:
+    text: "Home"

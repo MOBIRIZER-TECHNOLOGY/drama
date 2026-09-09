@@ -20,7 +20,11 @@
     "infra:logs": "docker compose -f infra/docker/compose.yaml logs -f",
     "i18n:check": "node scripts/check-i18n.mjs",
     "db:native": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db-native.ps1",
-    "db:native:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db-native.ps1 -Stop"
+    "db:native:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local-db-native.ps1 -Stop",
+    "e2e": "pnpm --filter @katha/e2e test",
+    "e2e:web": "pnpm --filter @katha/e2e test:web",
+    "e2e:admin": "pnpm --filter @katha/e2e test:admin",
+    "e2e:mobile": "pnpm --dir apps/mobile run e2e:android"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

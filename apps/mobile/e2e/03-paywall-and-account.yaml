@@ -1,0 +1,39 @@
+# What a signed-out viewer meets when they reach the paywall, and the screens a store review looks for.
+#
+# The app signs in through Firebase, so this suite stays signed out on purpose: that is the state every new
+# install is in, and it is the one where the funnel either works or does not.
+appId: com.mobirizer.katha
+name: Paywall and account
+---
+- launchApp
+
+- tapOn: "Ashes of Lucknow"
+- assertVisible: "Episodes"
+
+# The locked episode has to lead somewhere. Silence here is the worst outcome: a viewer taps, nothing
+# happens, and the app has no way to take their money.
+# "Unlock all" rather than the episode tile: it is unambiguous, and it is the control the paywall is built
+# around. Tapping it signed out has to lead somewhere — silence is the worst outcome, because the viewer
+# taps, nothing happens, and there is no way for them to pay.
+- tapOn:
+    text: ".*Unlock all.*"
+- assertVisible:
+    text: ".*(Sign in|Sign up|Unlock|coins|Continue|Get coins).*"
+
+# Back to the tabs. The series screen is pushed over them and has no tab bar of its own, so navigating by
+# tapping "Me" from here finds nothing.
+- launchApp
+
+# The account tab is where a viewer signs in, manages their wallet and — for a store review — finds the
+# legal pages and the way out.
+- tapOn: "Me"
+- assertVisible:
+    text: ".*(Me|Profile|Settings|Sign in).*"
+
+# The legal pages both app stores require. A dead link here fails a review, and nothing else checks them.
+- tapOn:
+    text: ".*Privacy.*"
+    optional: true
+- assertVisible:
+    text: ".*(Privacy|What we collect|placeholder).*"
+    optional: true

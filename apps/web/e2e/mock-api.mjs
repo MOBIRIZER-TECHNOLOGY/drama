@@ -184,6 +184,37 @@ const server = createServer(async (req, res) => {
     });
   }
 
+  if (path === "/v1/shorts") {
+    // One entry per episode, flattened across series exactly as the real feed does: the first episode of
+    // each series carries `starts_series`, which is what the feed uses to decide where a series begins.
+    const shorts = [CARD, SECOND_CARD].flatMap((series) =>
+      EPISODES.map((episode) => ({
+        episode_id: episode.id,
+        episode_number: episode.number,
+        episode_title: episode.title,
+        thumbnail_url: episode.thumbnail_url,
+        duration_sec: episode.duration_sec,
+        is_free: episode.is_free,
+        price: episode.price,
+        accessible: episode.accessible,
+        series_id: series.id,
+        slug: series.slug,
+        title: series.title,
+        synopsis: series.synopsis,
+        cover_url: series.cover_url,
+        categories: series.categories,
+        episode_count: series.episode_count,
+        free_episodes: series.free_episodes,
+        content_rating: "U",
+        is_adult: false,
+        is_favorite: false,
+        is_liked: false,
+        starts_series: episode.number === 1,
+      })),
+    );
+    return json(res, 200, { items: shorts, next_cursor: null });
+  }
+
   if (path === "/v1/series") {
     const category = url.searchParams.get("category");
     const q = (url.searchParams.get("q") ?? "").toLowerCase();

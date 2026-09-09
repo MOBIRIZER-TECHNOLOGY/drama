@@ -178,3 +178,53 @@ async def test_an_unknown_segment_is_refused_rather_than_sent_to_everyone(admin_
         json={"title": "Oops", "body": "Body", "segment": {"contry": "IN"}},
     )
     assert res.status_code == 422
+
+
+async def test_the_user_drawer_endpoint_returns_everything_it_promises(admin_client, seeded):
+    """`GET /admin/users/{id}` — the one call the support drawer makes.
+
+    It was broken twice over, and each fault hid the other. An older handler for the same path was registered
+    first and served a plain account, so the extra fields never appeared; and the newer handler, once it
+    could run at all, raised `MissingGreenlet` — `AdminUserDetail.model_validate(user)` reads a `sessions`
+    attribute, `User.sessions` is a lazy relationship, and touching it is IO on an async session outside its
+    greenlet. The console read `purchases.length` of undefined and showed "Couldn't load" for every account.
+
+    Asserting on the fields is what catches both: a shadowing route drops them, and the greenlet fault turns
+    the whole call into a 400.
+    """
+    listing = await admin_client.get("/v1/admin/users?limit=1")
+    assert listing.status_code == 200
+    items = listing.json()["items"]
+    if not items:
+        pytest.skip("no users in the test database")
+
+    r = await admin_client.get(f"/v1/admin/users/{items[0]['id']}")
+    assert r.status_code == 200, f"{r.status_code}: {r.text[:300]}"
+    body = r.json()
+    assert isinstance(body.get("purchases"), list), "the drawer renders purchases and crashes without them"
+    assert isinstance(body.get("sessions"), int), "the drawer shows a signed-in device count"
+    assert isinstance(body.get("is_vip"), bool), "granting VIP blind is what this field exists to prevent"
+
+
+async def test_a_category_can_be_created_without_translations(admin_client):
+    """Creating a category with an empty translation map used to 500.
+
+    `Category.translations` is `lazy="selectin"`, which loads eagerly for objects that came out of a query —
+    and a freshly inserted one never did. Serialising the response touched the collection, that became a lazy
+    load on an async session outside its greenlet, and the request died with MissingGreenlet.
+
+    It only happened with *no* translations: supply one and the applier fills the collection in memory on the
+    way past, so creating a category by hand looked fine. The console's form posts `{}` by default, so every
+    category created through the UI hit it.
+    """
+    created = await admin_client.post(
+        "/v1/admin/categories",
+        json={"name": "Regression", "slug": f"regression-{uuid.uuid4().hex[:8]}", "show_on_home": False,
+              "sort_order": 0, "translations": {}},
+    )
+    assert created.status_code == 201, f"{created.status_code}: {created.text[:300]}"
+    body = created.json()
+    assert body["translations"] == {}
+
+    cleanup = await admin_client.delete(f"/v1/admin/categories/{body['id']}")
+    assert cleanup.status_code == 200

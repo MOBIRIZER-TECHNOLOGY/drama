@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { aiErrorMessage, jobQueuedText, reembedAll } from "@/lib/ai";
+import { mediaSrc } from "@/lib/media";
 import { api, call, type Schemas } from "@/lib/api";
 import { fmtCompact, fmtDate } from "@/lib/format";
 import { seriesTitle } from "@/lib/series";
@@ -181,7 +182,7 @@ export default function DramasPage() {
                           <span className="h-14 w-8 shrink-0 overflow-hidden rounded bg-surface-2">
                             {s.cover_url && (
                               // eslint-disable-next-line @next/next/no-img-element
-                              <img src={s.cover_url} alt="" className="h-full w-full object-cover" />
+                              <img src={mediaSrc(s.cover_url) ?? ""} alt="" className="h-full w-full object-cover" />
                             )}
                           </span>
                           <span className="min-w-0">
