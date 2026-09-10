@@ -34,6 +34,18 @@ pnpm --filter admin dev                         # http://localhost:3001
 pnpm --filter mobile start                      # Expo dev server
 ```
 
+`seed.py` creates the least the apps need to boot, which leaves most of the product with nothing to show: no
+reward tasks, no offers, no settings to edit, no category named in any language but English. Two more scripts
+fill that in, and both are safe to re-run:
+
+```bash
+(cd services/api && uv run python scripts/seed_translations.py ../../apps/web/src/i18n/en.json ../../apps/mobile/src/i18n/en.json)
+(cd services/api && uv run python scripts/seed_demo.py)
+```
+
+The second one settles its demo purchases through `payments.mark_paid` and earns its coins through the
+ledger, so what it leaves behind is a database the product itself could have produced.
+
 ## Running the database-backed tests
 
 ```bash
