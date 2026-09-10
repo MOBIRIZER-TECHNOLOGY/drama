@@ -1,0 +1,1077 @@
+{
+  "schema_version": 1,
+  "pack_id": "open-film-chapters-v1",
+  "collection": "Open Film Chapters — Developer Seed",
+  "purpose": "Sequential technical chapter cuts from five licensed films, not original episodic productions. All story footage and original end credits are retained across each five-chapter sequence. No standalone soundtrack or third-party site artwork is included.",
+  "storage_prefix": "developer-seed/v1",
+  "series": [
+    {
+      "slug": "tears-of-steel-chapters",
+      "title": "Tears of Steel — Chapters",
+      "synopsis": "A team in a future Amsterdam tries to recreate a pivotal memory to stop a robot catastrophe.",
+      "year": 2012,
+      "director": "Ian Hubert",
+      "original_language": "en",
+      "audio": "English dialogue",
+      "categories": [
+        "Short Films",
+        "Science Fiction",
+        "Drama"
+      ],
+      "content_rating": "UA13",
+      "content_advisory": "Science-fiction violence, weapons, threatening robots and some strong language. Editorial guidance, not an official certificate.",
+      "free_episodes": 5,
+      "episode_price": 0,
+      "is_premium": false,
+      "completion_status": "Completed",
+      "release_note": "5 sequential film chapters · 2012 · Developer seed",
+      "cover_path": "media/tears-of-steel-chapters/cover.jpg",
+      "banner_path": "media/tears-of-steel-chapters/banner.jpg",
+      "attribution": "Tears of Steel (2012), Blender Foundation | mango.blender.org. Directed by Ian Hubert.",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0/",
+      "rights_url": "https://mango.blender.org/about/",
+      "source_page_url": "https://video.blender.org/videos/watch/8533ea43-4271-4a57-9694-e9d0b35e1aa1",
+      "changes": "Divided into five sequential chapters at six-second HLS boundaries. Original audio and final credits retained. HLS converted to 24 fps, letterboxed; artwork uses cropped/resized film stills. Chapter titles are technical labels, not creator episode titles.",
+      "source": {
+        "slug": "tears-of-steel",
+        "url": "https://video.blender.org/object-storage/web_videos/8533ea43-4271-4a57-9694-e9d0b35e1aa1-720.mp4",
+        "sha256": "e4d6a1e1bcd603c7f0c3a6517e14b89bb3a7c0cebd20b64221a0e11d42a3d676",
+        "size_bytes": 225159290,
+        "duration_seconds": 734.166667
+      },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Tears of Steel — Chapter 1 of 5",
+          "description": "Sequential chapter 1/5 of the original film; watch in order.",
+          "duration_seconds": 144.0,
+          "duration_sec": 144,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 0.0,
+          "source_end_seconds": 144.0,
+          "thumbnail_frame_seconds": 20.0,
+          "thumbnail_path": "media/tears-of-steel-chapters/episode-01/thumbnail.jpg",
+          "video_path": "media/tears-of-steel-chapters/episode-01/video.mp4",
+          "video_sha256": "84747697b6032717f6ef389301e9b19a5cfeed1b06f2c336735d6a3d8267a4ea",
+          "video_size_bytes": 17328901,
+          "hls_master_path": "media/tears-of-steel-chapters/episode-01/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/tears-of-steel-chapters/episode-01/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2474431,
+              "duration_seconds": 144.0,
+              "segments": 24
+            },
+            "360p": {
+              "path": "media/tears-of-steel-chapters/episode-01/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1011942,
+              "duration_seconds": 144.0,
+              "segments": 24
+            }
+          }
+        },
+        {
+          "number": 2,
+          "title": "Tears of Steel — Chapter 2 of 5",
+          "description": "Sequential chapter 2/5 of the original film; watch in order.",
+          "duration_seconds": 150.0,
+          "duration_sec": 150,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 144.0,
+          "source_end_seconds": 294.0,
+          "thumbnail_frame_seconds": 164.0,
+          "thumbnail_path": "media/tears-of-steel-chapters/episode-02/thumbnail.jpg",
+          "video_path": "media/tears-of-steel-chapters/episode-02/video.mp4",
+          "video_sha256": "ef7ef3a43baa4cf1f21d4c69fb6c9a2849284609526c165fb0a23f243feea972",
+          "video_size_bytes": 26988333,
+          "hls_master_path": "media/tears-of-steel-chapters/episode-02/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/tears-of-steel-chapters/episode-02/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3639681,
+              "duration_seconds": 150.0,
+              "segments": 25
+            },
+            "360p": {
+              "path": "media/tears-of-steel-chapters/episode-02/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1143467,
+              "duration_seconds": 150.0,
+              "segments": 25
+            }
+          }
+        },
+        {
+          "number": 3,
+          "title": "Tears of Steel — Chapter 3 of 5",
+          "description": "Sequential chapter 3/5 of the original film; watch in order.",
+          "duration_seconds": 144.0,
+          "duration_sec": 144,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 294.0,
+          "source_end_seconds": 438.0,
+          "thumbnail_frame_seconds": 314.0,
+          "thumbnail_path": "media/tears-of-steel-chapters/episode-03/thumbnail.jpg",
+          "video_path": "media/tears-of-steel-chapters/episode-03/video.mp4",
+          "video_sha256": "b25e88d788af92c97845fd24e39d02fd08a1728d21b87ecda3c13d93ac7e41cf",
+          "video_size_bytes": 21432185,
+          "hls_master_path": "media/tears-of-steel-chapters/episode-03/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/tears-of-steel-chapters/episode-03/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2238404,
+              "duration_seconds": 144.0,
+              "segments": 24
+            },
+            "360p": {
+              "path": "media/tears-of-steel-chapters/episode-03/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 936942,
+              "duration_seconds": 144.0,
+              "segments": 24
+            }
+          }
+        },
+        {
+          "number": 4,
+          "title": "Tears of Steel — Chapter 4 of 5",
+          "description": "Sequential chapter 4/5 of the original film; watch in order.",
+          "duration_seconds": 150.0,
+          "duration_sec": 150,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 438.0,
+          "source_end_seconds": 588.0,
+          "thumbnail_frame_seconds": 458.0,
+          "thumbnail_path": "media/tears-of-steel-chapters/episode-04/thumbnail.jpg",
+          "video_path": "media/tears-of-steel-chapters/episode-04/video.mp4",
+          "video_sha256": "13740c5f8ef9fd5850647dd769c8c0789db07bf26f6265ae6ad02355a8cd1043",
+          "video_size_bytes": 32560090,
+          "hls_master_path": "media/tears-of-steel-chapters/episode-04/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/tears-of-steel-chapters/episode-04/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3675250,
+              "duration_seconds": 150.0,
+              "segments": 25
+            },
+            "360p": {
+              "path": "media/tears-of-steel-chapters/episode-04/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1188963,
+              "duration_seconds": 150.0,
+              "segments": 25
+            }
+          }
+        },
+        {
+          "number": 5,
+          "title": "Tears of Steel — Chapter 5 of 5",
+          "description": "Sequential chapter 5/5 of the original film; watch in order. Includes the original end credits.",
+          "duration_seconds": 146.166667,
+          "duration_sec": 147,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 588.0,
+          "source_end_seconds": 734.166667,
+          "thumbnail_frame_seconds": 608.0,
+          "thumbnail_path": "media/tears-of-steel-chapters/episode-05/thumbnail.jpg",
+          "video_path": "media/tears-of-steel-chapters/episode-05/video.mp4",
+          "video_sha256": "b98ea84ac9cfae312cedb4bd1be43782cea824beff8231d50cc16ffc271222c4",
+          "video_size_bytes": 30391518,
+          "hls_master_path": "media/tears-of-steel-chapters/episode-05/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/tears-of-steel-chapters/episode-05/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3630581,
+              "duration_seconds": 146.166667,
+              "segments": 25
+            },
+            "360p": {
+              "path": "media/tears-of-steel-chapters/episode-05/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1165250,
+              "duration_seconds": 146.166667,
+              "segments": 25
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "sintel-chapters",
+      "title": "Sintel — Chapters",
+      "synopsis": "A young traveler searches for a dragon she rescued, discovering the cost of her long journey.",
+      "year": 2010,
+      "director": "Colin Levy",
+      "original_language": "en",
+      "audio": "English dialogue",
+      "categories": [
+        "Short Films",
+        "Fantasy",
+        "Drama",
+        "Animation"
+      ],
+      "content_rating": "UA13",
+      "content_advisory": "Fantasy combat, injury, blood and the death of a creature. Editorial guidance, not an official certificate.",
+      "free_episodes": 5,
+      "episode_price": 0,
+      "is_premium": false,
+      "completion_status": "Completed",
+      "release_note": "5 sequential film chapters · 2010 · Developer seed",
+      "cover_path": "media/sintel-chapters/cover.jpg",
+      "banner_path": "media/sintel-chapters/banner.jpg",
+      "attribution": "Sintel (2010), copyright Blender Foundation | durian.blender.org. Directed by Colin Levy.",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0/",
+      "rights_url": "https://durian.blender.org/sharing/",
+      "source_page_url": "https://video.blender.org/videos/watch/0eb052d0-fd51-43e6-aa33-ecdbf77a5d40",
+      "changes": "Divided into five sequential chapters at six-second HLS boundaries. Original audio and final credits retained. HLS converted to 24 fps, letterboxed; artwork uses cropped/resized film stills. Chapter titles are technical labels, not creator episode titles.",
+      "source": {
+        "slug": "sintel",
+        "url": "https://video.blender.org/object-storage/web_videos/0eb052d0-fd51-43e6-aa33-ecdbf77a5d40-720.mp4",
+        "sha256": "2329a5af417a54beea1b99b7a23bd64f1c45fa51f2c4ebfdd19e48accc370631",
+        "size_bytes": 199888486,
+        "duration_seconds": 888.041667
+      },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Sintel — Chapter 1 of 5",
+          "description": "Sequential chapter 1/5 of the original film; watch in order.",
+          "duration_seconds": 174.0,
+          "duration_sec": 174,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 0.0,
+          "source_end_seconds": 174.0,
+          "thumbnail_frame_seconds": 20.0,
+          "thumbnail_path": "media/sintel-chapters/episode-01/thumbnail.jpg",
+          "video_path": "media/sintel-chapters/episode-01/video.mp4",
+          "video_sha256": "2ce97ddaefe0f5be920c37c1e5a5e511b624ba7a2a60000f3bd46eab9a00d291",
+          "video_size_bytes": 18795345,
+          "hls_master_path": "media/sintel-chapters/episode-01/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/sintel-chapters/episode-01/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 1837763,
+              "duration_seconds": 174.0,
+              "segments": 29
+            },
+            "360p": {
+              "path": "media/sintel-chapters/episode-01/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 813690,
+              "duration_seconds": 174.0,
+              "segments": 29
+            }
+          }
+        },
+        {
+          "number": 2,
+          "title": "Sintel — Chapter 2 of 5",
+          "description": "Sequential chapter 2/5 of the original film; watch in order.",
+          "duration_seconds": 180.0,
+          "duration_sec": 180,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 174.0,
+          "source_end_seconds": 354.0,
+          "thumbnail_frame_seconds": 194.0,
+          "thumbnail_path": "media/sintel-chapters/episode-02/thumbnail.jpg",
+          "video_path": "media/sintel-chapters/episode-02/video.mp4",
+          "video_sha256": "a939a4ed05a8349772de77e7dc7fb82b36ad31ec2bdad2b6d2ee0661d92df14c",
+          "video_size_bytes": 33366701,
+          "hls_master_path": "media/sintel-chapters/episode-02/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/sintel-chapters/episode-02/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2675992,
+              "duration_seconds": 180.0,
+              "segments": 30
+            },
+            "360p": {
+              "path": "media/sintel-chapters/episode-02/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1063504,
+              "duration_seconds": 180.0,
+              "segments": 30
+            }
+          }
+        },
+        {
+          "number": 3,
+          "title": "Sintel — Chapter 3 of 5",
+          "description": "Sequential chapter 3/5 of the original film; watch in order.",
+          "duration_seconds": 180.0,
+          "duration_sec": 180,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 354.0,
+          "source_end_seconds": 534.0,
+          "thumbnail_frame_seconds": 374.0,
+          "thumbnail_path": "media/sintel-chapters/episode-03/thumbnail.jpg",
+          "video_path": "media/sintel-chapters/episode-03/video.mp4",
+          "video_sha256": "52d1000174ba7c33a7e147719d07968d2142fc939eea2da049ccab63bc1e0f2b",
+          "video_size_bytes": 23334646,
+          "hls_master_path": "media/sintel-chapters/episode-03/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/sintel-chapters/episode-03/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3786646,
+              "duration_seconds": 180.0,
+              "segments": 30
+            },
+            "360p": {
+              "path": "media/sintel-chapters/episode-03/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1179312,
+              "duration_seconds": 180.0,
+              "segments": 30
+            }
+          }
+        },
+        {
+          "number": 4,
+          "title": "Sintel — Chapter 4 of 5",
+          "description": "Sequential chapter 4/5 of the original film; watch in order.",
+          "duration_seconds": 180.0,
+          "duration_sec": 180,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 534.0,
+          "source_end_seconds": 714.0,
+          "thumbnail_frame_seconds": 554.0,
+          "thumbnail_path": "media/sintel-chapters/episode-04/thumbnail.jpg",
+          "video_path": "media/sintel-chapters/episode-04/video.mp4",
+          "video_sha256": "cdbcae831ad60d0b0cb0cc97f5218ba158446cdf40eca83e175ae5584ce44119",
+          "video_size_bytes": 26708305,
+          "hls_master_path": "media/sintel-chapters/episode-04/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/sintel-chapters/episode-04/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2879208,
+              "duration_seconds": 180.0,
+              "segments": 30
+            },
+            "360p": {
+              "path": "media/sintel-chapters/episode-04/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1139331,
+              "duration_seconds": 180.0,
+              "segments": 30
+            }
+          }
+        },
+        {
+          "number": 5,
+          "title": "Sintel — Chapter 5 of 5",
+          "description": "Sequential chapter 5/5 of the original film; watch in order. Includes the original end credits.",
+          "duration_seconds": 174.041667,
+          "duration_sec": 175,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 714.0,
+          "source_end_seconds": 888.041667,
+          "thumbnail_frame_seconds": 734.0,
+          "thumbnail_path": "media/sintel-chapters/episode-05/thumbnail.jpg",
+          "video_path": "media/sintel-chapters/episode-05/video.mp4",
+          "video_sha256": "bd1063488e09ebd1ba719d6725e6d4e232da3d3d57746f9b963cd6ffc800fd01",
+          "video_size_bytes": 23656201,
+          "hls_master_path": "media/sintel-chapters/episode-05/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/sintel-chapters/episode-05/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2758712,
+              "duration_seconds": 174.041667,
+              "segments": 30
+            },
+            "360p": {
+              "path": "media/sintel-chapters/episode-05/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1389685,
+              "duration_seconds": 174.041667,
+              "segments": 30
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "big-buck-bunny-chapters",
+      "title": "Big Buck Bunny — Chapters",
+      "synopsis": "A gentle rabbit responds to three mischievous forest animals with an elaborate plan.",
+      "year": 2008,
+      "director": "Sacha Goedegebure",
+      "original_language": "en",
+      "audio": "No spoken dialogue; music, sound effects and English credits",
+      "categories": [
+        "Short Films",
+        "Comedy",
+        "Animation"
+      ],
+      "content_rating": "UA7",
+      "content_advisory": "Cartoon bullying, slapstick violence and harm to small creatures. Editorial guidance, not an official certificate.",
+      "free_episodes": 5,
+      "episode_price": 0,
+      "is_premium": false,
+      "completion_status": "Completed",
+      "release_note": "5 sequential film chapters · 2008 · Developer seed",
+      "cover_path": "media/big-buck-bunny-chapters/cover.jpg",
+      "banner_path": "media/big-buck-bunny-chapters/banner.jpg",
+      "attribution": "Copyright 2008, Blender Foundation / www.bigbuckbunny.org. Directed by Sacha Goedegebure. Official remastered edition.",
+      "license": "CC BY 3.0",
+      "license_url": "https://creativecommons.org/licenses/by/3.0/",
+      "rights_url": "https://peach.blender.org/about/",
+      "source_page_url": "https://video.blender.org/videos/watch/6402b77c-b61f-4a06-96ca-c8420a2becf4",
+      "changes": "Divided into five sequential chapters at six-second HLS boundaries. Original audio and final credits retained. HLS converted to 24 fps, letterboxed; artwork uses cropped/resized film stills. Chapter titles are technical labels, not creator episode titles.",
+      "source": {
+        "slug": "big-buck-bunny",
+        "url": "https://video.blender.org/object-storage/web_videos/6402b77c-b61f-4a06-96ca-c8420a2becf4-720.mp4",
+        "sha256": "926a25eceed1696899d015b8ecfcca69690190ceca4f15eca7b277de4a569b53",
+        "size_bytes": 153020278,
+        "duration_seconds": 634.583333
+      },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Big Buck Bunny — Chapter 1 of 5",
+          "description": "Sequential chapter 1/5 of the original film; watch in order.",
+          "duration_seconds": 126.0,
+          "duration_sec": 126,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 0.0,
+          "source_end_seconds": 126.0,
+          "thumbnail_frame_seconds": 20.0,
+          "thumbnail_path": "media/big-buck-bunny-chapters/episode-01/thumbnail.jpg",
+          "video_path": "media/big-buck-bunny-chapters/episode-01/video.mp4",
+          "video_sha256": "6e235fe07fa3325cf7b7898d755de9706f279d208bdad986763774e1f6f74e6c",
+          "video_size_bytes": 18700871,
+          "hls_master_path": "media/big-buck-bunny-chapters/episode-01/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/big-buck-bunny-chapters/episode-01/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2469192,
+              "duration_seconds": 126.0,
+              "segments": 21
+            },
+            "360p": {
+              "path": "media/big-buck-bunny-chapters/episode-01/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1047787,
+              "duration_seconds": 126.0,
+              "segments": 21
+            }
+          }
+        },
+        {
+          "number": 2,
+          "title": "Big Buck Bunny — Chapter 2 of 5",
+          "description": "Sequential chapter 2/5 of the original film; watch in order.",
+          "duration_seconds": 126.0,
+          "duration_sec": 126,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 126.0,
+          "source_end_seconds": 252.0,
+          "thumbnail_frame_seconds": 146.0,
+          "thumbnail_path": "media/big-buck-bunny-chapters/episode-02/thumbnail.jpg",
+          "video_path": "media/big-buck-bunny-chapters/episode-02/video.mp4",
+          "video_sha256": "f05e6e90054e6a9761f8ea505b85abe278c54ba658f8112e1712cb094bacc49f",
+          "video_size_bytes": 17824605,
+          "hls_master_path": "media/big-buck-bunny-chapters/episode-02/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/big-buck-bunny-chapters/episode-02/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2065243,
+              "duration_seconds": 126.0,
+              "segments": 21
+            },
+            "360p": {
+              "path": "media/big-buck-bunny-chapters/episode-02/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 900546,
+              "duration_seconds": 126.0,
+              "segments": 21
+            }
+          }
+        },
+        {
+          "number": 3,
+          "title": "Big Buck Bunny — Chapter 3 of 5",
+          "description": "Sequential chapter 3/5 of the original film; watch in order.",
+          "duration_seconds": 126.0,
+          "duration_sec": 126,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 252.0,
+          "source_end_seconds": 378.0,
+          "thumbnail_frame_seconds": 272.0,
+          "thumbnail_path": "media/big-buck-bunny-chapters/episode-03/thumbnail.jpg",
+          "video_path": "media/big-buck-bunny-chapters/episode-03/video.mp4",
+          "video_sha256": "d21b9a310712faca39e5eb84ae0bf3377ea34e06797d5078c366b524530ac6dd",
+          "video_size_bytes": 24018896,
+          "hls_master_path": "media/big-buck-bunny-chapters/episode-03/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/big-buck-bunny-chapters/episode-03/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2846396,
+              "duration_seconds": 126.0,
+              "segments": 21
+            },
+            "360p": {
+              "path": "media/big-buck-bunny-chapters/episode-03/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1113136,
+              "duration_seconds": 126.0,
+              "segments": 21
+            }
+          }
+        },
+        {
+          "number": 4,
+          "title": "Big Buck Bunny — Chapter 4 of 5",
+          "description": "Sequential chapter 4/5 of the original film; watch in order.",
+          "duration_seconds": 126.0,
+          "duration_sec": 126,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 378.0,
+          "source_end_seconds": 504.0,
+          "thumbnail_frame_seconds": 398.0,
+          "thumbnail_path": "media/big-buck-bunny-chapters/episode-04/thumbnail.jpg",
+          "video_path": "media/big-buck-bunny-chapters/episode-04/video.mp4",
+          "video_sha256": "6a8311e3706f0290f65e64268310e374175314340d8267d6e7e5dae1c50a82c7",
+          "video_size_bytes": 20707408,
+          "hls_master_path": "media/big-buck-bunny-chapters/episode-04/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/big-buck-bunny-chapters/episode-04/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3213948,
+              "duration_seconds": 126.0,
+              "segments": 21
+            },
+            "360p": {
+              "path": "media/big-buck-bunny-chapters/episode-04/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1011666,
+              "duration_seconds": 126.0,
+              "segments": 21
+            }
+          }
+        },
+        {
+          "number": 5,
+          "title": "Big Buck Bunny — Chapter 5 of 5",
+          "description": "Sequential chapter 5/5 of the original film; watch in order. Includes the original end credits.",
+          "duration_seconds": 130.583333,
+          "duration_sec": 131,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 504.0,
+          "source_end_seconds": 634.583333,
+          "thumbnail_frame_seconds": 524.0,
+          "thumbnail_path": "media/big-buck-bunny-chapters/episode-05/thumbnail.jpg",
+          "video_path": "media/big-buck-bunny-chapters/episode-05/video.mp4",
+          "video_sha256": "634f3a3a08dc3a99d4e5848db03163a816246f7ac863b7f316c7cd0da5e65521",
+          "video_size_bytes": 23306470,
+          "hls_master_path": "media/big-buck-bunny-chapters/episode-05/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/big-buck-bunny-chapters/episode-05/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2828749,
+              "duration_seconds": 130.583333,
+              "segments": 22
+            },
+            "360p": {
+              "path": "media/big-buck-bunny-chapters/episode-05/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1144845,
+              "duration_seconds": 130.583333,
+              "segments": 22
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "spring-chapters",
+      "title": "Spring — Chapters",
+      "synopsis": "A shepherd girl and her dog encounter ancient spirits as winter gives way to spring.",
+      "year": 2019,
+      "director": "Andy Goralczyk",
+      "original_language": "en",
+      "audio": "No spoken dialogue; music, sound effects and English credits",
+      "categories": [
+        "Short Films",
+        "Fantasy",
+        "Adventure",
+        "Animation"
+      ],
+      "content_rating": "UA7",
+      "content_advisory": "Threatening fantasy spirits, peril and intense scenes. Editorial guidance, not an official certificate.",
+      "free_episodes": 5,
+      "episode_price": 0,
+      "is_premium": false,
+      "completion_status": "Completed",
+      "release_note": "5 sequential film chapters · 2019 · Developer seed",
+      "cover_path": "media/spring-chapters/cover.jpg",
+      "banner_path": "media/spring-chapters/banner.jpg",
+      "attribution": "© Blender Foundation | cloud.blender.org/spring. Directed by Andy Goralczyk.",
+      "license": "CC BY 4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "rights_url": "https://studio.blender.org/projects/spring/pages/about/",
+      "source_page_url": "https://video.blender.org/videos/watch/3d95fb3d-c866-42c8-9db1-fe82f48ccb95",
+      "changes": "Divided into five sequential chapters at six-second HLS boundaries. Original audio and final credits retained. HLS converted to 24 fps, letterboxed; artwork uses cropped/resized film stills. Chapter titles are technical labels, not creator episode titles.",
+      "source": {
+        "slug": "spring",
+        "url": "https://video.blender.org/object-storage/web_videos/3d95fb3d-c866-42c8-9db1-fe82f48ccb95-720.mp4",
+        "sha256": "9bff819bad5c957f9b09344950db1f03084437b76dd577730c031b30cab36461",
+        "size_bytes": 97446257,
+        "duration_seconds": 464.083333
+      },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Spring — Chapter 1 of 5",
+          "description": "Sequential chapter 1/5 of the original film; watch in order.",
+          "duration_seconds": 90.0,
+          "duration_sec": 90,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 0.0,
+          "source_end_seconds": 90.0,
+          "thumbnail_frame_seconds": 20.0,
+          "thumbnail_path": "media/spring-chapters/episode-01/thumbnail.jpg",
+          "video_path": "media/spring-chapters/episode-01/video.mp4",
+          "video_sha256": "449ea6c63af210b0e5f55a780ad37942c0865ee9fffa6d1e9dfd39eae1e2fd01",
+          "video_size_bytes": 9541247,
+          "hls_master_path": "media/spring-chapters/episode-01/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/spring-chapters/episode-01/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2026089,
+              "duration_seconds": 90.0,
+              "segments": 15
+            },
+            "360p": {
+              "path": "media/spring-chapters/episode-01/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 861116,
+              "duration_seconds": 90.0,
+              "segments": 15
+            }
+          }
+        },
+        {
+          "number": 2,
+          "title": "Spring — Chapter 2 of 5",
+          "description": "Sequential chapter 2/5 of the original film; watch in order.",
+          "duration_seconds": 96.0,
+          "duration_sec": 96,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 90.0,
+          "source_end_seconds": 186.0,
+          "thumbnail_frame_seconds": 110.0,
+          "thumbnail_path": "media/spring-chapters/episode-02/thumbnail.jpg",
+          "video_path": "media/spring-chapters/episode-02/video.mp4",
+          "video_sha256": "16876df3970e3944c54fee14c210fcc5be7484a41f849cfb801efd816874b74b",
+          "video_size_bytes": 9753134,
+          "hls_master_path": "media/spring-chapters/episode-02/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/spring-chapters/episode-02/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 1516810,
+              "duration_seconds": 96.0,
+              "segments": 16
+            },
+            "360p": {
+              "path": "media/spring-chapters/episode-02/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 605235,
+              "duration_seconds": 96.0,
+              "segments": 16
+            }
+          }
+        },
+        {
+          "number": 3,
+          "title": "Spring — Chapter 3 of 5",
+          "description": "Sequential chapter 3/5 of the original film; watch in order.",
+          "duration_seconds": 90.0,
+          "duration_sec": 90,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 186.0,
+          "source_end_seconds": 276.0,
+          "thumbnail_frame_seconds": 206.0,
+          "thumbnail_path": "media/spring-chapters/episode-03/thumbnail.jpg",
+          "video_path": "media/spring-chapters/episode-03/video.mp4",
+          "video_sha256": "54edcf3d2dc3c88203a39760d114edacae7aa2f709215e22875152aa3a4fa1f5",
+          "video_size_bytes": 12280426,
+          "hls_master_path": "media/spring-chapters/episode-03/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/spring-chapters/episode-03/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2551912,
+              "duration_seconds": 90.0,
+              "segments": 15
+            },
+            "360p": {
+              "path": "media/spring-chapters/episode-03/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1003946,
+              "duration_seconds": 90.0,
+              "segments": 15
+            }
+          }
+        },
+        {
+          "number": 4,
+          "title": "Spring — Chapter 4 of 5",
+          "description": "Sequential chapter 4/5 of the original film; watch in order.",
+          "duration_seconds": 96.0,
+          "duration_sec": 96,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 276.0,
+          "source_end_seconds": 372.0,
+          "thumbnail_frame_seconds": 296.0,
+          "thumbnail_path": "media/spring-chapters/episode-04/thumbnail.jpg",
+          "video_path": "media/spring-chapters/episode-04/video.mp4",
+          "video_sha256": "617e293241bf180592ca403ada39a9c3e7c38d547733c01a277cfd58fd207641",
+          "video_size_bytes": 13368045,
+          "hls_master_path": "media/spring-chapters/episode-04/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/spring-chapters/episode-04/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2511931,
+              "duration_seconds": 96.0,
+              "segments": 16
+            },
+            "360p": {
+              "path": "media/spring-chapters/episode-04/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 932255,
+              "duration_seconds": 96.0,
+              "segments": 16
+            }
+          }
+        },
+        {
+          "number": 5,
+          "title": "Spring — Chapter 5 of 5",
+          "description": "Sequential chapter 5/5 of the original film; watch in order. Includes the original end credits.",
+          "duration_seconds": 92.083333,
+          "duration_sec": 93,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 372.0,
+          "source_end_seconds": 464.083333,
+          "thumbnail_frame_seconds": 392.0,
+          "thumbnail_path": "media/spring-chapters/episode-05/thumbnail.jpg",
+          "video_path": "media/spring-chapters/episode-05/video.mp4",
+          "video_sha256": "6c808eb040b633a89ea53257af1a0bceb14ff4075ae184fd1ba9eae42e19ffc4",
+          "video_size_bytes": 11682925,
+          "hls_master_path": "media/spring-chapters/episode-05/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/spring-chapters/episode-05/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2132246,
+              "duration_seconds": 92.083333,
+              "segments": 16
+            },
+            "360p": {
+              "path": "media/spring-chapters/episode-05/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 902751,
+              "duration_seconds": 92.083333,
+              "segments": 16
+            }
+          }
+        }
+      ]
+    },
+    {
+      "slug": "elephants-dream-chapters",
+      "title": "Elephants Dream — Chapters",
+      "synopsis": "Two travelers disagree about the strange mechanical world around them as their journey becomes increasingly unsettling.",
+      "year": 2006,
+      "director": "Bassam Kurdali",
+      "original_language": "en",
+      "audio": "English dialogue",
+      "categories": [
+        "Short Films",
+        "Science Fiction",
+        "Drama",
+        "Animation"
+      ],
+      "content_rating": "UA13",
+      "content_advisory": "Surreal threatening environments, psychological conflict and violence. Editorial guidance, not an official certificate.",
+      "free_episodes": 5,
+      "episode_price": 0,
+      "is_premium": false,
+      "completion_status": "Completed",
+      "release_note": "5 sequential film chapters · 2006 · Developer seed",
+      "cover_path": "media/elephants-dream-chapters/cover.jpg",
+      "banner_path": "media/elephants-dream-chapters/banner.jpg",
+      "attribution": "(c) copyright 2006, Blender Foundation / Netherlands Media Art Institute / www.elephantsdream.org. Directed by Bassam Kurdali.",
+      "license": "CC BY 2.5",
+      "license_url": "https://creativecommons.org/licenses/by/2.5/",
+      "rights_url": "https://orange.blender.org/page/2/",
+      "source_page_url": "https://video.blender.org/videos/watch/cccc3e60-0291-4ecc-aa56-39b2e2c7d0d5",
+      "changes": "Divided into five sequential chapters at six-second HLS boundaries. Original audio and final credits retained. HLS converted to 24 fps, letterboxed; artwork uses cropped/resized film stills. Chapter titles are technical labels, not creator episode titles.",
+      "source": {
+        "slug": "elephants-dream",
+        "url": "https://video.blender.org/object-storage/web_videos/cccc3e60-0291-4ecc-aa56-39b2e2c7d0d5-720.mp4",
+        "sha256": "4ca95823389a25740ae1f96c8af366a091db12a52da0940be0a17028d0734d80",
+        "size_bytes": 117134159,
+        "duration_seconds": 653.791667
+      },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Elephants Dream — Chapter 1 of 5",
+          "description": "Sequential chapter 1/5 of the original film; watch in order.",
+          "duration_seconds": 126.0,
+          "duration_sec": 126,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 0.0,
+          "source_end_seconds": 126.0,
+          "thumbnail_frame_seconds": 20.0,
+          "thumbnail_path": "media/elephants-dream-chapters/episode-01/thumbnail.jpg",
+          "video_path": "media/elephants-dream-chapters/episode-01/video.mp4",
+          "video_sha256": "30ccf881a69765424922142b52472c97ef8ea3cc36f721c2a21fac4e840b778b",
+          "video_size_bytes": 26417000,
+          "hls_master_path": "media/elephants-dream-chapters/episode-01/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/elephants-dream-chapters/episode-01/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3452458,
+              "duration_seconds": 126.0,
+              "segments": 21
+            },
+            "360p": {
+              "path": "media/elephants-dream-chapters/episode-01/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1192547,
+              "duration_seconds": 126.0,
+              "segments": 21
+            }
+          }
+        },
+        {
+          "number": 2,
+          "title": "Elephants Dream — Chapter 2 of 5",
+          "description": "Sequential chapter 2/5 of the original film; watch in order.",
+          "duration_seconds": 132.0,
+          "duration_sec": 132,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 126.0,
+          "source_end_seconds": 258.0,
+          "thumbnail_frame_seconds": 146.0,
+          "thumbnail_path": "media/elephants-dream-chapters/episode-02/thumbnail.jpg",
+          "video_path": "media/elephants-dream-chapters/episode-02/video.mp4",
+          "video_sha256": "0737a17caa2c2a95d926c9890c08202324c2789e9a90cf33dcec9ca12b206ec5",
+          "video_size_bytes": 19281375,
+          "hls_master_path": "media/elephants-dream-chapters/episode-02/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/elephants-dream-chapters/episode-02/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3366153,
+              "duration_seconds": 132.0,
+              "segments": 22
+            },
+            "360p": {
+              "path": "media/elephants-dream-chapters/episode-02/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1129956,
+              "duration_seconds": 132.0,
+              "segments": 22
+            }
+          }
+        },
+        {
+          "number": 3,
+          "title": "Elephants Dream — Chapter 3 of 5",
+          "description": "Sequential chapter 3/5 of the original film; watch in order.",
+          "duration_seconds": 132.0,
+          "duration_sec": 132,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 258.0,
+          "source_end_seconds": 390.0,
+          "thumbnail_frame_seconds": 278.0,
+          "thumbnail_path": "media/elephants-dream-chapters/episode-03/thumbnail.jpg",
+          "video_path": "media/elephants-dream-chapters/episode-03/video.mp4",
+          "video_sha256": "b9db2dfb54c1c77df104976ec2a4cde367dfcaf2363a46725e405821b5121277",
+          "video_size_bytes": 20811939,
+          "hls_master_path": "media/elephants-dream-chapters/episode-03/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/elephants-dream-chapters/episode-03/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 3783889,
+              "duration_seconds": 132.0,
+              "segments": 22
+            },
+            "360p": {
+              "path": "media/elephants-dream-chapters/episode-03/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1165525,
+              "duration_seconds": 132.0,
+              "segments": 22
+            }
+          }
+        },
+        {
+          "number": 4,
+          "title": "Elephants Dream — Chapter 4 of 5",
+          "description": "Sequential chapter 4/5 of the original film; watch in order.",
+          "duration_seconds": 132.0,
+          "duration_sec": 132,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 390.0,
+          "source_end_seconds": 522.0,
+          "thumbnail_frame_seconds": 410.0,
+          "thumbnail_path": "media/elephants-dream-chapters/episode-04/thumbnail.jpg",
+          "video_path": "media/elephants-dream-chapters/episode-04/video.mp4",
+          "video_sha256": "783cf3c6500074731a14d68edf29a526a633ec8d0aa698735ba136d228125662",
+          "video_size_bytes": 28188751,
+          "hls_master_path": "media/elephants-dream-chapters/episode-04/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/elephants-dream-chapters/episode-04/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2870936,
+              "duration_seconds": 132.0,
+              "segments": 22
+            },
+            "360p": {
+              "path": "media/elephants-dream-chapters/episode-04/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1132437,
+              "duration_seconds": 132.0,
+              "segments": 22
+            }
+          }
+        },
+        {
+          "number": 5,
+          "title": "Elephants Dream — Chapter 5 of 5",
+          "description": "Sequential chapter 5/5 of the original film; watch in order. Includes the original end credits.",
+          "duration_seconds": 131.791667,
+          "duration_sec": 132,
+          "is_free": true,
+          "price": 0,
+          "source_start_seconds": 522.0,
+          "source_end_seconds": 653.791667,
+          "thumbnail_frame_seconds": 542.0,
+          "thumbnail_path": "media/elephants-dream-chapters/episode-05/thumbnail.jpg",
+          "video_path": "media/elephants-dream-chapters/episode-05/video.mp4",
+          "video_sha256": "bd336050712a5a01a8e973d07a1a6f8c0654257a43cf59ea92b94b1af150e8f1",
+          "video_size_bytes": 11347825,
+          "hls_master_path": "media/elephants-dream-chapters/episode-05/master.m3u8",
+          "renditions": {
+            "720p": {
+              "path": "media/elephants-dream-chapters/episode-05/720p/index.m3u8",
+              "width": 1280,
+              "height": 720,
+              "bandwidth": 2242540,
+              "duration_seconds": 131.791667,
+              "segments": 22
+            },
+            "360p": {
+              "path": "media/elephants-dream-chapters/episode-05/360p/index.m3u8",
+              "width": 640,
+              "height": 360,
+              "bandwidth": 1155323,
+              "duration_seconds": 131.791667,
+              "segments": 22
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

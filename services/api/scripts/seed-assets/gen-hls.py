@@ -18,6 +18,7 @@ episodes at it, and serve the directory:
 Requires ffmpeg on PATH.
 """
 
+import argparse
 import shutil
 import subprocess
 import sys
@@ -25,7 +26,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ROOT = HERE / "media" / "heiress"
-SECONDS = 8
+SECONDS = 30
 EPISODES = 10
 # One hue per episode, walking the brand's warm range so neighbouring episodes never look alike.
 HUES = ["6B1220", "8C1A2E", "A8262B", "C03A22", "D4571A", "C76A12", "A87016", "80641F", "5A4A2A", "3A2A2E"]
@@ -43,8 +44,19 @@ def find_font() -> Path | None:
 
 
 def main() -> int:
-    if shutil.which("ffmpeg") is None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--source", type=Path, help="Optional real video source; each episode uses a different 30-second excerpt."
+    )
+    parser.add_argument("--ffmpeg", default=shutil.which("ffmpeg"), help="Path to ffmpeg when it is not on PATH.")
+    args = parser.parse_args()
+
+    if not args.ffmpeg:
         print("ffmpeg is not on PATH.")
+        return 1
+    ffmpeg = str(Path(args.ffmpeg).resolve())
+    if args.source and not args.source.exists():
+        print(f"Source video does not exist: {args.source}")
         return 1
 
     font = find_font()
@@ -70,17 +82,58 @@ def main() -> int:
                 rf"drawtext=fontfile={local_font.name}:text='%{{eif\:t\:d}}':fontcolor=white@0.85:fontsize=110:"
                 "x=(w-text_w)/2:y=(h-text_h)/2+120"
             )
+            if args.source:
+                inputs = ["-ss", str(45 + (n - 1) * 45), "-t", str(SECONDS), "-i", str(args.source.resolve())]
+                video_filter = (
+                    "[0:v]split=2[back][front];"
+                    "[back]scale=720:1280:force_original_aspect_ratio=increase,crop=720:1280,boxblur=24[bg];"
+                    "[front]scale=720:1280:force_original_aspect_ratio=decrease[fg];"
+                    "[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p"
+                )
+                filter_args = ["-filter_complex", video_filter]
+            else:
+                inputs = [
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    f"color=c=0x{HUES[n - 1]}:s=720x1280:d={SECONDS}:r=25",
+                    "-f",
+                    "lavfi",
+                    "-i",
+                    f"sine=frequency={220 + n * 40}:duration={SECONDS}",
+                ]
+                filter_args = ["-vf", text]
+
             subprocess.run(
                 [
-                    "ffmpeg", "-y", "-loglevel", "error",
-                    "-f", "lavfi", "-i", f"color=c=0x{HUES[n - 1]}:s=720x1280:d={SECONDS}:r=25",
-                    "-f", "lavfi", "-i", f"sine=frequency={220 + n * 40}:duration={SECONDS}",
-                    "-vf", text,
-                    "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-g", "50",
-                    "-c:a", "aac", "-b:a", "64k",
-                    "-f", "hls", "-hls_time", "2", "-hls_playlist_type", "vod",
-                    "-hls_flags", "independent_segments",
-                    "-hls_segment_filename", str(out / "seg%d.ts"),
+                    ffmpeg,
+                    "-y",
+                    "-loglevel",
+                    "error",
+                    *inputs,
+                    *filter_args,
+                    "-c:v",
+                    "libx264",
+                    "-preset",
+                    "ultrafast",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-g",
+                    "50",
+                    "-c:a",
+                    "aac",
+                    "-b:a",
+                    "64k",
+                    "-f",
+                    "hls",
+                    "-hls_time",
+                    "4",
+                    "-hls_playlist_type",
+                    "vod",
+                    "-hls_flags",
+                    "independent_segments",
+                    "-hls_segment_filename",
+                    str(out / "seg%d.ts"),
                     str(out / "master.m3u8"),
                 ],
                 check=True,

@@ -49,7 +49,17 @@ playwright-report/
 # Locally generated placeholder video for the seeded episodes (scripts/seed-assets/gen-hls.py).
 # Regenerate rather than commit: it is a few megabytes of test pattern, not content.
 services/api/scripts/seed-assets/media/
+services/api/scripts/seed-assets/source/
+services/api/scripts/seed-assets/hls/
+services/api/scripts/seed-assets/images/open-films/
 services/api/scripts/seed-assets/_hls-font.ttf
+content/developer-seed/.cache/
+content/developer-seed/media/
+
+# Screenshots, captured frames and validation reports from driving the running product in a browser.
+# Evidence of one local run against one machine's data: a few megabytes per run, stale as soon as a page
+# changes, and read by the person who produced it. The findings belong in the commit that fixes them.
+review/
 
 # Expo prebuild regenerates apps/mobile/android and apps/mobile/ios from app.json, app.config.ts and the
 # plugins in apps/mobile/plugins. Committing them would mean two sources of truth for the same settings, and
