@@ -1,10 +1,13 @@
 # Maestro workspace config for this folder.
 #
-# The flows share state on purpose: 01 completes onboarding, and the other two start from a device that has
-# been through it. Maestro does not promise to run a folder in filename order, and on a fresh install it ran
-# the paywall flow first, straight into the language picker. This pins the order the flows were written in.
+# The flows share state on purpose: 01 completes onboarding, and the rest start from a device that has been
+# through it. Maestro does not promise to run a folder in filename order, and on a fresh install it ran the
+# paywall flow first, straight into the language picker. This pins the order the flows were written in.
+#
+# The include pattern is matched against each file's path, extension included: a bare `*` matched nothing
+# on Maestro 2.8 and the whole folder was reported as zero flows rather than as an error.
 flows:
-  - "*"
+  - "*.yaml"
 executionOrder:
   continueOnFailure: true
   flowsOrder:
