@@ -5,6 +5,11 @@
 **/.ruff_cache
 **/.next
 **/.expo
+**/tests
+# Local secrets never belong in an image layer; the example file is documentation and stays.
+**/.env
+**/.env.*
+!**/.env.example
 ref/
 docs/
 .git/

@@ -15,12 +15,26 @@ Two failure modes worth naming, because the product this replaces hit both:
     their money back and keeps nothing. `finalize` does this and is called after the coins are granted.
   - **A client-reported "success" is not a success.** Nothing here trusts the client's word about the outcome;
     the only input taken from it is the token to go and check.
+
+Refunds come back the same two ways a gateway's do, and for the same reason a webhook alone is not enough:
+
+  - **Real-time developer notifications** are Play's webhook. They arrive through a Pub/Sub push subscription
+    as a POST carrying a Google-signed OIDC token; `verify_play_rtdn` checks the token and `apply_rtdn` turns a
+    void or cancellation into `payments.mark_refunded`. A refund that is not reversed is coins the viewer keeps.
+  - **`list_voided`** is the safety net. A push subscription can be misconfigured, its endpoint can be down for
+    longer than Pub/Sub keeps retrying, and the notification for a purchase made before the subscription
+    existed never arrives at all. The worker polls the voided-purchases list and reverses whatever the push
+    path missed; `mark_refunded` is terminal, so seeing the same void twice costs nothing.
 """
 
 import asyncio
+import base64
+import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from urllib.parse import urlencode
 
 import httpx
 import structlog
@@ -29,7 +43,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.errors import AppError, NotFound
+from app.core.errors import AppError, NotFound, Unauthorized
 from app.models.identity import User
 from app.models.wallet import CoinPack, PackKind, Purchase, PurchaseStatus
 from app.services import payments
@@ -44,6 +58,12 @@ SCOPE = "https://www.googleapis.com/auth/androidpublisher"
 PURCHASED = 0
 # acknowledgementState: 0 not acknowledged, 1 acknowledged.
 ACKNOWLEDGED = 1
+# RTDN `oneTimeProductNotification.notificationType`.
+ONE_TIME_PRODUCT_PURCHASED = 1
+ONE_TIME_PRODUCT_CANCELED = 2
+# The voided-purchases list refuses a `startTime` older than this; a poll that has fallen further behind
+# starts from here and accepts that anything older was missed.
+VOIDED_LOOKBACK = timedelta(days=30)
 
 
 @dataclass
@@ -223,13 +243,194 @@ def is_configured() -> bool:
     return bool(s.google_play_package_name and s.google_play_service_account_file)
 
 
+# ---- real-time developer notifications (Pub/Sub push) ----
+
+
+def _google_oidc_verifier(token: str, audience: str) -> dict:
+    """Verify a Google-signed OIDC token: signature against Google's published certificates, issuer, expiry
+    and audience. Blocking (the certificates are fetched and cached over HTTP); callers thread it off."""
+    from google.auth.transport import requests as google_requests  # noqa: PLC0415 - optional dependency
+    from google.oauth2 import id_token  # noqa: PLC0415
+
+    return id_token.verify_oauth2_token(token, google_requests.Request(), audience=audience)
+
+
+def verify_play_rtdn(
+    token: str,
+    *,
+    audience: str,
+    service_account_email: str,
+    verifier: Callable[[str, str], dict] | None = None,
+) -> dict:
+    """The push endpoint's authentication. Returns the token's claims, or raises Unauthorized.
+
+    A valid Google signature only proves that *some* Google account minted the token; any Pub/Sub topic in
+    any project can push to a public URL. The audience ties the token to this endpoint and the email ties it
+    to the one service account the subscription was told to use, and both have to match. `email_verified`
+    is required too: Google sets it for its own service accounts, and a token that lacks it is not one.
+
+    `verifier` is looked up at call time so a test can swap the Google one out without a network.
+    """
+    try:
+        claims = (verifier or _google_oidc_verifier)(token, audience)
+    except Exception as exc:  # noqa: BLE001 - any verification failure is a refusal, whatever the library says
+        raise Unauthorized("Invalid Pub/Sub token", code="bad_signature") from exc
+    email = str(claims.get("email") or "").lower()
+    if not claims.get("email_verified") or email != service_account_email.lower():
+        raise Unauthorized("Pub/Sub token is not from the expected service account", code="bad_signature")
+    return claims
+
+
+def decode_rtdn(envelope: dict) -> tuple[str, dict]:
+    """Unwrap a Pub/Sub push body into (message id, developer notification).
+
+    The notification itself travels base64-encoded inside `message.data`; the message id is what makes the
+    delivery idempotent, since Pub/Sub redelivers until it gets a 2xx. Either missing means this was not a
+    Pub/Sub push at all, and a 400 is the right answer — the authentication check has already run.
+    """
+    message = envelope.get("message") if isinstance(envelope, dict) else None
+    if not isinstance(message, dict):
+        raise AppError("Not a Pub/Sub push message", code="bad_request")
+    message_id = message.get("messageId") or message.get("message_id")
+    data = message.get("data")
+    if not message_id or not isinstance(data, str):
+        raise AppError("Pub/Sub message has no id or data", code="bad_request")
+    try:
+        notification = json.loads(base64.b64decode(data, validate=True))
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise AppError("Pub/Sub message data is not a JSON notification", code="bad_request") from exc
+    if not isinstance(notification, dict):
+        raise AppError("Pub/Sub message data is not a JSON notification", code="bad_request")
+    return str(message_id), notification
+
+
+def rtdn_kind(notification: dict) -> str | None:
+    """Which of Play's notification families this is; stored as the inbox row's event type."""
+    for key in (
+        "voidedPurchaseNotification",
+        "oneTimeProductNotification",
+        "subscriptionNotification",
+        "testNotification",
+    ):
+        if key in notification:
+            return key
+    return None
+
+
+def refund_token(notification: dict) -> str | None:
+    """The purchase token to reverse, or None when this notification reverses nothing.
+
+    A voided purchase is a refund or chargeback that has already happened. A cancelled one-time product is a
+    pending purchase the viewer backed out of; `mark_refunded` leaves a purchase that was never paid alone,
+    so routing it the same way is safe and covers the case where the pending state was somehow granted.
+    """
+    voided = notification.get("voidedPurchaseNotification")
+    if isinstance(voided, dict) and voided.get("purchaseToken"):
+        return str(voided["purchaseToken"])
+    one_time = notification.get("oneTimeProductNotification")
+    if isinstance(one_time, dict) and one_time.get("purchaseToken"):
+        if int(one_time.get("notificationType") or 0) == ONE_TIME_PRODUCT_CANCELED:
+            return str(one_time["purchaseToken"])
+    return None
+
+
+async def apply_rtdn(session: AsyncSession, notification: dict) -> str:
+    """Inbox handler: void or cancellation -> refunded; everything else ignored.
+
+    The package name is checked against ours rather than trusted: the push subscription is authenticated,
+    but a topic shared across apps would deliver another app's voids, and a purchase token is opaque enough
+    that a collision would be invisible.
+    """
+    s = get_settings()
+    package = notification.get("packageName")
+    if package != s.google_play_package_name:
+        log.warning("play.rtdn_package_mismatch", package=package)
+        return "ignored"
+    token = refund_token(notification)
+    if token is None:
+        return "ignored"
+    purchase = await session.scalar(select(Purchase).where(Purchase.gateway == GATEWAY, Purchase.external_id == token))
+    if purchase is None:
+        # A void for a purchase never redeemed here: nothing was granted, so there is nothing to take back.
+        log.info("play.rtdn_unknown_purchase", kind=rtdn_kind(notification))
+        return "ignored"
+    await payments.mark_refunded(
+        session, purchase.id, raw={"source": "play_rtdn", "kind": rtdn_kind(notification), "notification": notification}
+    )
+    return "refunded"
+
+
+# ---- voided purchases (the polled safety net) ----
+
+
+@dataclass
+class VoidedPurchase:
+    """One entry from the voided-purchases list. `reason` and `source` are Google's enums, kept for the audit."""
+
+    purchase_token: str
+    order_id: str | None
+    voided_time_ms: int | None
+    reason: int | None
+    source: int | None
+
+
+def parse_voided(payload: dict) -> list[VoidedPurchase]:
+    out = []
+    for row in payload.get("voidedPurchases") or []:
+        token = row.get("purchaseToken")
+        if not token:
+            continue
+        voided_ms = row.get("voidedTimeMillis")
+        out.append(
+            VoidedPurchase(
+                purchase_token=str(token),
+                order_id=row.get("orderId"),
+                voided_time_ms=int(voided_ms) if voided_ms is not None else None,
+                reason=row.get("voidedReason"),
+                source=row.get("voidedSource"),
+            )
+        )
+    return out
+
+
+def voided_start_ms(start_time_ms: int | None, *, now: datetime | None = None) -> int:
+    """Clamp a poll's start to the window Google serves. Older than that and the API answers 400."""
+    current = now or datetime.now(UTC)
+    floor = int((current - VOIDED_LOOKBACK).timestamp() * 1000)
+    return floor if start_time_ms is None else max(int(start_time_ms), floor)
+
+
+async def list_voided(start_time_ms: int | None = None) -> list[VoidedPurchase]:
+    """Every one-time purchase Google has voided since `start_time_ms`, following pagination to the end."""
+    out: list[VoidedPurchase] = []
+    page_token: str | None = None
+    while True:
+        params: dict[str, str | int] = {"startTime": voided_start_ms(start_time_ms)}
+        if page_token:
+            params["token"] = page_token
+        payload = await _get(f"purchases/voidedpurchases?{urlencode(params)}")
+        out.extend(parse_voided(payload))
+        page_token = (payload.get("tokenPagination") or {}).get("nextPageToken")
+        if not page_token:
+            return out
+
+
 __all__ = [
     "GATEWAY",
     "PlayPurchase",
+    "VoidedPurchase",
+    "apply_rtdn",
+    "decode_rtdn",
     "finalize",
     "is_configured",
+    "list_voided",
     "parse_product",
+    "parse_voided",
     "redeem",
+    "refund_token",
+    "rtdn_kind",
+    "verify_play_rtdn",
     "verify_product",
     "vip_window",
+    "voided_start_ms",
 ]

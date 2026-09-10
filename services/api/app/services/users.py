@@ -62,8 +62,11 @@ async def get_or_create_from_firebase(
         return user, False
 
     # Same verified email or phone on an existing account (phone first, Google later): link, do not duplicate.
+    # Only a *verified* email may link. Some providers pass Firebase whatever address the person typed, and
+    # linking on that would hand an existing account to anyone who signs up claiming its email. A phone
+    # number is verified by Firebase itself before it appears in the token.
     existing = None
-    if ident.email:
+    if ident.email and ident.email_verified:
         existing = await session.scalar(
             select(User).where(User.email == ident.email.lower(), User.status != UserStatus.deleted)
         )
@@ -95,6 +98,7 @@ async def get_or_create_from_firebase(
             user_id=user.id, provider="firebase", provider_uid=ident.uid, raw={"sign_in_provider": ident.provider}
         )
     )
+    referrer = None
     if referral_code:
         referrer = await session.scalar(
             select(User).where(User.referral_code == referral_code.strip().upper(), User.id != user.id)
@@ -109,20 +113,25 @@ async def get_or_create_from_firebase(
                     created_at=datetime.now(UTC),
                 )
             )
-            # The referee is paid immediately. The referrer's half waits for a real purchase (see payments.py);
-            # paying both sides at signup would make throwaway accounts profitable.
-            welcome = await config_svc.referee_reward_coins(session)
-            if welcome > 0:
-                await ledger.post(
-                    session,
-                    user_id=user.id,
-                    delta=welcome,
-                    kind=LedgerKind.referral,
-                    idempotency_key=f"referral-welcome:{user.id}",
-                    ref_type="user",
-                    ref_id=str(referrer.id),
-                    note="Invited by a friend",
-                )
+    # The first two ledger rows an account ever gets are the ones an onboarding experiment is most likely to
+    # be about, so they carry the variant assignment like every later row does.
+    variants = await config_svc.variant_map(session, user.id)
+    if referrer is not None:
+        # The referee is paid immediately. The referrer's half waits for a real purchase (see payments.py);
+        # paying both sides at signup would make throwaway accounts profitable.
+        welcome = await config_svc.referee_reward_coins(session)
+        if welcome > 0:
+            await ledger.post(
+                session,
+                user_id=user.id,
+                delta=welcome,
+                kind=LedgerKind.referral,
+                idempotency_key=f"referral-welcome:{user.id}",
+                ref_type="user",
+                ref_id=str(referrer.id),
+                note="Invited by a friend",
+                variant_map=variants or None,
+            )
     bonus = get_settings().default_signup_bonus
     if bonus > 0:
         await ledger.post(
@@ -132,6 +141,7 @@ async def get_or_create_from_firebase(
             kind=LedgerKind.signup_bonus,
             idempotency_key=f"signup:{user.id}",
             note="Welcome bonus",
+            variant_map=variants or None,
         )
     return user, True
 

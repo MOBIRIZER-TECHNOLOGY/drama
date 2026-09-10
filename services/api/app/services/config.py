@@ -3,6 +3,7 @@
 import hashlib
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,6 +38,72 @@ DEFAULT_NAMESPACES: dict[str, dict] = {
     "site": {"name": "Katha", "url": None},
     "payments": {"stripe": True, "razorpay": True, "play": True},
 }
+
+
+# Keys whose values must be whole numbers, with the range an operator could plausibly mean. Every one of these
+# is read with `int(...)` somewhere in the economy — a string, a float or a negative number saved here used to
+# surface as a 500 on the next unlock or sign-up rather than as a rejected save.
+NUMERIC_KEYS: dict[str, dict[str, tuple[int, int]]] = {
+    "economy": {
+        "episode_price": (0, 100_000),
+        "free_episodes": (0, 1_000),
+        "ad_unlocks_per_day": (0, 100),
+        "bundle_discount_pct": (0, 90),
+    },
+    "rewards": {"signup_bonus": (0, 100_000)},
+    "referral": {"referrer_coins": (0, 100_000), "referee_coins": (0, 100_000)},
+    "mobile": {"min_version_code": (0, 1_000_000_000)},
+}
+# Lists of whole numbers, with the bound on each element and on the length.
+NUMERIC_LIST_KEYS: dict[str, dict[str, tuple[int, int, int]]] = {
+    "rewards": {"daily_rewards": (0, 100_000, 31)},
+}
+_SECRET_MARKERS = ("secret", "token", "password")
+
+
+def find_secret_keys(data: Any, path: str = "") -> list[str]:
+    """Every key, at any depth, that looks like it holds a credential.
+
+    Settings are served to clients through /v1/config, so a secret saved here is a secret published. The check
+    used to look at top-level keys only, which a nested `{"stripe": {"secret_key": ...}}` walked straight past.
+    "key" alone is exempt when the name says public — `public_key`, `razorpay_public_key` — because those are
+    the values that belong here.
+    """
+    found: list[str] = []
+    if isinstance(data, dict):
+        for k, v in data.items():
+            name = str(k)
+            full = f"{path}.{name}" if path else name
+            lowered = name.lower()
+            if any(m in lowered for m in _SECRET_MARKERS) or ("key" in lowered and "public" not in lowered):
+                found.append(full)
+            found.extend(find_secret_keys(v, full))
+    elif isinstance(data, list):
+        for i, v in enumerate(data):
+            found.extend(find_secret_keys(v, f"{path}[{i}]"))
+    return found
+
+
+def _is_int(v: Any) -> bool:
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def validate_namespace_values(name: str, data: dict) -> list[str]:
+    """Problems with the values an operator is about to save, as messages; empty when the save is sound."""
+    problems: list[str] = []
+    for key, (lo, hi) in NUMERIC_KEYS.get(name, {}).items():
+        if key not in data or data[key] is None:
+            continue
+        v = data[key]
+        if not _is_int(v) or not lo <= v <= hi:
+            problems.append(f"{key} must be a whole number between {lo} and {hi}")
+    for key, (lo, hi, max_len) in NUMERIC_LIST_KEYS.get(name, {}).items():
+        if key not in data or data[key] is None:
+            continue
+        v = data[key]
+        if not isinstance(v, list) or not v or len(v) > max_len or not all(_is_int(x) and lo <= x <= hi for x in v):
+            problems.append(f"{key} must be a list of 1 to {max_len} whole numbers between {lo} and {hi}")
+    return problems
 
 
 async def namespace(session: AsyncSession, name: str) -> dict:

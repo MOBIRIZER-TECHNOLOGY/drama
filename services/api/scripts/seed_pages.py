@@ -34,8 +34,7 @@ PAGES = [
         "privacy",
         "Privacy Policy",
         True,
-        PLACEHOLDER
-        + "<h2>What we collect</h2><p>An email address or phone number when you create an account, the "
+        PLACEHOLDER + "<h2>What we collect</h2><p>An email address or phone number when you create an account, the "
         "episodes you watch so your progress follows you between devices, and the coins you earn and spend."
         "</p><h2>Why</h2><p>To keep you signed in, remember where you left off, and settle purchases.</p>"
         "<h2>Deleting your account</h2><p>Settings &rarr; Delete account removes your profile, your watch "
@@ -45,8 +44,7 @@ PAGES = [
         "terms",
         "Terms of Service",
         True,
-        PLACEHOLDER
-        + "<h2>Your account</h2><p>One account per person. Keep your sign-in details to yourself.</p>"
+        PLACEHOLDER + "<h2>Your account</h2><p>One account per person. Keep your sign-in details to yourself.</p>"
         "<h2>Coins</h2><p>Coins unlock episodes. They have no cash value, cannot be transferred between "
         "accounts, and are not refundable once spent on an episode.</p>"
         "<h2>Content</h2><p>Episodes are licensed for personal viewing. Recording or redistributing them is "
@@ -56,14 +54,14 @@ PAGES = [
         "about",
         "About Katha",
         True,
-        PLACEHOLDER + "<p>Katha is a short-drama streaming service: complete stories in episodes built for a phone.</p>",
+        PLACEHOLDER
+        + "<p>Katha is a short-drama streaming service: complete stories in episodes built for a phone.</p>",
     ),
     (
         "rate",
         "Rate Katha",
         False,
-        PLACEHOLDER
-        + "<p>Ratings open in the app store. Set the store link in Settings &rarr; Mobile so this page is "
+        PLACEHOLDER + "<p>Ratings open in the app store. Set the store link in Settings &rarr; Mobile so this page is "
         "skipped entirely.</p>",
     ),
 ]
@@ -83,8 +81,10 @@ async def main() -> int:
             if tr is None:
                 tr = CmsPageTranslation(page_id=page.id, lang="en", title=title, body_html=body)
                 db.add(tr)
-            # An existing page is left alone: it may already hold the real text.
-            page.updated_at = datetime.now(UTC)
+                # Only a page that actually gained content is touched. An existing page is left alone — it may
+                # already hold the real text — and bumping its `updated_at` on every run told the sitemap and
+                # every crawler that the privacy policy had changed when nothing had.
+                page.updated_at = datetime.now(UTC)
         await db.commit()
 
     print(f"Created {created} page(s); {len(PAGES) - created} already existed.")

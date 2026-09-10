@@ -77,10 +77,14 @@ async def register_video(body: RegisterVideoIn, admin: CurrentAdmin, db: DB) -> 
     db.add(asset)
     await db.commit()
     try:
-        await jobs.enqueue("transcode_asset", str(asset.id), job_id=f"transcode:{asset.id}")
+        queued = await jobs.enqueue("transcode_asset", str(asset.id), job_id=f"transcode:{asset.id}")
     except Exception as exc:  # noqa: BLE001 - queue down: leave it queued, a sweeper re-enqueues
         asset.error = f"enqueue failed: {exc}"
         await db.commit()
+    else:
+        if queued is None:  # cannot happen for a fresh id, but a silent "queued" that never runs is the worst case
+            asset.error = "enqueue refused: a job with this id is already queued"
+            await db.commit()
     return VideoAssetOut(
         id=asset.id,
         status=asset.status,
@@ -185,13 +189,19 @@ async def video_status(asset_id: uuid.UUID, admin: CurrentAdmin, db: DB) -> Vide
 
 @router.post("/videos/{asset_id}/retry", response_model=VideoAssetOut)
 async def retry_video(asset_id: uuid.UUID, admin: CurrentAdmin, db: DB) -> VideoAssetOut:
+    """Re-run the transcode. 409 `job_in_progress` while the previous run is still queued or running.
+
+    The queue is asked first and the row updated second: the old order marked the asset queued and then let the
+    enqueue be refused, which left a "queued" asset that no worker would ever pick up. The worker resets `error`
+    and sets `transcoding` itself, so nothing it needs depends on this row update landing first.
+    """
     asset = await db.get(VideoAsset, asset_id)
     if asset is None:
         raise AppError("Asset not found", status_code=404, code="not_found")
+    await jobs.enqueue_or_raise("transcode_asset", str(asset.id), job_id=f"transcode:{asset.id}", retry=True)
     asset.status = AssetStatus.queued
     asset.error = None
     await db.commit()
-    await jobs.enqueue("transcode_asset", str(asset.id), job_id=f"transcode:{asset.id}")
     return VideoAssetOut(
         id=asset.id,
         status=asset.status,

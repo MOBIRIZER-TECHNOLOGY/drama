@@ -16,4 +16,7 @@ USER katha
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD python -c "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/ready')" || exit 1
-CMD ["uv", "run", "--no-sync", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]
+# Which peers may set X-Forwarded-* comes from the environment (see Settings.forwarded_allow_ips). Trusting "*"
+# would let any direct connection choose its own client address, and with it its rate-limit bucket. Shell form
+# so the variable expands; `exec` so uvicorn is PID 1 and receives the stop signal itself.
+CMD ["sh", "-c", "exec uv run --no-sync uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips \"${KATHA_FORWARDED_ALLOW_IPS:-127.0.0.1}\""]

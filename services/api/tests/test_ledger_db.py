@@ -91,3 +91,46 @@ async def test_unlock_is_sequential_and_charges_once(session):
     assert (await session.get(User, u.id)).coin_balance == 80
     with pytest.raises(Conflict):
         await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.coins)
+
+
+async def test_the_balance_moves_in_the_database_not_from_a_stale_copy(session):
+    """Two spends in one session used to start from the balance the request authenticated with.
+
+    The user object a handler holds was loaded before any ledger call; computing the new balance from it and
+    writing the sum back meant a balance that had moved behind it was silently overwritten. The move is now
+    one atomic UPDATE, and the loaded object is told what the database returned so the response is right too.
+    """
+    from sqlalchemy import select, update
+
+    u = await _user(session, coins=100)
+    assert u.coin_balance == 100
+    # Another writer moves the balance behind the object this "request" holds, which is now stale.
+    await session.execute(
+        update(User).where(User.id == u.id).values(coin_balance=50),
+        execution_options={"synchronize_session": False},
+    )
+    assert u.coin_balance == 100
+
+    row = await ledger.post(session, user_id=u.id, delta=-20, kind=LedgerKind.unlock, idempotency_key=f"s:{u.id}")
+    assert row.balance_after == 30, "computed from the database's 50, not the object's 100"
+    assert await session.scalar(select(User.coin_balance).where(User.id == u.id)) == 30
+    assert u.coin_balance == 30, "the in-session object reflects what the database returned"
+
+    # The overdraft guard is checked against the database's balance at the moment of the write, and refusing
+    # leaves nothing behind: the next post still sees 30.
+    with pytest.raises(InsufficientCoins):
+        await ledger.post(session, user_id=u.id, delta=-31, kind=LedgerKind.unlock, idempotency_key=f"o:{u.id}")
+    assert u.coin_balance == 30
+    ok = await ledger.post(session, user_id=u.id, delta=-30, kind=LedgerKind.unlock, idempotency_key=f"z:{u.id}")
+    assert ok.balance_after == 0 and u.coin_balance == 0
+
+
+async def test_posting_to_a_missing_user_is_not_found_not_insufficient(session):
+    from app.core.errors import NotFound
+
+    with pytest.raises(NotFound):
+        await ledger.post(session, user_id=uuid.uuid4(), delta=-1, kind=LedgerKind.unlock, idempotency_key="nobody")
+    with pytest.raises(NotFound):
+        await ledger.post(
+            session, user_id=uuid.uuid4(), delta=1, kind=LedgerKind.admin_adjust, idempotency_key="nobody2"
+        )

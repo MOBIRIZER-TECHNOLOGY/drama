@@ -42,7 +42,9 @@ from app.services import access as access_svc
 from app.services import config as config_svc
 from app.services import recommend
 from app.services.media import media_url, sign_hls_url, sign_path
+from app.services.search import LIKE_ESCAPE, like_pattern
 from app.services.storage import public_url
+from app.services.visibility import published_series, published_series_predicates
 
 log = structlog.get_logger()
 router = APIRouter(tags=["catalog"])
@@ -132,8 +134,13 @@ async def _first_episode_ids(db: AsyncSession, series_ids: list[uuid.UUID]) -> d
     return {sid: eid for sid, eid in rows.all()}
 
 
-async def _embedding_neighbours(db: AsyncSession, series: Series, *, limit: int) -> list[Series]:
+async def _embedding_neighbours(
+    db: AsyncSession, series: Series, *, limit: int, lang: str | None = None, country: str | None = None
+) -> list[Series]:
     """Nearest neighbours by embedding, or [] when the vector side is unavailable.
+
+    Filtered by language and territory like the page that shows them: a neighbour the viewer cannot open is a
+    dead card, and a geo-blocked one is a licensing breach dressed up as a recommendation.
 
     Everything here depends on pgvector: the extension, the `embeddings` table and the distance operator. Any
     of those can be missing on an environment that has not run the vector migration, and the failure arrives as
@@ -160,7 +167,7 @@ async def _embedding_neighbours(db: AsyncSession, series: Series, *, limit: int)
                     .where(
                         Embedding.model == own.model,
                         Embedding.series_id != series_id,
-                        Series.status == PublishStatus.published,
+                        *published_series_predicates(lang, country),
                     )
                     .order_by(Embedding.vector.cosine_distance(own.vector))
                     .limit(limit)
@@ -171,13 +178,17 @@ async def _embedding_neighbours(db: AsyncSession, series: Series, *, limit: int)
         return []
     if not neighbour_ids:
         return []
-    rows = {s.id: s for s in (await db.scalars(_published_series().where(Series.id.in_(neighbour_ids)))).all()}
+    rows = {
+        s.id: s for s in (await db.scalars(_published_series(lang, country).where(Series.id.in_(neighbour_ids)))).all()
+    }
     return [rows[i] for i in neighbour_ids if i in rows]
 
 
-async def _similar_series(db: AsyncSession, series: Series, *, limit: int) -> list[Series]:
+async def _similar_series(
+    db: AsyncSession, series: Series, *, limit: int, lang: str | None = None, country: str | None = None
+) -> list[Series]:
     """Nearest neighbours by embedding when the series has one; otherwise shared category."""
-    neighbours = await _embedding_neighbours(db, series, limit=limit)
+    neighbours = await _embedding_neighbours(db, series, limit=limit, lang=lang, country=country)
     if neighbours:
         return neighbours
     if not series.categories:
@@ -186,7 +197,7 @@ async def _similar_series(db: AsyncSession, series: Series, *, limit: int) -> li
     return list(
         (
             await db.scalars(
-                _published_series()
+                _published_series(lang, country)
                 .join(Series.categories)
                 .where(Category.id.in_(cat_ids), Series.id != series.id)
                 .distinct()
@@ -237,22 +248,12 @@ async def _semantic_ids(db: AsyncSession, q: str, *, limit: int) -> list[uuid.UU
 
 
 def _published_series(lang: str | None = None, country: str | None = None):
-    """Published, inside its licensing window, visible in this language and territory."""
-    now = datetime.now(UTC)
-    stmt = (
-        select(Series)
-        .where(
-            Series.status == PublishStatus.published,
-            (Series.window_starts_at.is_(None)) | (Series.window_starts_at <= now),
-            (Series.window_ends_at.is_(None)) | (Series.window_ends_at > now),
-        )
-        .options(selectinload(Series.translations), selectinload(Series.categories))
-    )
-    if lang:
-        stmt = stmt.where((Series.visible_languages.is_(None)) | (Series.visible_languages.any(lang)))
-    if country:
-        stmt = stmt.where((Series.territories.is_(None)) | (Series.territories.any(country)))
-    return stmt
+    """Published, inside its licensing window, visible in this language and territory.
+
+    The predicate lives in `services.visibility` so My List, reports, playback and recommendations apply the
+    same rule as the catalogue; this is the catalogue's name for it.
+    """
+    return published_series(lang, country)
 
 
 def _is_adult(series: Series) -> bool:
@@ -289,20 +290,46 @@ async def home(
     return out
 
 
+HOME_RAIL_SIZE = 12
+HOME_FEATURED_SIZE = 8
+
+
 async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> HomeOut:
+    """Every rail from bounded queries.
+
+    This used to load the entire published catalogue and slice rails out of it in Python — every series, with
+    translations and categories, on every uncached request, which is every request from a signed-in viewer.
+    The editorial base is now capped at the same size browse uses, and the two rails whose order is not
+    editorial (most viewed, newest) get their own twelve-row queries, so each rail is exactly what it was
+    before on a catalogue of any size. Continue and For You reach series outside the base by id.
+
+    Language and territory apply to every rail, including the personalised ones: a card the viewer cannot
+    open is a broken card, and a geo-blocked title on home is a licensing breach.
+    """
+    base = _published_series(lang, country)
     series_rows = list(
-        (await db.scalars(_published_series().order_by(Series.sort_weight.desc(), Series.released_at.desc()))).all()
+        (
+            await db.scalars(
+                base.order_by(Series.sort_weight.desc(), Series.released_at.desc().nullslast(), Series.id).limit(
+                    BROWSE_SERIES_CAP
+                )
+            )
+        ).all()
     )
-    ids = [s.id for s in series_rows]
-    counts = await _episode_counts(db, ids)
-    firsts = await _first_episode_ids(db, ids)
-    cards = {s.id: _card(s, lang, counts.get(s.id, 0), first_episode_id=firsts.get(s.id)) for s in series_rows}
+    top = list((await db.scalars(base.order_by(Series.view_count.desc(), Series.id).limit(HOME_RAIL_SIZE))).all())
+    newest = list(
+        (
+            await db.scalars(
+                base.order_by(func.coalesce(Series.released_at, Series.created_at).desc(), Series.id).limit(
+                    HOME_RAIL_SIZE
+                )
+            )
+        ).all()
+    )
+    by_id: dict[uuid.UUID, Series] = {s.id: s for s in (*series_rows, *top, *newest)}
 
-    rails: list[HomeRail] = []
-    featured = [cards[s.id] for s in series_rows if s.is_featured][:8]
-    if featured:
-        rails.append(HomeRail(key="featured", title="Featured", items=featured))
-
+    continue_rows: list[tuple[WatchProgress, Episode]] = []
+    for_you_ids: list[uuid.UUID] = []
     if ctx is not None:
         recent = await db.execute(
             select(WatchProgress, Episode)
@@ -311,15 +338,39 @@ async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> 
             .order_by(WatchProgress.updated_at.desc())
             .limit(30)
         )
+        continue_rows = list(recent.all())
+        # Catching the error is not enough: a failed statement aborts the transaction, and the category
+        # queries below it then fail too, so a missing embeddings table turned the whole home page into a 500
+        # for every signed-in viewer who had watched anything. The savepoint keeps it to a missing rail.
+        async with best_effort(db, "home.for_you"):
+            for_you_ids = await recommend.for_you_ids(db, ctx.user.id, limit=HOME_RAIL_SIZE, lang=lang, country=country)
+        wanted = {wp.series_id for wp, _ in continue_rows} | set(for_you_ids)
+        missing = [i for i in wanted if i not in by_id]
+        if missing:
+            # Through the same visibility filter, so a series that fell out of its window or territory since
+            # the viewer last watched it drops off Continue rather than linking to a 404.
+            for s in (await db.scalars(base.where(Series.id.in_(missing)))).all():
+                by_id[s.id] = s
+
+    ids = list(by_id)
+    counts = await _episode_counts(db, ids)
+    firsts = await _first_episode_ids(db, ids)
+    cards = {sid: _card(s, lang, counts.get(sid, 0), first_episode_id=firsts.get(sid)) for sid, s in by_id.items()}
+
+    rails: list[HomeRail] = []
+    featured = [cards[s.id] for s in series_rows if s.is_featured][:HOME_FEATURED_SIZE]
+    if featured:
+        rails.append(HomeRail(key="featured", title="Featured", items=featured))
+
+    if ctx is not None:
         cont: list[SeriesCard] = []
         seen: set[uuid.UUID] = set()
-        for wp, ep in recent.all():
+        for wp, ep in continue_rows:
             if wp.series_id in seen or wp.series_id not in cards:
                 continue
             seen.add(wp.series_id)
-            base = cards[wp.series_id]
             cont.append(
-                base.model_copy(
+                cards[wp.series_id].model_copy(
                     update={
                         "progress": ContinueProgress(
                             episode_id=ep.id,
@@ -330,27 +381,17 @@ async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> 
                     }
                 )
             )
-            if len(cont) >= 12:
+            if len(cont) >= HOME_RAIL_SIZE:
                 break
         if cont:
             rails.append(HomeRail(key="continue", title="Continue Watching", items=cont))
 
-    if ctx is not None:
-        # Catching the error is not enough: a failed statement aborts the transaction, and the category
-        # queries below it then fail too, so a missing embeddings table turned the whole home page into a 500
-        # for every signed-in viewer who had watched anything. The savepoint keeps it to a missing rail.
-        ids: list[uuid.UUID] = []
-        async with best_effort(db, "home.for_you"):
-            ids = await recommend.for_you_ids(db, ctx.user.id, limit=12)
-        picks = [cards[i] for i in ids if i in cards]
+        picks = [cards[i] for i in for_you_ids if i in cards]
         if picks:
             rails.append(HomeRail(key="for_you", title="For You", items=picks))
 
-    top = sorted(series_rows, key=lambda s: s.view_count, reverse=True)[:12]
     if top:
         rails.append(HomeRail(key="top_picks", title="Top Picks", items=[cards[s.id] for s in top]))
-
-    newest = sorted(series_rows, key=lambda s: s.released_at or s.created_at, reverse=True)[:12]
     if newest:
         rails.append(HomeRail(key="newest", title="New Releases", items=[cards[s.id] for s in newest]))
 
@@ -358,7 +399,7 @@ async def _build_home(db: AsyncSession, ctx, lang: str, country: str | None) -> 
         await db.scalars(select(Category).where(Category.show_on_home.is_(True)).order_by(Category.sort_order))
     ).all()
     for cat in categories:
-        items = [cards[s.id] for s in series_rows if any(c.id == cat.id for c in s.categories)][:12]
+        items = [cards[s.id] for s in series_rows if any(c.id == cat.id for c in s.categories)][:HOME_RAIL_SIZE]
         if items:
             rails.append(HomeRail(key=f"category:{cat.slug}", title=cat.name, items=items))
     return HomeOut(rails=rails)
@@ -371,13 +412,13 @@ async def list_series(
     db: DB,
     country: Annotated[str | None, Depends(client_country)],
     lang: Lang = "en",
-    category: str | None = None,
-    q: str | None = None,
+    category: Annotated[str | None, Query(max_length=80)] = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
     sort: Annotated[str, Query(pattern="^(featured|popular|newest|updated)$")] = "featured",
     status: Annotated[str | None, Query(pattern="^(ongoing|completed)$")] = None,
     length: Annotated[str | None, Query(pattern="^(short|medium|long)$")] = None,
-    limit: Annotated[int, Query(le=100)] = 40,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=100)] = 40,
+    offset: Annotated[int, Query(ge=0, le=10_000)] = 0,
 ) -> list[SeriesCard]:
     """The catalogue, filtered and ordered.
 
@@ -415,7 +456,11 @@ async def list_series(
         rows = [found[i] for i in semantic_ids if i in found]
     else:
         if q:
-            stmt = stmt.join(Series.translations).where(SeriesTranslation.title.ilike(f"%{q}%")).distinct()
+            stmt = (
+                stmt.join(Series.translations)
+                .where(SeriesTranslation.title.ilike(like_pattern(q), escape=LIKE_ESCAPE))
+                .distinct()
+            )
         # A stable tiebreak on id keeps paging deterministic: without it two series with equal weight can
         # swap places between pages and one of them is never shown.
         order = {
@@ -546,7 +591,7 @@ async def series_detail(
             continue_number = ep_by_id[wp.episode_id].number if wp.episode_id in ep_by_id else None
 
     # Similar series: same category for now; embeddings replace this in phase 3.
-    similar_rows = await _similar_series(db, series, limit=8)
+    similar_rows = await _similar_series(db, series, limit=8, lang=lang, country=country)
     all_ids = [series.id] + [s.id for s in similar_rows]
     counts = await _episode_counts(db, all_ids)
     firsts = await _first_episode_ids(db, all_ids)
@@ -736,9 +781,7 @@ async def unlock_bundle(request: Request, series_id: uuid.UUID, ctx: CurrentUser
     """Unlock the rest of the series in one transaction, at the bundle discount."""
     variants = await config_svc.variant_map(db, ctx.user.id)
     before = ctx.user.coin_balance
-    rows = await access_svc.unlock_series_bundle(
-        db, user=ctx.user, series_id=series_id, variant_map=variants or None
-    )
+    rows = await access_svc.unlock_series_bundle(db, user=ctx.user, series_id=series_id, variant_map=variants or None)
     await db.commit()
     await db.refresh(ctx.user)
     return BundleUnlockOut(
@@ -750,14 +793,25 @@ async def unlock_bundle(request: Request, series_id: uuid.UUID, ctx: CurrentUser
 
 
 @router.post("/episodes/{episode_id}/play", response_model=PlayOut)
-async def play(episode_id: uuid.UUID, ctx: OptionalUser, db: DB) -> PlayOut:
+async def play(
+    episode_id: uuid.UUID, ctx: OptionalUser, db: DB, country: Annotated[str | None, Depends(client_country)]
+) -> PlayOut:
     """Access check, then a short-lived signed playback URL. Locked episodes never get a URL.
 
     Guests may play free episodes (the hook before sign-up); anything else needs a session.
+
+    The series is checked with the same predicate the catalogue uses, not just the episode's own status: an
+    episode of an archived series, or of one outside its licensing window or territory, stayed playable to
+    anyone holding its id, which made unpublishing a title cosmetic.
     """
     episode = await db.scalar(
         select(Episode)
-        .where(Episode.id == episode_id, Episode.status == PublishStatus.published)
+        .join(Series, Series.id == Episode.series_id)
+        .where(
+            Episode.id == episode_id,
+            Episode.status == PublishStatus.published,
+            *published_series_predicates(country=country),
+        )
         .options(selectinload(Episode.video_asset), selectinload(Episode.series))
     )
     if episode is None:

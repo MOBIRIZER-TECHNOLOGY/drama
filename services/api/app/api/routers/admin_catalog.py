@@ -1,9 +1,12 @@
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Annotated, Literal
 
+import structlog
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
@@ -19,6 +22,7 @@ from app.models.catalog import (
     Tag,
     VideoAsset,
 )
+from app.models.wallet import EpisodeUnlock
 from app.schemas.admin import (
     AdminCategoryOut,
     AdminEpisodeOut,
@@ -30,8 +34,11 @@ from app.schemas.admin import (
     SeriesTranslationOut,
 )
 from app.schemas.common import Ok
+from app.services import audit
 from app.services.html import validate_embed_html
+from app.services.search import LIKE_ESCAPE, like_pattern
 
+log = structlog.get_logger()
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.editor)])
 
 _slug_re = re.compile(r"[^a-z0-9]+")
@@ -83,9 +90,39 @@ def _series_query():
     )
 
 
+SeriesSort = Literal["title", "status", "episode_count", "view_count", "like_count", "updated_at", "created_at"]
+SortOrder = Literal["asc", "desc"]
+
+
+def _series_sort_column(sort: SeriesSort):
+    """The expression a sort key orders by.
+
+    `title` is the title in the series' own language — the one editors recognise a show by — falling back to
+    the slug for a series that has no translation in it yet, so nothing sorts to a null hole. `episode_count`
+    is counted in the database rather than from the per-page tally below: the console sorts across the whole
+    catalogue, and a count taken after the page was cut would only reorder that page.
+    """
+    if sort == "title":
+        original = (
+            select(SeriesTranslation.title)
+            .where(SeriesTranslation.series_id == Series.id, SeriesTranslation.lang == Series.original_language)
+            .scalar_subquery()
+        )
+        return func.lower(func.coalesce(original, Series.slug))
+    if sort == "episode_count":
+        return select(func.count()).where(Episode.series_id == Series.id).scalar_subquery()
+    return getattr(Series, sort)
+
+
 @router.get("/series", response_model=AdminSeriesPage)
 async def list_series(
-    db: DB, q: str | None = None, status: PublishStatus | None = None, limit: int = Query(50, le=200), offset: int = 0
+    db: DB,
+    q: Annotated[str | None, Query(max_length=120)] = None,
+    status: PublishStatus | None = None,
+    sort: SeriesSort | None = None,
+    order: SortOrder = "desc",
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AdminSeriesPage:
     stmt = _series_query()
     count_stmt = select(func.count()).select_from(Series)
@@ -93,12 +130,21 @@ async def list_series(
         stmt = stmt.where(Series.status == status)
         count_stmt = count_stmt.where(Series.status == status)
     if q:
-        stmt = stmt.join(Series.translations).where(SeriesTranslation.title.ilike(f"%{q}%")).distinct()
-        count_stmt = count_stmt.where(
-            Series.id.in_(select(SeriesTranslation.series_id).where(SeriesTranslation.title.ilike(f"%{q}%")))
-        )
+        # Filtered with a semi-join rather than a JOIN ... DISTINCT: a series with two matching translations
+        # must appear once, and DISTINCT would refuse to order by anything not in the select list — which the
+        # title and episode-count sorts are.
+        title_match = SeriesTranslation.title.ilike(like_pattern(q), escape=LIKE_ESCAPE)
+        matching = Series.id.in_(select(SeriesTranslation.series_id).where(title_match))
+        stmt = stmt.where(matching)
+        count_stmt = count_stmt.where(matching)
     total = await db.scalar(count_stmt) or 0
-    rows = list((await db.scalars(stmt.order_by(Series.updated_at.desc()).limit(limit).offset(offset))).all())
+    if sort is None:
+        ordering = Series.updated_at.desc()
+    else:
+        column = _series_sort_column(sort)
+        ordering = (column.desc() if order == "desc" else column.asc()).nulls_last()
+    # The id tiebreak makes the order total, so paging never shows a row twice or skips one across equal keys.
+    rows = list((await db.scalars(stmt.order_by(ordering, Series.id).limit(limit).offset(offset))).all())
     counts = dict(
         (
             await db.execute(
@@ -117,8 +163,6 @@ async def _apply_series(db, s: Series, body: SeriesIn) -> None:
         "territories",
         "window_starts_at",
         "window_ends_at",
-        "moderation_flags",
-        "moderation_note",
         "cover_url",
         "banner_url",
         "original_language",
@@ -164,15 +208,50 @@ async def _apply_series(db, s: Series, body: SeriesIn) -> None:
     s.tags = tags
 
 
+def _audit_status_change(
+    db, admin: CurrentAdmin, *, target_type: str, target_id: uuid.UUID, before: PublishStatus, after: PublishStatus
+) -> None:
+    """One row when a title's public visibility changes, named for what happened rather than "saved".
+
+    Publishing and unpublishing are the two edits someone may have to account for later — a takedown, a
+    licensing complaint, a title that went live early — and a generic "series.update" row would bury them
+    among every synopsis correction.
+    """
+    if before == after:
+        return
+    if after == PublishStatus.published:
+        action = f"{target_type}.publish"
+    elif before == PublishStatus.published:
+        action = f"{target_type}.unpublish"
+    else:
+        return
+    audit.record(
+        db,
+        admin=admin,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        before={"status": before.value},
+        after={"status": after.value},
+    )
+
+
 @router.post("/series", response_model=AdminSeriesOut, status_code=201)
 async def create_series(body: SeriesIn, db: DB, admin: CurrentAdmin) -> AdminSeriesOut:
     slug = body.slug or slugify(body.translations[0].title)
     if await db.scalar(select(Series.id).where(Series.slug == slug)):
         raise Conflict("Slug already exists", code="slug_taken")
     s = Series(slug=slug)
-    db.add(s)
-    await db.flush()
+    # The check above is advisory; two editors saving the same slug at once both pass it. The unique index is
+    # the real guard, and the savepoint turns its failure into the same 409 instead of a 500.
+    try:
+        async with db.begin_nested():
+            db.add(s)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict("Slug already exists", code="slug_taken") from None
     await _apply_series(db, s, body)
+    _audit_status_change(db, admin, target_type="series", target_id=s.id, before=PublishStatus.draft, after=s.status)
     await db.commit()
     if s.status == PublishStatus.published:
         await _on_publish(s)
@@ -194,7 +273,7 @@ async def get_series(series_id: uuid.UUID, db: DB) -> AdminSeriesOut:
 
 
 @router.put("/series/{series_id}", response_model=AdminSeriesOut)
-async def update_series(series_id: uuid.UUID, body: SeriesIn, db: DB) -> AdminSeriesOut:
+async def update_series(series_id: uuid.UUID, body: SeriesIn, db: DB, admin: CurrentAdmin) -> AdminSeriesOut:
     s = await db.scalar(_series_query().where(Series.id == series_id))
     if s is None:
         raise NotFound("Series")
@@ -202,8 +281,10 @@ async def update_series(series_id: uuid.UUID, body: SeriesIn, db: DB) -> AdminSe
         if await db.scalar(select(Series.id).where(Series.slug == body.slug, Series.id != s.id)):
             raise Conflict("Slug already exists", code="slug_taken")
         s.slug = body.slug
-    was_published = s.status == PublishStatus.published
+    previous_status = s.status
+    was_published = previous_status == PublishStatus.published
     await _apply_series(db, s, body)
+    _audit_status_change(db, admin, target_type="series", target_id=s.id, before=previous_status, after=s.status)
     await db.commit()
     if s.status == PublishStatus.published and not was_published:
         await _on_publish(s)
@@ -217,16 +298,26 @@ async def update_series(series_id: uuid.UUID, body: SeriesIn, db: DB) -> AdminSe
 
 
 @router.delete("/series/{series_id}", response_model=Ok)
-async def delete_series(series_id: uuid.UUID, db: DB) -> Ok:
+async def delete_series(series_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
     s = await db.get(Series, series_id)
     if s is None:
         raise NotFound("Series")
-    from app.models.wallet import EpisodeUnlock
-
     if await db.scalar(select(EpisodeUnlock.id).where(EpisodeUnlock.series_id == series_id).limit(1)):
-        s.status = PublishStatus.archived  # paid unlocks reference it: archive, never destroy the evidence
+        # Paid unlocks reference it: archive, never destroy the evidence of what someone paid for.
+        audit.record(
+            db,
+            admin=admin,
+            action="series.archive",
+            target_type="series",
+            target_id=s.id,
+            note="delete requested; archived because paid unlocks reference it",
+            before={"status": s.status.value, "slug": s.slug},
+            after={"status": PublishStatus.archived.value, "slug": s.slug},
+        )
+        s.status = PublishStatus.archived
         await db.commit()
         return Ok()
+    audit.record(db, admin=admin, action="series.delete", target_type="series", target_id=s.id, before={"slug": s.slug})
     await db.delete(s)
     await db.commit()
     return Ok()
@@ -237,10 +328,13 @@ async def _on_publish(s: Series) -> None:
     from app.services import jobs
 
     try:
-        await jobs.enqueue("run_ingestion", str(s.id), job_id=f"ingest:{s.id}")
-        await jobs.enqueue("indexnow_ping", [f"series/{s.slug}"], job_id=f"indexnow:{s.slug}")
+        # `retry=True`: re-publishing after an edit must re-run ingestion even if the last run's result is
+        # still being kept; a run in flight is deduplicated, which is what a None here means.
+        if await jobs.enqueue("run_ingestion", str(s.id), job_id=f"ingest:{s.id}", retry=True) is None:
+            log.info("ingest.already_queued", series_id=str(s.id))
+        await jobs.enqueue("indexnow_ping", [f"series/{s.slug}"], job_id=f"indexnow:{s.slug}", retry=True)
     except Exception:  # noqa: BLE001 - queue down; a sweeper can re-run ingestion
-        pass
+        log.warning("ingest.enqueue_failed", series_id=str(s.id), exc_info=True)
 
 
 def _episode_out(e: Episode) -> AdminEpisodeOut:
@@ -250,7 +344,7 @@ def _episode_out(e: Episode) -> AdminEpisodeOut:
 
 
 @router.post("/series/{series_id}/episodes", response_model=AdminEpisodeOut, status_code=201)
-async def create_episode(series_id: uuid.UUID, body: EpisodeIn, db: DB) -> AdminEpisodeOut:
+async def create_episode(series_id: uuid.UUID, body: EpisodeIn, db: DB, admin: CurrentAdmin) -> AdminEpisodeOut:
     if await db.get(Series, series_id) is None:
         raise NotFound("Series")
     if await db.scalar(select(Episode.id).where(Episode.series_id == series_id, Episode.number == body.number)):
@@ -258,14 +352,20 @@ async def create_episode(series_id: uuid.UUID, body: EpisodeIn, db: DB) -> Admin
     e = Episode(series_id=series_id, **body.model_dump())
     e.embed_html = validate_embed_html(e.embed_html)
     await _sync_asset(db, e)
-    db.add(e)
+    try:
+        async with db.begin_nested():
+            db.add(e)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict(f"Episode {body.number} already exists", code="episode_exists") from None
+    _audit_status_change(db, admin, target_type="episode", target_id=e.id, before=PublishStatus.draft, after=e.status)
     await db.commit()
     e = await db.scalar(select(Episode).where(Episode.id == e.id).options(selectinload(Episode.video_asset)))
     return _episode_out(e)
 
 
 @router.put("/episodes/{episode_id}", response_model=AdminEpisodeOut)
-async def update_episode(episode_id: uuid.UUID, body: EpisodeIn, db: DB) -> AdminEpisodeOut:
+async def update_episode(episode_id: uuid.UUID, body: EpisodeIn, db: DB, admin: CurrentAdmin) -> AdminEpisodeOut:
     e = await db.scalar(select(Episode).where(Episode.id == episode_id).options(selectinload(Episode.video_asset)))
     if e is None:
         raise NotFound("Episode")
@@ -273,10 +373,12 @@ async def update_episode(episode_id: uuid.UUID, body: EpisodeIn, db: DB) -> Admi
         select(Episode.id).where(Episode.series_id == e.series_id, Episode.number == body.number)
     ):
         raise Conflict(f"Episode {body.number} already exists", code="episode_exists")
+    previous_status = e.status
     for k, v in body.model_dump().items():
         setattr(e, k, v)
     e.embed_html = validate_embed_html(e.embed_html)
     await _sync_asset(db, e)
+    _audit_status_change(db, admin, target_type="episode", target_id=e.id, before=previous_status, after=e.status)
     await db.commit()
     e = await db.scalar(select(Episode).where(Episode.id == episode_id).options(selectinload(Episode.video_asset)))
     return _episode_out(e)
@@ -296,10 +398,38 @@ async def _sync_asset(db, e: Episode) -> None:
 
 
 @router.delete("/episodes/{episode_id}", response_model=Ok)
-async def delete_episode(episode_id: uuid.UUID, db: DB) -> Ok:
+async def delete_episode(episode_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
+    """Delete an episode, unless someone has paid for it — then archive it, as `delete_series` does.
+
+    `episode_unlocks` cascades on episode delete, so removing an episode used to remove the record that a
+    viewer spent coins on it, with the ledger row left pointing at nothing. The unlock is the receipt; it is
+    kept and the episode is hidden instead.
+    """
     e = await db.get(Episode, episode_id)
     if e is None:
         raise NotFound("Episode")
+    if await db.scalar(select(EpisodeUnlock.id).where(EpisodeUnlock.episode_id == episode_id).limit(1)):
+        audit.record(
+            db,
+            admin=admin,
+            action="episode.archive",
+            target_type="episode",
+            target_id=e.id,
+            note="delete requested; archived because paid unlocks reference it",
+            before={"status": e.status.value, "number": e.number},
+            after={"status": PublishStatus.archived.value, "number": e.number},
+        )
+        e.status = PublishStatus.archived
+        await db.commit()
+        return Ok()
+    audit.record(
+        db,
+        admin=admin,
+        action="episode.delete",
+        target_type="episode",
+        target_id=e.id,
+        before={"series_id": str(e.series_id), "number": e.number, "status": e.status.value},
+    )
     await db.delete(e)
     await db.commit()
     return Ok()
@@ -333,9 +463,7 @@ def _apply_translations(c: Category, translations: dict[str, str]) -> None:
 async def categories(db: DB) -> list[AdminCategoryOut]:
     rows = await db.scalars(select(Category).order_by(Category.sort_order, Category.name))
     cats = rows.all()
-    tally = await db.execute(
-        select(SeriesCategory.category_id, func.count()).group_by(SeriesCategory.category_id)
-    )
+    tally = await db.execute(select(SeriesCategory.category_id, func.count()).group_by(SeriesCategory.category_id))
     counts = dict(tally.all())
     return [_category_out(c, counts.get(c.id, 0)) for c in cats]
 
@@ -348,7 +476,12 @@ async def create_category(body: CategoryIn, db: DB) -> AdminCategoryOut:
     translations = fields.pop("translations", {})
     c = Category(**fields)
     _apply_translations(c, translations)
-    db.add(c)
+    try:
+        async with db.begin_nested():
+            db.add(c)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict("Slug already exists", code="slug_taken") from None
     await db.commit()
     # `Category.translations` is `lazy="selectin"`, which loads eagerly for objects that came out of a query
     # — and this one never did, it was just inserted. Serialising it therefore triggers a lazy load on an
@@ -370,17 +503,27 @@ async def update_category(category_id: uuid.UUID, body: CategoryIn, db: DB) -> A
         setattr(c, k, v)
     _apply_translations(c, translations)
     await db.commit()
-    count = await db.scalar(
-        select(func.count()).select_from(SeriesCategory).where(SeriesCategory.category_id == c.id)
-    )
+    count = await db.scalar(select(func.count()).select_from(SeriesCategory).where(SeriesCategory.category_id == c.id))
     return _category_out(c, count or 0)
 
 
 @router.delete("/categories/{category_id}", response_model=Ok)
-async def delete_category(category_id: uuid.UUID, db: DB) -> Ok:
+async def delete_category(category_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
     c = await db.get(Category, category_id)
     if c is None:
         raise NotFound("Category")
+    attached = await db.scalar(
+        select(func.count()).select_from(SeriesCategory).where(SeriesCategory.category_id == c.id)
+    )
+    # Deleting a genre silently detaches it from every series and removes a rail from home; worth a row.
+    audit.record(
+        db,
+        admin=admin,
+        action="category.delete",
+        target_type="category",
+        target_id=c.id,
+        before={"slug": c.slug, "name": c.name, "series_count": int(attached or 0)},
+    )
     await db.delete(c)
     await db.commit()
     return Ok()

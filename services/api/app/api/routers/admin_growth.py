@@ -5,17 +5,17 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import String, cast, func, select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import String, case, cast, func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.types import Date, Float
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
+from app.core.config import get_settings
 from app.core.errors import Conflict, NotFound
 from app.models.engagement import AnalyticsEvent
-from app.models.identity import User
 from app.models.ops import AuditLog, Experiment, ExperimentAssignment, FeatureFlag
 from app.models.wallet import CoinLedger, Coupon, EpisodeUnlock, Offer, Purchase, PurchaseStatus
-from app.schemas.common import Ok
+from app.schemas.common import Ok, UtcDatetime
 from app.services import audit, stats
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.finance, AdminRole.editor)])
@@ -87,34 +87,75 @@ async def create_experiment(body: ExperimentIn, db: DB) -> ExperimentOut:
     return _exp_out(e)
 
 
+def _exp_snapshot(e: Experiment) -> dict:
+    return {
+        "allocation": e.allocation,
+        "variants": sorted(e.variants),
+        "started_at": e.started_at.isoformat() if e.started_at else None,
+        "ended_at": e.ended_at.isoformat() if e.ended_at else None,
+    }
+
+
+# An experiment decides what price or paywall a slice of the audience sees. Starting, stopping and
+# reallocating one are revenue decisions, and "who changed the split mid-test" has to be answerable.
 @router.put("/experiments/{key}", response_model=ExperimentOut)
-async def update_experiment(key: str, body: ExperimentIn, db: DB) -> ExperimentOut:
+async def update_experiment(key: str, body: ExperimentIn, db: DB, admin: CurrentAdmin) -> ExperimentOut:
     e = await db.get(Experiment, key)
     if e is None:
         raise NotFound("Experiment")
     if e.started_at is not None and body.variants.keys() != e.variants.keys():
         raise Conflict("Cannot change variants of a running experiment", code="running")
+    before = _exp_snapshot(e)
     e.description, e.variants, e.allocation = body.description, body.variants, body.allocation
+    audit.record(
+        db,
+        admin=admin,
+        action="experiment.update",
+        target_type="experiment",
+        target_id=key,
+        before=before,
+        after=_exp_snapshot(e),
+    )
     await db.commit()
     return _exp_out(e)
 
 
 @router.post("/experiments/{key}/start", response_model=ExperimentOut)
-async def start_experiment(key: str, db: DB) -> ExperimentOut:
+async def start_experiment(key: str, db: DB, admin: CurrentAdmin) -> ExperimentOut:
     e = await db.get(Experiment, key)
     if e is None:
         raise NotFound("Experiment")
+    before = _exp_snapshot(e)
     e.started_at, e.ended_at = datetime.now(UTC), None
+    audit.record(
+        db,
+        admin=admin,
+        action="experiment.start",
+        target_type="experiment",
+        target_id=key,
+        before=before,
+        after=_exp_snapshot(e),
+    )
     await db.commit()
     return _exp_out(e)
 
 
 @router.post("/experiments/{key}/stop", response_model=ExperimentOut)
-async def stop_experiment(key: str, db: DB) -> ExperimentOut:
+async def stop_experiment(key: str, db: DB, admin: CurrentAdmin) -> ExperimentOut:
     e = await db.get(Experiment, key)
     if e is None:
         raise NotFound("Experiment")
+    before = _exp_snapshot(e)
     e.ended_at = datetime.now(UTC)
+    audit.record(
+        db,
+        admin=admin,
+        action="experiment.stop",
+        target_type="experiment",
+        target_id=key,
+        before=before,
+        after=_exp_snapshot(e),
+    )
     await db.commit()
     return _exp_out(e)
 
@@ -327,8 +368,8 @@ class OfferIn(BaseModel):
     pack_id: uuid.UUID | None = None
     discount_pct: int | None = Field(default=None, ge=1, le=90)
     eligibility: dict | None = None  # {"first_purchase": true, "inactive_days": 14, "countries": ["IN"]}
-    starts_at: datetime | None = None
-    ends_at: datetime | None = None
+    starts_at: UtcDatetime | None = None
+    ends_at: UtcDatetime | None = None
     is_active: bool = True
 
 
@@ -371,42 +412,92 @@ async def offers(db: DB) -> list[OfferOut]:
     return [await _offer_out(db, o) for o in rows.all()]
 
 
+def _offer_snapshot(o: Offer) -> dict:
+    return {
+        "title": o.title,
+        "kind": o.kind,
+        "pack_id": str(o.pack_id) if o.pack_id else None,
+        "discount_pct": o.discount_pct,
+        "eligibility": o.eligibility,
+        "starts_at": o.starts_at.isoformat() if o.starts_at else None,
+        "ends_at": o.ends_at.isoformat() if o.ends_at else None,
+        "is_active": o.is_active,
+    }
+
+
+# Offers and coupons are discounts on real money. Every create, change and removal is recorded, because a
+# 90% coupon that appeared for an afternoon is exactly the thing finance will ask about afterwards.
 @router.post("/offers", response_model=OfferOut, status_code=201)
-async def create_offer(body: OfferIn, db: DB) -> OfferOut:
+async def create_offer(body: OfferIn, db: DB, admin: CurrentAdmin) -> OfferOut:
     o = Offer(**body.model_dump())
     db.add(o)
+    await db.flush()
+    audit.record(db, admin=admin, action="offer.create", target_type="offer", target_id=o.id, after=_offer_snapshot(o))
     await db.commit()
     return await _offer_out(db, o)
 
 
 @router.put("/offers/{offer_id}", response_model=OfferOut)
-async def update_offer(offer_id: uuid.UUID, body: OfferIn, db: DB) -> OfferOut:
+async def update_offer(offer_id: uuid.UUID, body: OfferIn, db: DB, admin: CurrentAdmin) -> OfferOut:
     o = await db.get(Offer, offer_id)
     if o is None:
         raise NotFound("Offer")
+    before = _offer_snapshot(o)
     for k, v in body.model_dump().items():
         setattr(o, k, v)
+    audit.record(
+        db,
+        admin=admin,
+        action="offer.update",
+        target_type="offer",
+        target_id=o.id,
+        before=before,
+        after=_offer_snapshot(o),
+    )
     await db.commit()
     return await _offer_out(db, o)
 
 
 @router.post("/offers/{offer_id}/coupons", response_model=CouponOut, status_code=201)
-async def add_coupon(offer_id: uuid.UUID, body: CouponIn, db: DB) -> CouponOut:
+async def add_coupon(offer_id: uuid.UUID, body: CouponIn, db: DB, admin: CurrentAdmin) -> CouponOut:
     if await db.get(Offer, offer_id) is None:
         raise NotFound("Offer")
     if await db.scalar(select(Coupon.id).where(Coupon.code == body.code)):
         raise Conflict("Coupon code exists", code="code_taken")
     c = Coupon(code=body.code, offer_id=offer_id, max_uses=body.max_uses)
-    db.add(c)
+    # The lookup above is advisory; the unique index on `code` is the guard, and the savepoint turns a lost
+    # race into the same 409 instead of a 500.
+    try:
+        async with db.begin_nested():
+            db.add(c)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict("Coupon code exists", code="code_taken") from None
+    audit.record(
+        db,
+        admin=admin,
+        action="coupon.create",
+        target_type="coupon",
+        target_id=c.id,
+        after={"code": c.code, "offer_id": str(offer_id), "max_uses": c.max_uses},
+    )
     await db.commit()
     return CouponOut(id=c.id, code=c.code, max_uses=c.max_uses, used=c.used)
 
 
 @router.delete("/coupons/{coupon_id}", response_model=Ok)
-async def delete_coupon(coupon_id: uuid.UUID, db: DB) -> Ok:
+async def delete_coupon(coupon_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
     c = await db.get(Coupon, coupon_id)
     if c is None:
         raise NotFound("Coupon")
+    audit.record(
+        db,
+        admin=admin,
+        action="coupon.delete",
+        target_type="coupon",
+        target_id=c.id,
+        before={"code": c.code, "offer_id": str(c.offer_id), "max_uses": c.max_uses, "used": c.used},
+    )
     await db.delete(c)
     await db.commit()
     return Ok()
@@ -428,8 +519,14 @@ class QoeRow(BaseModel):
 @router.get("/analytics/qoe", response_model=list[QoeRow])
 async def qoe(db: DB, days: int = Query(14, ge=1, le=90)) -> list[QoeRow]:
     since = datetime.now(UTC) - timedelta(days=days)
-    day = cast(AnalyticsEvent.ts, Date)
-    ttff = cast(AnalyticsEvent.props["ttff_ms"].astext, Float)
+    # Bucketed in the product timezone: the operator reads "yesterday" as a local day, and a UTC boundary put
+    # an Indian evening's plays into the following date.
+    day = cast(func.timezone(get_settings().reward_timezone, AnalyticsEvent.ts), Date)
+    # Events come from clients, and a client can send `ttff_ms: "fast"`. A bare cast raises for the whole
+    # query — one bad beacon blanked the screen — so only values that look like numbers are cast, and CASE
+    # is what keeps Postgres from evaluating the cast on the rest.
+    ttff_text = AnalyticsEvent.props["ttff_ms"].astext
+    ttff = case((ttff_text.op("~")(r"^\d+(\.\d+)?$"), cast(ttff_text, Float)), else_=None)
     starts = (
         select(
             day.label("d"),
@@ -499,7 +596,8 @@ async def funnel(db: DB, days: int = Query(30, ge=1, le=365)) -> FunnelOut:
     payment webhook and is true regardless of whether a client analytics beacon ever arrived.
     """
     since = datetime.now(UTC) - timedelta(days=days)
-    actor = func.coalesce(cast(AnalyticsEvent.user_id, String), AnalyticsEvent.session_id)
+    # Both sides cast: COALESCE(varchar, uuid) is a type error in Postgres, and this query 500'd every time.
+    actor = func.coalesce(cast(AnalyticsEvent.user_id, String), cast(AnalyticsEvent.session_id, String))
 
     async def actors(name: str, within: set[str] | None) -> set[str]:
         rows = await db.scalars(
@@ -524,6 +622,4 @@ async def funnel(db: DB, days: int = Query(30, ge=1, le=365)) -> FunnelOut:
     )
     paid = {str(u) for u in paid_rows.all()}
     steps.append({"name": "paid", "users": len(paid & reached) if reached is not None else len(paid)})
-
-    _ = (User, JSONB)  # keep imports for future breakdowns
     return FunnelOut(range_days=days, steps=steps)

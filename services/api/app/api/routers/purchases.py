@@ -1,3 +1,4 @@
+import asyncio
 import uuid
 from decimal import Decimal
 from typing import Annotated
@@ -7,7 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import DB, CurrentUser, client_country
 from app.core.config import get_settings
-from app.core.errors import AppError, NotFound
+from app.core.errors import AppError, NotFound, Unauthorized
 from app.core.ratelimit import limiter
 from app.models.wallet import Purchase
 from app.schemas.purchases import CheckoutIn, CheckoutOut, PlayRedeemIn, PurchaseOut, QuoteIn, QuoteOut
@@ -61,7 +62,9 @@ async def checkout(
     country: Annotated[str | None, Depends(client_country)],
 ) -> CheckoutOut:
     variants = await config_svc.variant_map(db, ctx.user.id)
-    country = body.country if body.country and body.country != "*" else (country or "*")
+    # The country is the edge's word, never the client's. Regional prices exist because some markets pay less,
+    # and a body field would let anyone claim to be in the cheapest one. Unknown becomes "*", the world price.
+    country = country or "*"
     purchase, handle = await payments.create_purchase(
         db,
         user=ctx.user,
@@ -109,7 +112,7 @@ async def quote(
     country: Annotated[str | None, Depends(client_country)],
 ) -> QuoteOut:
     """Price a pack with any offer or coupon applied, without creating a purchase."""
-    resolved = body.country if body.country and body.country != "*" else (country or "*")
+    resolved = country or "*"  # edge-resolved, for the same reason as checkout
     q = await payments.quote_purchase(
         db,
         user=ctx.user,
@@ -153,13 +156,15 @@ async def list_purchases(ctx: CurrentUser, db: DB) -> list[PurchaseOut]:
 
 
 async def _apply(db, gateway: str, event_id: str, event_type: str | None, event: dict, apply) -> dict:
+    # `record_event` returns None for an event that already succeeded and the cleared row for one whose last
+    # delivery errored, so a gateway retry after a transient failure is processed rather than swallowed.
     row = await payments.record_event(db, gateway, event_id, event_type, event)
     if row is None:
         await db.rollback()
         return {"result": "duplicate"}
     try:
         result = await apply(db, event)
-        await payments.finish_event(row, result)
+        payments.finish_event(row, result)
         await db.commit()
         return {"result": result}
     except Exception as exc:  # noqa: BLE001 - keep the inbox row so the event can be re-driven
@@ -167,7 +172,7 @@ async def _apply(db, gateway: str, event_id: str, event_type: str | None, event:
         async with db.begin():
             row2 = await payments.record_event(db, gateway, event_id, event_type, event)
             if row2 is not None:
-                await payments.finish_event(row2, "error", str(exc)[:1000])
+                payments.finish_event(row2, "error", str(exc)[:1000])
         raise
 
 
@@ -194,3 +199,40 @@ async def razorpay_webhook(request: Request, db: DB, x_razorpay_signature: str =
     event = payments.verify_razorpay(payload, x_razorpay_signature, s.razorpay_webhook_secret)
     event_id = payments.razorpay_event_id(event, dict(request.headers))
     return await _apply(db, "razorpay", event_id, event.get("event"), event, payments.apply_razorpay_event)
+
+
+@router.post("/webhooks/play", include_in_schema=False)
+async def play_webhook(request: Request, db: DB, authorization: str = Header(default="")) -> dict:
+    """Google Play real-time developer notifications, delivered by a Pub/Sub push subscription.
+
+    This is the refund half of Play billing: `/purchases/play/redeem` grants coins, and without this route
+    nothing ever took them back when Google refunded or voided the purchase. Pub/Sub authenticates with a
+    Google-signed OIDC bearer token rather than an HMAC, so the check is a signature *and* an identity: the
+    token has to name this endpoint as its audience and the one service account the subscription uses.
+    """
+    s = get_settings()
+    if not (s.google_play_rtdn_audience and s.google_play_rtdn_service_account_email):
+        raise AppError("Google Play notifications not configured", status_code=503, code="not_configured")
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise Unauthorized("Missing Pub/Sub bearer token", code="bad_signature")
+    # Certificate fetch and RSA verification are blocking; off the loop like the Stripe SDK call in checkout.
+    await asyncio.to_thread(
+        store_billing.verify_play_rtdn,
+        token.strip(),
+        audience=s.google_play_rtdn_audience,
+        service_account_email=s.google_play_rtdn_service_account_email,
+    )
+    try:
+        envelope = await request.json()
+    except ValueError as exc:
+        raise AppError("Body is not JSON", code="bad_request") from exc
+    message_id, notification = store_billing.decode_rtdn(envelope)
+    return await _apply(
+        db,
+        store_billing.GATEWAY,
+        message_id,
+        store_billing.rtdn_kind(notification),
+        notification,
+        store_billing.apply_rtdn,
+    )

@@ -194,7 +194,11 @@ async def forgot(request: Request, body: ForgotIn, db: DB) -> dict:
         select(AdminUser).where(AdminUser.email == body.email.lower(), AdminUser.is_active.is_(True))
     )
     if admin is not None:
-        token = mint_token(str(admin.id), "admin", ttl=1800, extra={"purpose": "reset"})
+        # Its own token kind, never an admin session with a marker on it: the link goes out by email, and an
+        # `admin` token in an inbox is an eight-hour console session for whoever reads it first. The only
+        # thing that can spend it is /reset below, and only once: it names the token version it was minted
+        # under, and /reset bumps that version.
+        token = mint_token(str(admin.id), "admin_reset", ttl=1800, extra={"tv": admin.token_version})
         link = f"{get_settings().admin_base_url}/reset?token={token}"
         body_text = "\n\n".join(
             [
@@ -215,16 +219,21 @@ async def reset(request: Request, body: ResetIn, db: DB) -> dict:
     import jwt
 
     try:
-        payload = decode_token(body.token, "admin")
+        payload = decode_token(body.token, "admin_reset")
     except jwt.PyJWTError as exc:
         raise Unauthorized("Reset link is invalid or expired") from exc
-    if payload.get("purpose") != "reset":
-        raise Unauthorized("Reset link is invalid")
     if len(body.password) < 10:
         raise Unauthorized("Password must be at least 10 characters")
     admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
     if admin is None or not admin.is_active:
         raise Unauthorized("Account not found")
+    # The link is single-use in effect: the version it was minted under is recorded in the token, and a used
+    # link no longer matches. That same bump signs out every existing session, which is what someone who has
+    # just reset a password because they suspect it leaked would want.
+    if int(payload.get("tv", admin.token_version)) != admin.token_version:
+        raise Unauthorized("Reset link is invalid or expired")
     admin.password_hash = await asyncio.to_thread(hash_password, body.password)
+    admin.token_version += 1
+    audit.record(db, admin=admin, action="admin.password_reset", target_type="admin", target_id=admin.id)
     await db.commit()
     return {"ok": True}

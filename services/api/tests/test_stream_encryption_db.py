@@ -25,7 +25,7 @@ from app.api.routers import stream
 from app.core.db import get_session
 from app.main import app
 from app.models.catalog import AssetStatus, VideoAsset
-from app.services.media import content_iv, content_key, sign_path
+from app.services.media import content_key, sign_path
 
 DB_URL = os.environ.get("KATHA_TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not DB_URL, reason="KATHA_TEST_DATABASE_URL not set")
@@ -99,16 +99,9 @@ def test_a_key_is_sixteen_bytes_and_stable_for_an_asset():
     assert content_key(a) == content_key(a)
 
 
-def test_two_assets_never_share_a_key_or_an_iv():
+def test_two_assets_never_share_a_key():
     a, b = uuid.uuid4(), uuid.uuid4()
     assert content_key(a) != content_key(b)
-    assert content_iv(a) != content_iv(b)
-
-
-def test_the_iv_is_not_the_key():
-    """Derived from the same secret, so a shared label would have made them identical."""
-    a = uuid.uuid4()
-    assert content_iv(a) != content_key(a)
 
 
 # ---- key delivery ----------------------------------------------------------
@@ -203,3 +196,40 @@ async def test_a_variant_name_that_is_not_a_rendition_is_refused(client, asset):
     """This value becomes part of a URL fetched from storage, so it is matched, not sanitised."""
     path = f"/v1/stream/{asset.id}/v/..%2F..%2Fetc/index.m3u8"
     assert (await client.get(f"{path}?{_signed(path)}")).status_code == 404
+
+
+async def test_segment_urls_verify_at_the_hmac_edge(client, asset, monkeypatch):
+    """The signature on a segment used to cover only the file name, which the edge verifier never sees.
+
+    With signing switched on, every encrypted segment came back 403: the manifest route signed "/seg_0000.ts"
+    and /v1/media/verify checked "/library/…/1080p/seg_0000.ts". This takes a segment URL exactly as the
+    player would and asks the verifier the same question nginx would.
+    """
+    from urllib.parse import urlsplit
+
+    from app.core.config import get_settings
+
+    async def fake_fetch(_url: str) -> str:
+        return VARIANT
+
+    monkeypatch.setattr(stream, "_fetch", fake_fetch)
+    s = get_settings()
+    monkeypatch.setattr(s, "cdn_signing_mode", "hmac")
+
+    path = f"/v1/stream/{asset.id}/v/1080p/index.m3u8"
+    body = (await client.get(f"{path}?{_signed(path)}")).text
+    segment_url = next(line for line in body.splitlines() if "seg_0000.ts" in line)
+    assert segment_url.startswith(s.cdn_base_url.rstrip("/") + "/")
+
+    # What the edge sees: the request path under the CDN's mount prefix, query intact.
+    original_uri = urlsplit(segment_url).path + "?" + urlsplit(segment_url).query
+    ok = await client.get("/v1/media/verify", headers={"x-original-uri": original_uri})
+    assert ok.status_code == 204, original_uri
+
+    # The same grant does not open a segment of a different asset.
+    other = original_uri.replace(_asset_dir_of(asset), "library/someone-else/hls/S01E01")
+    assert (await client.get("/v1/media/verify", headers={"x-original-uri": other})).status_code == 403
+
+
+def _asset_dir_of(asset) -> str:
+    return stream._asset_dir(asset)

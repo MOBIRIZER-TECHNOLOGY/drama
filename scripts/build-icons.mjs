@@ -15,7 +15,9 @@ import { fileURLToPath } from "node:url";
 
 const require = createRequire(import.meta.url);
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const sharp = require(join(root, "node_modules/.pnpm/sharp@0.35.4_@types+node@20.19.43/node_modules/sharp"));
+// Resolved from this file's location, which is what a hoisted node_modules needs; a hard-coded .pnpm store
+// path only ever existed on the machine that wrote it.
+const sharp = require("sharp");
 
 const MARK = readFileSync(join(root, "apps/web/public/logo-mark.svg"), "utf8");
 /** The app's own ground, so an opaque icon and the splash screen are the same colour. */

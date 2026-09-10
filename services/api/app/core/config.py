@@ -46,13 +46,14 @@ class Settings(BaseSettings):
     s3_secret_key: str | None = None
     cdn_base_url: str = "http://localhost:9000/katha-media"
     play_token_ttl_seconds: int = 900
-    # How the edge validates playback URLs: none (dev only), hmac (nginx/verifier using media_signing_key),
-    # cloudfront, bunny. Production refuses to boot with none.
+    # How the edge validates playback URLs: none (dev only) or hmac (nginx `auth_request` against
+    # /v1/media/verify, using media_signing_key). Production refuses to boot with none. Only modes that are
+    # actually implemented are listed: a value that boots cleanly and verifies nothing is worse than a typo.
     # Where this service reads manifests from, which is not where viewers read segments from. `cdn_base_url`
     # is the public edge; this is the origin behind it. They differ in production (edge vs bucket) and they
     # differ in development too, where the emulator's view of the host is not the host's view of itself.
     media_origin_url: str | None = None
-    cdn_signing_mode: Literal["none", "hmac", "cloudfront", "bunny"] = "none"
+    cdn_signing_mode: Literal["none", "hmac"] = "none"
     media_signing_key: str | None = None  # falls back to jwt_secret outside production
     # Master secret for AES-128 HLS content keys. Per-asset keys are derived from it, never stored, so a
     # database dump carries no content keys and rotating this rotates every asset at once.
@@ -83,6 +84,11 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_starttls: bool = False
     smtp_from: str = "Katha <no-reply@katha.app>"
+    # Proxies whose X-Forwarded-* headers uvicorn may believe, as a comma-separated list of IPs or "*". It is
+    # read by the container's start command, not by application code: uvicorn rewrites `request.client` from
+    # the headers only for these peers, and everything above it (rate-limit keys, session IPs) reads that
+    # rewritten value. The default trusts loopback only; a deployment behind a load balancer sets the balancer.
+    forwarded_allow_ips: str = "127.0.0.1"
     # Where this API is reachable from a viewer's device. It goes inside HLS manifests as the key URL, so it
     # has to be the public address rather than whatever the process happens to bind to.
     api_base_url: str = "http://localhost:8000"
@@ -94,8 +100,11 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.1
     otlp_endpoint: str | None = None
 
-    # Content safety: ratings that need a confirmed adult viewer.
+    # Content safety: ratings that need a confirmed adult viewer, and the ratings known to be safe without one.
+    # Anything in neither list — a typo, a scheme from another market — is treated as adult, because the only
+    # thing an unknown rating proves is that nobody has cleared the title for a general audience.
     adult_ratings: list[str] = Field(default_factory=lambda: ["A", "UA16"])
+    general_ratings: list[str] = Field(default_factory=lambda: ["U", "UA7", "UA13"])
     # A series with no rating set is treated as adult. Fail closed: an editor who forgets a rating must not be
     # able to publish mature content ungated. Set false only for a catalogue that is entirely general-audience.
     unrated_is_adult: bool = True
@@ -124,6 +133,12 @@ class Settings(BaseSettings):
     # before any coins are granted, exactly like a gateway webhook.
     google_play_package_name: str | None = None
     google_play_service_account_file: str | None = None
+    # Real-time developer notifications (refunds, voided purchases) arrive as Pub/Sub push requests carrying a
+    # Google-signed OIDC token. Both values are required before /v1/webhooks/play accepts anything: the
+    # audience the push subscription was created with (normally the endpoint URL itself) and the service
+    # account it was told to authenticate as. Anyone can POST to the route; only that account's token counts.
+    google_play_rtdn_audience: str | None = None
+    google_play_rtdn_service_account_email: str | None = None
 
     @model_validator(mode="after")
     def _timezone_is_resolvable(self) -> "Settings":

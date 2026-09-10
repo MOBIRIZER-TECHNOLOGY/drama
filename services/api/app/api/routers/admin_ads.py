@@ -194,9 +194,7 @@ async def create_placement(body: AdPlacementIn, admin: CurrentAdmin, db: DB) -> 
 
 
 @router.put("/{placement_id}", response_model=AdPlacementOut, dependencies=[require_role(AdminRole.finance)])
-async def update_placement(
-    placement_id: uuid.UUID, body: AdPlacementIn, admin: CurrentAdmin, db: DB
-) -> AdPlacementOut:
+async def update_placement(placement_id: uuid.UUID, body: AdPlacementIn, admin: CurrentAdmin, db: DB) -> AdPlacementOut:
     p = await db.get(AdPlacement, placement_id)
     if p is None:
         raise NotFound("Ad placement")

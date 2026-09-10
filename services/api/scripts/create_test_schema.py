@@ -37,9 +37,7 @@ VECTOR_TABLES = {"embeddings"}
 async def main(url: str) -> None:
     engine = create_async_engine(url)
     async with engine.begin() as conn:
-        has_vector = bool(
-            await conn.scalar(text("select 1 from pg_available_extensions where name = 'vector'"))
-        )
+        has_vector = bool(await conn.scalar(text("select 1 from pg_available_extensions where name = 'vector'")))
         for extension in ("pg_trgm", *(("vector",) if has_vector else ())):
             await conn.execute(text(f"CREATE EXTENSION IF NOT EXISTS {extension}"))
 

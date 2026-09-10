@@ -108,8 +108,10 @@ class TranslateSeriesIn(BaseModel):
 async def translate_series(series_id: uuid.UUID, body: TranslateSeriesIn, db: DB) -> JobOut:
     if await db.get(Series, series_id) is None:
         raise NotFound("Series")
-    job_id = await jobs.enqueue(
-        "run_series_translation", str(series_id), body.languages, job_id=f"series-translate:{series_id}"
+    # `retry=True`: an admin pressing the button again after a run finished wants a fresh run, not the stale
+    # result arq would otherwise refuse to replace; a run still in flight is still refused (409).
+    job_id = await jobs.enqueue_or_raise(
+        "run_series_translation", str(series_id), body.languages, job_id=f"series-translate:{series_id}", retry=True
     )
     return JobOut(job_id=job_id)
 
@@ -118,7 +120,7 @@ async def translate_series(series_id: uuid.UUID, body: TranslateSeriesIn, db: DB
 async def refresh_embeddings(series_id: uuid.UUID, db: DB) -> JobOut:
     if await db.get(Series, series_id) is None:
         raise NotFound("Series")
-    job_id = await jobs.enqueue("refresh_embeddings", str(series_id), job_id=f"embed:{series_id}")
+    job_id = await jobs.enqueue_or_raise("refresh_embeddings", str(series_id), job_id=f"embed:{series_id}", retry=True)
     return JobOut(job_id=job_id)
 
 
@@ -133,7 +135,9 @@ async def transcribe_episode(episode_id: uuid.UUID, body: SubtitlesIn, db: DB) -
         raise NotFound("Episode")
     if ep.video_asset_id is None:
         raise AppError("Episode has no video asset", code="no_asset")
-    job_id = await jobs.enqueue("transcribe_episode", str(episode_id), body.languages, job_id=f"subtitles:{episode_id}")
+    job_id = await jobs.enqueue_or_raise(
+        "transcribe_episode", str(episode_id), body.languages, job_id=f"subtitles:{episode_id}", retry=True
+    )
     return JobOut(job_id=job_id)
 
 
@@ -188,5 +192,5 @@ async def series_transcript(series_id: uuid.UUID, db: DB, episodes: int = 3) -> 
 @router.post("/reembed-all", response_model=JobOut)
 async def reembed_all() -> JobOut:
     """After changing the embedding model: refresh every published series."""
-    job_id = await jobs.enqueue("reembed_all", job_id="reembed-all")
+    job_id = await jobs.enqueue_or_raise("reembed_all", job_id="reembed-all", retry=True)
     return JobOut(job_id=job_id)

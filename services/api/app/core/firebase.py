@@ -44,6 +44,10 @@ class FirebaseIdentity:
     name: str | None
     picture: str | None
     provider: str
+    # Whether Google vouches for the email. Some providers hand Firebase an address the person merely typed,
+    # and linking on an unverified address would let anyone claim an existing account by signing up with its
+    # email. Phone numbers are always verified by Firebase itself, so they carry no such flag.
+    email_verified: bool = False
 
 
 @lru_cache
@@ -83,6 +87,7 @@ def verify_id_token(id_token: str) -> FirebaseIdentity:
         name=decoded.get("name"),
         picture=decoded.get("picture"),
         provider=firebase_claims.get("sign_in_provider", "unknown"),
+        email_verified=bool(decoded.get("email_verified", False)),
     )
 
 

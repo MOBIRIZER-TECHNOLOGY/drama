@@ -91,7 +91,9 @@ async def test_enrol_then_login_requires_the_code(env):
     # Nothing is stored until a code proves the authenticator holds the secret.
     assert (await client.get("/v1/admin/auth/me", headers=_auth(token))).json()["totp_enabled"] is False
 
-    bad = await client.post("/v1/admin/auth/totp/enable", json={"secret": secret, "code": "000000"}, headers=_auth(token))
+    bad = await client.post(
+        "/v1/admin/auth/totp/enable", json={"secret": secret, "code": "000000"}, headers=_auth(token)
+    )
     assert bad.status_code == 401
     assert (await client.get("/v1/admin/auth/me", headers=_auth(token))).json()["totp_enabled"] is False
 
@@ -183,3 +185,47 @@ async def test_owner_can_revoke_another_accounts_sessions(env):
     assert after.status_code == 401
     # Their access is intact — only the tokens died.
     assert (await _login(client, victim)).status_code == 200
+
+
+async def test_a_password_reset_link_cannot_be_used_as_a_session(env, monkeypatch):
+    """The reset link used to be a full admin token with a `purpose` claim nobody checked on the way in.
+
+    A link that travels by email — the least trusted channel this service writes to — was an eight-hour
+    console session for whoever read it first, and because it carried no token version it stayed valid
+    through "sign out everywhere". Now it is its own token kind: /me refuses it, /reset spends it once, and
+    spending it ends every other session on the account.
+    """
+    from app.api.routers import admin_auth
+
+    client, admin, maker = env
+    sent: list[str] = []
+
+    async def capture(to, subject, text, html=None):
+        sent.append(text)
+        return True
+
+    monkeypatch.setattr(admin_auth.email_svc, "send", capture)
+    laptop = (await _login(client, admin)).json()["access_token"]
+
+    assert (await client.post("/v1/admin/auth/forgot", json={"email": admin.email})).status_code == 200
+    assert len(sent) == 1
+    token = sent[0].split("token=", 1)[1].split()[0]
+
+    # The link is not a session.
+    assert (await client.get("/v1/admin/auth/me", headers=_auth(token))).status_code == 401
+    assert (await client.post("/v1/admin/auth/sign-out-all", headers=_auth(token))).status_code == 401
+
+    # It does reset the password, and doing so signs out the sessions that existed before.
+    new_password = "a completely different passphrase"
+    used = await client.post("/v1/admin/auth/reset", json={"token": token, "password": new_password})
+    assert used.status_code == 200
+    stale = await client.get("/v1/admin/auth/me", headers=_auth(laptop))
+    assert stale.status_code == 401 and stale.json()["detail"]["code"] == "session_revoked"
+
+    # Once. The same link a second time is refused.
+    again = await client.post("/v1/admin/auth/reset", json={"token": token, "password": "yet another passphrase"})
+    assert again.status_code == 401
+
+    assert (await _login(client, admin)).status_code == 401
+    ok = await client.post("/v1/admin/auth/login", json={"email": admin.email, "password": new_password})
+    assert ok.status_code == 200

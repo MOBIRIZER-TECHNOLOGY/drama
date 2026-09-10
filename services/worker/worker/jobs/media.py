@@ -3,11 +3,18 @@
 transcode_asset(asset_id):
   1. mark transcoding, download the source from the bucket to a temp dir
   2. ffprobe for duration and dimensions
-  3. ffmpeg one pass per rendition (portrait ladder), 4-second fMP4 segments, AES-128 optional later
+  3. ffmpeg one pass per rendition (portrait ladder), 4-second segments, AES-128 MPEG-TS by default
   4. write master.m3u8, upload everything under hls/{asset_id}/
   5. mark ready with renditions + duration, or failed with the error
 
 The job is idempotent: a `ready` asset returns immediately, and a retry re-runs from scratch.
+
+Failure is split in two. Storage and database errors are the environment's fault and raise `arq.Retry` while
+tries remain, with the asset marked `queued` and the attempt noted in `error`. ffprobe and ffmpeg rejecting the
+input, or the input having no video, will not get better with another try, so they mark the asset `failed`
+and raise plainly, which arq records as the job's final result. Cancellation (a worker shutting down) kills
+the running ffmpeg, marks the asset `failed` so it is never left showing `transcoding` forever, and re-raises
+so arq re-runs the job on a live worker.
 """
 
 import asyncio
@@ -23,11 +30,14 @@ import structlog
 from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.models.catalog import AssetStatus, VideoAsset
-from app.services.media import PLACEHOLDER_KEY_URI, content_iv, content_key
+from app.services.media import CONTENT_KEY_LABEL, PLACEHOLDER_KEY_URI, content_key
+from arq import Retry
 from botocore.config import Config
+from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import select
+from sqlalchemy.exc import InterfaceError, OperationalError
 
-from worker.settings import get_worker_settings
+from worker.settings import MAX_TRIES, get_worker_settings
 
 log = structlog.get_logger()
 
@@ -37,6 +47,15 @@ LADDER = {
     "720p": {"height": 1280, "v_bitrate": "1800k", "a_bitrate": "96k", "bandwidth": 2000000},
     "480p": {"height": 854, "v_bitrate": "900k", "a_bitrate": "64k", "bandwidth": 1000000},
 }
+
+# Which key derivation a rendition was packaged under, recorded on every rendition so a future rotation of the
+# master secret (a new label in `app.services.media`) can tell old packages from new ones instead of guessing.
+# Read off the label itself so the two cannot drift: "katha:hls:aes128:v1:" -> "v1".
+KEY_VERSION = CONTENT_KEY_LABEL.decode().rstrip(":").rsplit(":", 1)[-1]
+
+# Errors worth another try: the bucket or the database was unreachable or refused for a moment. Everything
+# else is deterministic and gets one loud failure.
+TRANSIENT_ERRORS = (BotoCoreError, ClientError, OperationalError, InterfaceError)
 
 
 def _s3():
@@ -52,8 +71,20 @@ def _s3():
 
 
 async def _run(*cmd: str) -> tuple[int, str]:
+    """Run a command to completion, and take it down with us if we are cancelled.
+
+    A cancelled coroutine does not cancel its child process: arq stops the job, the caller's `finally` deletes
+    the temp tree, and ffmpeg keeps writing segments into a directory that no longer exists until it notices.
+    Killing it here keeps the process tree honest and the disk from filling with orphans.
+    """
     proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
-    out, _ = await proc.communicate()
+    try:
+        out, _ = await proc.communicate()
+    except BaseException:
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
+        raise
     return proc.returncode or 0, out.decode(errors="replace")
 
 
@@ -221,19 +252,22 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
         long_edge = max(info["width"], info["height"])
         out_root = tmp / "hls"
 
-        # The key and IV are derived from the master secret and this asset's id, never stored. ffmpeg needs
-        # them on disk, so they live in the same temp tree that is deleted in `finally`; the API derives the
-        # same values again when a player asks for the key.
+        # The key is derived from the master secret and this asset's id, never stored. ffmpeg needs it on
+        # disk, so it lives in the same temp tree that is deleted in `finally`; the API derives the same value
+        # again when a player asks for the key.
+        #
+        # The key-info file's third line, the IV, is deliberately left out. Given one IV, ffmpeg encrypts every
+        # segment of every rendition under the same key and IV, so segments with identical opening bytes
+        # encrypt identically. Without it ffmpeg uses each segment's media sequence number and writes an
+        # EXT-X-KEY line carrying that IV before every segment, which is what the HLS spec intends; the API's
+        # manifest route rewrites only the URI on those lines and keeps the IV.
         encrypt = get_worker_settings().hls_encrypt
         key_info: Path | None = None
         if encrypt:
             key_file = tmp / "hls.key"
             key_file.write_bytes(content_key(aid))  # noqa: ASYNC240 - local temp write
             key_info = tmp / "hls.keyinfo"
-            key_info.write_text(  # noqa: ASYNC240 - local temp write
-                f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n{content_iv(aid).hex()}\n",
-                encoding="utf-8",
-            )
+            key_info.write_text(f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n", encoding="utf-8")  # noqa: ASYNC240
 
         renditions: dict[str, dict] = {}
         for name in get_worker_settings().hls_ladder:
@@ -247,6 +281,9 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
                 "width": short_edge if portrait else spec["height"],
                 "height": spec["height"] if portrait else short_edge,
                 "playlist": f"{name}/index.m3u8",
+                # Per rendition rather than a column of its own, which the model does not have. Only present
+                # when encrypted, so its absence means "in the clear", not "unknown".
+                **({"key_version": KEY_VERSION} if encrypt else {}),
             }
         (out_root / "master.m3u8").write_text(_master_playlist(renditions, encrypted=encrypt), encoding="utf-8")
         prefix = f"hls/{aid}"
@@ -263,11 +300,34 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
             width=info["width"],
             height=info["height"],
         )
-        log.info(
-            "transcode.ready", asset_id=asset_id, renditions=list(renditions), files=uploaded, encrypted=encrypt
+        log.info("transcode.ready", asset_id=asset_id, renditions=list(renditions), files=uploaded, encrypted=encrypt)
+        return {
+            "status": "ready",
+            "renditions": list(renditions),
+            "files": uploaded,
+            "encrypted": encrypt,
+            "key_version": KEY_VERSION if encrypt else None,
+        }
+    except asyncio.CancelledError:
+        # The worker is going down. arq re-runs the job elsewhere while tries remain; until then the row must
+        # not say `transcoding`, because nothing is. The status write is shielded so the same cancellation
+        # cannot also cut it short.
+        await asyncio.shield(
+            _set_status(aid, AssetStatus.failed, error="interrupted: worker shut down mid-transcode; arq re-runs it")
         )
-        return {"status": "ready", "renditions": list(renditions), "files": uploaded, "encrypted": encrypt}
-    except Exception as exc:  # any failure is recorded on the asset for the admin to see
+        log.warning("transcode.cancelled", asset_id=asset_id)
+        raise
+    except TRANSIENT_ERRORS as exc:
+        tries = int(ctx.get("job_try") or 1)
+        if tries < MAX_TRIES:
+            note = f"try {tries} of {MAX_TRIES} failed, retrying: {exc}"
+            await _set_status(aid, AssetStatus.queued, error=note[:2000])
+            log.warning("transcode.retry", asset_id=asset_id, error=str(exc), tries=tries)
+            raise Retry(defer=60 * tries) from exc
+        await _set_status(aid, AssetStatus.failed, error=f"gave up after {tries} tries: {exc}"[:2000])
+        log.error("transcode.failed", asset_id=asset_id, error=str(exc), tries=tries)
+        raise
+    except Exception as exc:  # deterministic: bad input, no video stream. Recorded on the asset for the admin.
         await _set_status(aid, AssetStatus.failed, error=str(exc)[:2000])
         log.error("transcode.failed", asset_id=asset_id, error=str(exc))
         raise

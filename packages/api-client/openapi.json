@@ -584,7 +584,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 80
                 },
                 {
                   "type": "null"
@@ -600,7 +601,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 120
                 },
                 {
                   "type": "null"
@@ -661,6 +663,7 @@
             "schema": {
               "type": "integer",
               "maximum": 100,
+              "minimum": 1,
               "default": 40,
               "title": "Limit"
             }
@@ -671,6 +674,8 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "maximum": 10000,
+              "minimum": 0,
               "default": 0,
               "title": "Offset"
             }
@@ -1105,7 +1110,7 @@
           "catalog"
         ],
         "summary": "Play",
-        "description": "Access check, then a short-lived signed playback URL. Locked episodes never get a URL.\n\nGuests may play free episodes (the hook before sign-up); anything else needs a session.",
+        "description": "Access check, then a short-lived signed playback URL. Locked episodes never get a URL.\n\nGuests may play free episodes (the hook before sign-up); anything else needs a session.\n\nThe series is checked with the same predicate the catalogue uses, not just the episode's own status: an\nepisode of an archived series, or of one outside its licensing window or territory, stayed playable to\nanyone holding its id, which made unpublishing a title cosmetic.",
         "operationId": "play_v1_episodes__episode_id__play_post",
         "security": [
           {
@@ -1357,6 +1362,7 @@
           "engagement"
         ],
         "summary": "My List",
+        "description": "Favourites and history, limited to what the viewer can still open.\n\nLoaded through the catalogue's own visibility filter rather than by bare id: a favourite that has since\nbeen archived, expired out of its window or blocked in this territory otherwise becomes a card that leads\nto a 404, and My List was the one screen that showed unpublished titles to the public.",
         "operationId": "my_list_v1_me_list_get",
         "security": [
           {
@@ -1488,6 +1494,7 @@
           "engagement"
         ],
         "summary": "Report",
+        "description": "File a report against a series or episode the viewer can actually see.\n\nChecked against the visibility predicate, not bare existence: a report endpoint that accepts any id is an\noracle for which draft and archived series exist, which is not something a viewer should be able to probe.",
         "operationId": "report_v1_reports_post",
         "requestBody": {
           "content": {
@@ -2703,7 +2710,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 120
                 },
                 {
                   "type": "null"
@@ -2729,12 +2737,52 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "title",
+                    "status",
+                    "episode_count",
+                    "view_count",
+                    "like_count",
+                    "updated_at",
+                    "created_at"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -2745,6 +2793,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "default": 0,
               "title": "Offset"
             }
@@ -3088,6 +3137,7 @@
           "admin"
         ],
         "summary": "Delete Episode",
+        "description": "Delete an episode, unless someone has paid for it \u2014 then archive it, as `delete_series` does.\n\n`episode_unlocks` cascades on episode delete, so removing an episode used to remove the record that a\nviewer spent coins on it, with the ledger row left pointing at nothing. The unlock is the receipt; it is\nkept and the episode is hidden instead.",
         "operationId": "delete_episode_v1_admin_episodes__episode_id__delete",
         "security": [
           {
@@ -3507,7 +3557,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "$ref": "#/components/schemas/PurchaseStatus"
                 },
                 {
                   "type": "null"
@@ -3524,7 +3574,7 @@
               "anyOf": [
                 {
                   "type": "string",
-                  "maxLength": 160
+                  "maxLength": 120
                 },
                 {
                   "type": "null"
@@ -3574,6 +3624,7 @@
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -3584,6 +3635,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "default": 0,
               "title": "Offset"
             }
@@ -3903,6 +3955,7 @@
           "admin"
         ],
         "summary": "Users",
+        "description": "The accounts list. Sorting happens here, over the whole table: the console used to sort the page it\nhad, which put the richest account on page one only if it happened to be among the newest fifty.",
         "operationId": "users_v1_admin_users_get",
         "security": [
           {
@@ -3917,7 +3970,8 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string"
+                  "type": "string",
+                  "maxLength": 120
                 },
                 {
                   "type": "null"
@@ -3943,12 +3997,50 @@
             }
           },
           {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "display_name",
+                    "status",
+                    "coin_balance",
+                    "created_at",
+                    "last_seen_at"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "type": "string",
+              "default": "desc",
+              "title": "Order"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
             "schema": {
               "type": "integer",
               "maximum": 200,
+              "minimum": 1,
               "default": 50,
               "title": "Limit"
             }
@@ -3959,6 +4051,7 @@
             "required": false,
             "schema": {
               "type": "integer",
+              "minimum": 0,
               "default": 0,
               "title": "Offset"
             }
@@ -3971,101 +4064,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AdminUserPage"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/admin/users/{user_id}": {
-      "get": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "User Detail",
-        "description": "One call for the support drawer: the account, its VIP state and its purchases.\n\nVIP was never shown, so a support agent granting it worked blind and could stack a second month onto an\nalready-active pass; and answering \"I paid and got no coins\" meant leaving for Purchases and searching by\nhand for a user id.",
-        "operationId": "user_detail_v1_admin_users__user_id__get",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "User Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AdminUserDetail"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "admin"
-        ],
-        "summary": "Delete User",
-        "operationId": "delete_user_v1_admin_users__user_id__delete",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "user_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "User Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Ok"
                 }
               }
             }
@@ -4257,6 +4255,101 @@
         }
       }
     },
+    "/v1/admin/users/{user_id}": {
+      "get": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "User Detail",
+        "description": "One call for the support drawer: the account, its VIP state and its purchases.\n\nVIP was never shown, so a support agent granting it worked blind and could stack a second month onto an\nalready-active pass; and answering \"I paid and got no coins\" meant leaving for Purchases and searching by\nhand for a user id.",
+        "operationId": "user_detail_v1_admin_users__user_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminUserDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Delete User",
+        "operationId": "delete_user_v1_admin_users__user_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ok"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/admin/users/{user_id}/ledger": {
       "get": {
         "tags": [
@@ -4287,6 +4380,7 @@
             "schema": {
               "type": "integer",
               "maximum": 500,
+              "minimum": 1,
               "default": 100,
               "title": "Limit"
             }
@@ -5456,7 +5550,7 @@
           "admin"
         ],
         "summary": "Moderation",
-        "description": "Open reports and AI-flagged series in one queue, oldest first within each kind.\n\nBoth halves are counted over the whole table before anything is sliced, so the tab badges are workloads\nrather than samples.",
+        "description": "Open reports and AI-flagged series in one queue, oldest first.\n\nBoth halves are counted over the whole table, so the tab badges are workloads rather than samples. The\npage itself is cut in SQL: a UNION of (kind, id, created_at) over both sources, ordered and offset there,\nthen hydrated. The previous shape took the newest 200 of each, merged them in Python and sliced \u2014 so past\nthe four-hundredth item the pager showed empty pages while the total said otherwise, and the \"oldest\nfirst\" promise held only within whatever slice had been fetched.",
         "operationId": "moderation_v1_admin_moderation_get",
         "security": [
           {
@@ -7399,6 +7493,7 @@
           "admin"
         ],
         "summary": "Retry Video",
+        "description": "Re-run the transcode. 409 `job_in_progress` while the previous run is still queued or running.\n\nThe queue is asked first and the row updated second: the old order marked the asset queued and then let the\nenqueue be refused, which left a \"queued\" asset that no worker would ever pick up. The worker resets `error`\nand sets `transcoding` itself, so nothing it needs depends on this row update landing first.",
         "operationId": "retry_video_v1_admin_uploads_videos__asset_id__retry_post",
         "security": [
           {
@@ -7489,6 +7584,220 @@
                 "schema": {
                   "$ref": "#/components/schemas/Ok"
                 }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/{asset_id}/master.m3u8": {
+      "get": {
+        "tags": [
+          "stream"
+        ],
+        "summary": "Master",
+        "operationId": "master_v1_stream__asset_id__master_m3u8_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "exp",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exp"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "sig",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sig"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/{asset_id}/v/{variant}/index.m3u8": {
+      "get": {
+        "tags": [
+          "stream"
+        ],
+        "summary": "Variant Playlist",
+        "operationId": "variant_playlist_v1_stream__asset_id__v__variant__index_m3u8_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Variant"
+            }
+          },
+          {
+            "name": "exp",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exp"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "sig",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sig"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/stream/{asset_id}/key": {
+      "get": {
+        "tags": [
+          "stream"
+        ],
+        "summary": "Key",
+        "description": "Sixteen raw bytes. The signature is the only thing standing between a request and the episode.",
+        "operationId": "key_v1_stream__asset_id__key_get",
+        "parameters": [
+          {
+            "name": "asset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Asset Id"
+            }
+          },
+          {
+            "name": "exp",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Exp"
+            }
+          },
+          {
+            "name": "uid",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Uid"
+            }
+          },
+          {
+            "name": "sig",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sig"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
               }
             }
           },
@@ -9855,16 +10164,9 @@
           },
           "currency": {
             "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
+            "pattern": "^[A-Z]{3}$",
             "title": "Currency",
             "default": "INR"
-          },
-          "country": {
-            "type": "string",
-            "maxLength": 2,
-            "title": "Country",
-            "default": "*"
           },
           "success_url": {
             "type": "string",
@@ -9906,7 +10208,8 @@
           "success_url",
           "cancel_url"
         ],
-        "title": "CheckoutIn"
+        "title": "CheckoutIn",
+        "description": "What the client may choose about a purchase.\n\nThere is deliberately no `country`: regional prices exist because some markets pay less, so the country\ncomes from the edge header the request arrived with (see `deps.client_country`), never from the body. A\nclient that still sends one is ignored rather than refused."
       },
       "CheckoutOut": {
         "properties": {
@@ -12992,16 +13295,9 @@
           },
           "currency": {
             "type": "string",
-            "maxLength": 3,
-            "minLength": 3,
+            "pattern": "^[A-Z]{3}$",
             "title": "Currency",
             "default": "INR"
-          },
-          "country": {
-            "type": "string",
-            "maxLength": 2,
-            "title": "Country",
-            "default": "*"
           },
           "coupon_code": {
             "anyOf": [
@@ -13032,7 +13328,8 @@
         "required": [
           "pack_id"
         ],
-        "title": "QuoteIn"
+        "title": "QuoteIn",
+        "description": "Same shape as a checkout minus the gateway; the country is edge-resolved here too."
       },
       "QuoteOut": {
         "properties": {
@@ -13901,7 +14198,8 @@
           "content_rating": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^(U|UA7|UA13|UA16|A)$"
               },
               {
                 "type": "null"
@@ -13965,31 +14263,6 @@
               }
             ],
             "title": "Window Ends At"
-          },
-          "moderation_flags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Moderation Flags"
-          },
-          "moderation_note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Moderation Note"
           },
           "category_ids": {
             "items": {

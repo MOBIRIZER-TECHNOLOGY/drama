@@ -84,6 +84,17 @@ class Series(UUIDPrimaryKey, TimestampMixin, Base):
 
 class SeriesTranslation(Base):
     __tablename__ = "series_translations"
+    # Title search is a contains-match (`ILIKE '%…%'`), which a b-tree cannot serve; the trigram GIN index is
+    # what keeps it off a sequential scan as the catalogue grows. Declared here as well as in migration 0010
+    # so `alembic check` does not report it as drift.
+    __table_args__ = (
+        Index(
+            "ix_series_translations_title_trgm",
+            "title",
+            postgresql_using="gin",
+            postgresql_ops={"title": "gin_trgm_ops"},
+        ),
+    )
 
     series_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("series.id", ondelete="CASCADE"), primary_key=True

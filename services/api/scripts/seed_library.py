@@ -81,9 +81,8 @@ async def main() -> int:
     async with SessionLocal() as db:
         for order, entry in enumerate(catalog.get("series", [])):
             slug = entry["slug"]
-            series = await db.scalar(
-                select(Series).options(selectinload(Series.categories)).where(Series.slug == slug)
-            )
+            series = await db.scalar(select(Series).options(selectinload(Series.categories)).where(Series.slug == slug))
+            created = series is None
             if series is None:
                 # `categories=[]` matters: without it the collection is unloaded on the flushed instance and
                 # the membership check below becomes a lazy load, which in async is a MissingGreenlet.
@@ -93,18 +92,24 @@ async def main() -> int:
             lang = entry.get("language") or "en"
             series.original_language = lang
             series.free_episodes = int(entry.get("free_episodes") or 0)
-            series.status = PublishStatus.published
             series.released_at = series.released_at or datetime.now(UTC)
-            series.content_rating = "U"
+            series.content_rating = series.content_rating or "U"
             # The catalogue is portrait short-drama with everything already delivered.
             series.completion_status = "completed"
-            # One featured title is enough to fill the hero without every card claiming to be the highlight.
-            series.is_featured = order == 0
-            series.sort_weight = 100 - order
+            if created:
+                # Editorial state is set once. A re-run refreshes titles, synopses and media from the
+                # catalogue, but an operator who unpublished a title, changed the hero or reordered the rails
+                # in the console must not find that undone the next time someone re-imports.
+                series.status = PublishStatus.published
+                # One featured title is enough to fill the hero without every card claiming to be the highlight.
+                series.is_featured = order == 0
+                series.sort_weight = 100 - order
             # Stored as a key, not a URL: the API resolves it against its own CDN base at response time, so
             # one database serves a phone and a browser that disagree about what this host is called.
             if entry.get("cover"):
                 series.cover_url = entry["cover"]
+            if entry.get("banner"):
+                series.banner_url = entry["banner"]
             await db.flush()
 
             genre = entry.get("genre")
@@ -129,17 +134,17 @@ async def main() -> int:
 
             for ep in entry.get("episodes", []):
                 number = int(ep["number"])
-                row = await db.scalar(
-                    select(Episode).where(Episode.series_id == series.id, Episode.number == number)
-                )
+                row = await db.scalar(select(Episode).where(Episode.series_id == series.id, Episode.number == number))
                 if row is None:
                     row = Episode(series_id=series.id, number=number)
                     db.add(row)
+                    # Published on creation only, for the same reason as the series: an episode pulled from
+                    # the schedule in the console stays pulled.
+                    row.status = PublishStatus.published
                 # `title_display` is the stress-case variant where the catalogue provides one; it is the whole
                 # reason it exists, so it wins over the tidy title.
                 row.title = ep.get("title_display") or ep.get("title")
                 row.duration_sec = ep.get("duration_sec")
-                row.status = PublishStatus.published
                 row.published_at = row.published_at or datetime.now(UTC)
                 # `locked` and `coin_cost` are per-episode facts in the catalogue and override the series rule.
                 row.is_free_override = not ep.get("locked", False)

@@ -21,10 +21,14 @@ from app.services import admob_ssv
 @pytest.fixture
 def keypair():
     private = ec.generate_private_key(ec.SECP256R1())
-    pem = private.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    ).decode()
+    pem = (
+        private.public_key()
+        .public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo,
+        )
+        .decode()
+    )
     return private, pem
 
 
@@ -163,3 +167,54 @@ async def test_an_empty_key_set_raises_rather_than_verifying_nothing(monkeypatch
     with pytest.raises(ValueError):
         await admob_ssv.fetch_keys(client=FakeClient())
     admob_ssv.reset_cache()
+
+
+# ---- only the signed parameters are read ----------------------------------
+
+
+def test_signed_params_are_exactly_the_signed_prefix():
+    params = admob_ssv.signed_params(callback(CONTENT, "sig", "7"))
+    assert params == {
+        "ad_network": "5450213213286189855",
+        "ad_unit": "1234",
+        "custom_data": "task:abc",
+        "reward_amount": "10",
+        "reward_item": "coins",
+        "timestamp": "1700000000000",
+        "transaction_id": "abc123",
+        "user_id": "11111111-1111-1111-1111-111111111111",
+    }
+
+
+def test_a_parameter_after_key_id_is_refused():
+    """The framework parses it; nobody signed it. A verifier that only checks the prefix would act on it."""
+    assert admob_ssv.signed_params(callback(CONTENT, "sig") + "&reward_amount=99999") is None
+    assert admob_ssv.signed_params(callback(CONTENT, "sig") + "&user_id=22222222-2222-2222-2222-222222222222") is None
+
+
+def test_a_repeated_signed_key_is_refused():
+    """Which copy a query parser keeps is a library detail, not something Google signed."""
+    doubled = CONTENT.replace("reward_amount=10", "reward_amount=10&reward_amount=99999")
+    assert admob_ssv.signed_params(callback(doubled, "sig")) is None
+    doubled_user = "user_id=22222222-2222-2222-2222-222222222222&" + CONTENT
+    assert admob_ssv.signed_params(callback(doubled_user, "sig")) is None
+
+
+def test_signature_or_key_id_inside_the_signed_prefix_is_refused():
+    assert admob_ssv.signed_params(callback(CONTENT + "&key_id=1", "sig")) is None
+    assert admob_ssv.signed_params(callback("signature=abc&" + CONTENT, "sig")) is None
+
+
+def test_a_trailer_in_the_wrong_shape_is_refused():
+    assert admob_ssv.signed_params(f"{CONTENT}&signature=sig") is None  # no key_id at all
+    assert admob_ssv.signed_params(f"{CONTENT}&signature=sig&key_id=1&signature=other") is None
+    assert admob_ssv.signed_params("signature=sig&key_id=1") is None  # nothing was signed
+
+
+def test_a_genuine_callback_still_verifies_after_the_shape_check(keypair):
+    """The shape rules must not reject what Google actually sends."""
+    private, pem = keypair
+    signature = sign(private, CONTENT)
+    query = callback(CONTENT, signature, "1")
+    assert admob_ssv.signed_params(query) is not None
+    assert admob_ssv.verify_with_pem(query, signature, pem) is True

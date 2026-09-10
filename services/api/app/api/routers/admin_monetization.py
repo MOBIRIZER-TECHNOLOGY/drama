@@ -4,12 +4,13 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
-from app.core.errors import Conflict, NotFound
+from app.core.errors import AppError, Conflict, Forbidden, NotFound
 from app.models.identity import User
 from app.models.ops import Setting
-from app.models.wallet import CoinPack, PackPrice, Purchase, RewardTask
+from app.models.wallet import CoinPack, PackPrice, Purchase, PurchaseStatus, RewardTask
 from app.schemas.admin import (
     AdminPackOut,
     AdminPurchasePage,
@@ -23,10 +24,28 @@ from app.schemas.admin import (
 from app.schemas.common import Ok
 from app.services import audit
 from app.services import config as config_svc
+from app.services.search import LIKE_ESCAPE, like_pattern
 
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.finance, AdminRole.editor)])
+# Anything that sets a price or moves money is finance's call, not an editor's. Owners pass every role check.
+finance_only = [require_role(AdminRole.finance)]
 
 EDITABLE_NAMESPACES = {"auth", "economy", "rewards", "mobile", "site", "seo", "ads", "payments"}
+# Namespaces that change what things cost or which gateways take money: finance, not editorial.
+FINANCE_NAMESPACES = {"economy", "payments", "ads"}
+
+
+def _pack_snapshot(p: CoinPack, prices: list[PackPriceIn]) -> dict:
+    return {
+        "sku": p.sku,
+        "name": p.name,
+        "kind": p.kind.value,
+        "coins": p.coins,
+        "bonus_coins": p.bonus_coins,
+        "duration_days": p.duration_days,
+        "is_active": p.is_active,
+        "prices": sorted(f"{x.currency}/{x.country}={x.amount}" for x in prices),
+    }
 
 
 async def _pack_out(db, p: CoinPack) -> AdminPackOut:
@@ -61,35 +80,66 @@ async def _apply_prices(db, pack: CoinPack, prices: list[PackPriceIn]) -> None:
             await db.delete(row)
 
 
-@router.post("/packs", response_model=AdminPackOut, status_code=201)
-async def create_pack(body: PackIn, db: DB) -> AdminPackOut:
+# A pack and its prices are the price list. Every change is recorded: "why did the Popular pack cost ₹299 on
+# Tuesday" is a question finance gets asked, and the row is the only thing that can answer it.
+@router.post("/packs", response_model=AdminPackOut, status_code=201, dependencies=finance_only)
+async def create_pack(body: PackIn, db: DB, admin: CurrentAdmin) -> AdminPackOut:
     if await db.scalar(select(CoinPack.id).where(CoinPack.sku == body.sku)):
         raise Conflict("SKU already exists", code="sku_taken")
     p = CoinPack(**body.model_dump(exclude={"prices"}))
-    db.add(p)
-    await db.flush()
+    # The lookup above is advisory; the unique index on `sku` is the guard, and the savepoint turns a lost
+    # race into the same 409 instead of a 500.
+    try:
+        async with db.begin_nested():
+            db.add(p)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict("SKU already exists", code="sku_taken") from None
     await _apply_prices(db, p, body.prices)
+    audit.record(
+        db, admin=admin, action="pack.create", target_type="pack", target_id=p.id, after=_pack_snapshot(p, body.prices)
+    )
     await db.commit()
     return await _pack_out(db, p)
 
 
-@router.put("/packs/{pack_id}", response_model=AdminPackOut)
-async def update_pack(pack_id: uuid.UUID, body: PackIn, db: DB) -> AdminPackOut:
+@router.put("/packs/{pack_id}", response_model=AdminPackOut, dependencies=finance_only)
+async def update_pack(pack_id: uuid.UUID, body: PackIn, db: DB, admin: CurrentAdmin) -> AdminPackOut:
     p = await db.get(CoinPack, pack_id)
     if p is None:
         raise NotFound("Pack")
+    before = _pack_snapshot(p, (await _pack_out(db, p)).prices)
     for k, v in body.model_dump(exclude={"prices"}).items():
         setattr(p, k, v)
     await _apply_prices(db, p, body.prices)
+    audit.record(
+        db,
+        admin=admin,
+        action="pack.update",
+        target_type="pack",
+        target_id=p.id,
+        before=before,
+        after=_pack_snapshot(p, body.prices),
+    )
     await db.commit()
     return await _pack_out(db, p)
 
 
-@router.delete("/packs/{pack_id}", response_model=Ok)
-async def delete_pack(pack_id: uuid.UUID, db: DB) -> Ok:
+@router.delete("/packs/{pack_id}", response_model=Ok, dependencies=finance_only)
+async def delete_pack(pack_id: uuid.UUID, db: DB, admin: CurrentAdmin) -> Ok:
     p = await db.get(CoinPack, pack_id)
     if p is None:
         raise NotFound("Pack")
+    audit.record(
+        db,
+        admin=admin,
+        action="pack.deactivate",
+        target_type="pack",
+        target_id=p.id,
+        note="delete requested; packs are deactivated because purchases reference them",
+        before={"is_active": p.is_active, "sku": p.sku},
+        after={"is_active": False, "sku": p.sku},
+    )
     p.is_active = False  # purchases reference packs; never hard-delete
     await db.commit()
     return Ok()
@@ -98,12 +148,12 @@ async def delete_pack(pack_id: uuid.UUID, db: DB) -> Ok:
 @router.get("/purchases", response_model=AdminPurchasePage)
 async def purchases(
     db: DB,
-    status: str | None = None,
-    q: Annotated[str | None, Query(max_length=160)] = None,
+    status: PurchaseStatus | None = None,
+    q: Annotated[str | None, Query(max_length=120)] = None,
     date_from: Annotated[date | None, Query()] = None,
     date_to: Annotated[date | None, Query()] = None,
-    limit: int = Query(50, le=200),
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> AdminPurchasePage:
     """Purchases, searchable, with a count and a per-currency sum over the whole filtered set.
 
@@ -130,13 +180,13 @@ async def purchases(
     if status:
         filters.append(Purchase.status == status)
     if q:
-        needle = f"%{q.strip()}%"
+        needle = like_pattern(q)
         matches = [
-            Purchase.gateway_payment_id.ilike(needle),
-            Purchase.external_id.ilike(needle),
-            User.public_id.ilike(needle),
-            User.email.ilike(needle),
-            Purchase.coupon_code.ilike(needle),
+            Purchase.gateway_payment_id.ilike(needle, escape=LIKE_ESCAPE),
+            Purchase.external_id.ilike(needle, escape=LIKE_ESCAPE),
+            User.public_id.ilike(needle, escape=LIKE_ESCAPE),
+            User.email.ilike(needle, escape=LIKE_ESCAPE),
+            Purchase.coupon_code.ilike(needle, escape=LIKE_ESCAPE),
         ]
         # An id pasted whole should match exactly rather than relying on a LIKE over a uuid cast.
         try:
@@ -226,9 +276,14 @@ async def get_settings_ns(namespace: str, db: DB) -> dict:
 async def put_settings_ns(namespace: str, body: SettingsIn, db: DB, admin: CurrentAdmin) -> dict:
     if namespace not in EDITABLE_NAMESPACES:
         raise NotFound("Namespace")
-    forbidden = [k for k in body.data if "secret" in k.lower() or "key" in k.lower() and "public" not in k.lower()]
+    if namespace in FINANCE_NAMESPACES and admin.role not in (AdminRole.owner, AdminRole.finance):
+        raise Forbidden("Economy, payment and ad settings need the finance role")
+    forbidden = config_svc.find_secret_keys(body.data)
     if forbidden:
         raise Conflict(f"Secrets belong in the environment, not settings: {forbidden}", code="secret_in_settings")
+    problems = config_svc.validate_namespace_values(namespace, body.data)
+    if problems:
+        raise AppError("; ".join(problems), code="bad_setting_value")
     row = await db.get(Setting, namespace)
     if row is None:
         row = Setting(namespace=namespace, data={})

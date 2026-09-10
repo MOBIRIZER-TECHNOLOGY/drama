@@ -2,24 +2,24 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
 
-from app.api.deps import DB, CurrentUser, OptionalUser
+from app.api.deps import DB, CurrentUser, OptionalUser, client_country
 from app.api.routers.catalog import _card, _episode_counts
 from app.core.config import get_settings
 from app.core.errors import AppError, NotFound
 from app.core.ratelimit import limiter
 from app.core.redis import cache_available, note_cache_failure, note_cache_success, redis_client
-from app.models.catalog import Episode, Series
+from app.models.catalog import Episode, PublishStatus, Series
 from app.models.engagement import ContactMessage, Favorite, Report, WatchProgress
 from app.models.wallet import CoinLedger, Purchase
 from app.schemas.common import Ok
 from app.schemas.engagement import ContactIn, HistoryItem, MyListOut, ProgressIn, ReportIn, ToggleOut
 from app.services import engagement as eng
 from app.services.captcha import verify_turnstile
+from app.services.visibility import published_series, published_series_predicates
 
 router = APIRouter(tags=["engagement"])
 Lang = Annotated[str, Query(max_length=10)]
@@ -70,17 +70,21 @@ async def progress(episode_id: uuid.UUID, body: ProgressIn, ctx: CurrentUser, db
 
 
 @router.get("/me/list", response_model=MyListOut)
-async def my_list(ctx: CurrentUser, db: DB, lang: Lang = "en") -> MyListOut:
+async def my_list(
+    ctx: CurrentUser, db: DB, country: Annotated[str | None, Depends(client_country)], lang: Lang = "en"
+) -> MyListOut:
+    """Favourites and history, limited to what the viewer can still open.
+
+    Loaded through the catalogue's own visibility filter rather than by bare id: a favourite that has since
+    been archived, expired out of its window or blocked in this territory otherwise becomes a card that leads
+    to a 404, and My List was the one screen that showed unpublished titles to the public.
+    """
     fav_ids = await eng.favorites(db, ctx.user.id)
     hist = await eng.history(db, ctx.user.id)
     ids = list(dict.fromkeys(fav_ids + [wp.series_id for wp, _ in hist]))
     series_rows = {}
     if ids:
-        rows = await db.scalars(
-            select(Series)
-            .where(Series.id.in_(ids))
-            .options(selectinload(Series.translations), selectinload(Series.categories))
-        )
+        rows = await db.scalars(published_series(lang, country).where(Series.id.in_(ids)))
         series_rows = {s.id: s for s in rows.all()}
     counts = await _episode_counts(db, ids)
     cards = {sid: _card(s, lang, counts.get(sid, 0)) for sid, s in series_rows.items()}
@@ -128,9 +132,7 @@ async def export_me(request: Request, ctx: CurrentUser, db: DB) -> ExportOut:
     user = ctx.user
 
     ledger = (
-        await db.scalars(
-            select(CoinLedger).where(CoinLedger.user_id == user.id).order_by(CoinLedger.created_at.desc())
-        )
+        await db.scalars(select(CoinLedger).where(CoinLedger.user_id == user.id).order_by(CoinLedger.created_at.desc()))
     ).all()
     purchases = (
         await db.scalars(select(Purchase).where(Purchase.user_id == user.id).order_by(Purchase.created_at.desc()))
@@ -214,9 +216,24 @@ async def clear_history(ctx: CurrentUser, db: DB, series_id: uuid.UUID | None = 
 @router.post("/reports", response_model=Ok)
 @limiter.limit("10/minute")
 async def report(request: Request, body: ReportIn, ctx: CurrentUser, db: DB) -> Ok:
-    if body.series_id and await db.get(Series, body.series_id) is None:
+    """File a report against a series or episode the viewer can actually see.
+
+    Checked against the visibility predicate, not bare existence: a report endpoint that accepts any id is an
+    oracle for which draft and archived series exist, which is not something a viewer should be able to probe.
+    """
+    if body.series_id and not await db.scalar(
+        select(Series.id).where(Series.id == body.series_id, *published_series_predicates())
+    ):
         raise NotFound("Series")
-    if body.episode_id and await db.get(Episode, body.episode_id) is None:
+    if body.episode_id and not await db.scalar(
+        select(Episode.id)
+        .join(Series, Series.id == Episode.series_id)
+        .where(
+            Episode.id == body.episode_id,
+            Episode.status == PublishStatus.published,
+            *published_series_predicates(),
+        )
+    ):
         raise NotFound("Episode")
     db.add(
         Report(

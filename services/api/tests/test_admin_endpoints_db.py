@@ -49,6 +49,23 @@ LIST_ENDPOINTS = [
     "/v1/admin/series?limit=5",
     "/v1/admin/users?limit=5",
     "/v1/admin/notifications?limit=5",
+    # The funnel 500'd on every call: COALESCE(varchar, uuid) is a type error, and nothing requested it.
+    "/v1/admin/analytics/funnel?days=7",
+    "/v1/admin/analytics/qoe?days=7",
+    "/v1/admin/moderation?kind=flagged_series&limit=5&offset=0",
+    "/v1/admin/series?limit=5&q=%25_",
+    "/v1/admin/users?limit=5&q=%25_",
+    "/v1/admin/purchases?limit=5&q=%25_&status=paid",
+    # Sorted over the whole table, not the page. The title and episode-count sorts are subqueries, and the
+    # title search used to be a JOIN ... DISTINCT that Postgres refuses to order by an expression outside
+    # the select list, so the combination of a search and one of those sorts is the case worth a request.
+    "/v1/admin/series?limit=5&sort=title&order=asc",
+    "/v1/admin/series?limit=5&sort=episode_count&order=desc&q=%25_",
+    "/v1/admin/series?limit=5&sort=view_count",
+    "/v1/admin/series?limit=5&sort=status&order=asc&status=draft",
+    "/v1/admin/users?limit=5&sort=display_name&order=asc",
+    "/v1/admin/users?limit=5&sort=coin_balance",
+    "/v1/admin/users?limit=5&sort=last_seen_at&order=asc&q=%25_",
 ]
 
 
@@ -109,10 +126,13 @@ async def test_admin_list_endpoint_responds(admin_client, path):
     r = await admin_client.get(path)
     assert r.status_code == 200, f"{path} -> {r.status_code}: {r.text[:300]}"
     body = r.json()
-    # Either a bare list or a page; a page must carry its own total, which is the whole point of having one.
-    if isinstance(body, dict):
-        assert "items" in body and isinstance(body["items"], list), path
+    # Either a bare list, a page, or a report object. A page must carry its own total, which is the whole
+    # point of having one; a report (the funnel) is a fixed shape and only has to be non-empty.
+    if isinstance(body, dict) and "items" in body:
+        assert isinstance(body["items"], list), path
         assert isinstance(body.get("total"), int), f"{path} page has no integer total"
+    elif isinstance(body, dict):
+        assert body, f"{path} returned an empty object"
     else:
         assert isinstance(body, list), path
 
@@ -219,8 +239,13 @@ async def test_a_category_can_be_created_without_translations(admin_client):
     """
     created = await admin_client.post(
         "/v1/admin/categories",
-        json={"name": "Regression", "slug": f"regression-{uuid.uuid4().hex[:8]}", "show_on_home": False,
-              "sort_order": 0, "translations": {}},
+        json={
+            "name": "Regression",
+            "slug": f"regression-{uuid.uuid4().hex[:8]}",
+            "show_on_home": False,
+            "sort_order": 0,
+            "translations": {},
+        },
     )
     assert created.status_code == 201, f"{created.status_code}: {created.text[:300]}"
     body = created.json()

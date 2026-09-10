@@ -405,6 +405,10 @@ export interface paths {
          * @description Access check, then a short-lived signed playback URL. Locked episodes never get a URL.
          *
          *     Guests may play free episodes (the hook before sign-up); anything else needs a session.
+         *
+         *     The series is checked with the same predicate the catalogue uses, not just the episode's own status: an
+         *     episode of an archived series, or of one outside its licensing window or territory, stayed playable to
+         *     anyone holding its id, which made unpublishing a title cosmetic.
          */
         post: operations["play_v1_episodes__episode_id__play_post"];
         delete?: never;
@@ -491,7 +495,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** My List */
+        /**
+         * My List
+         * @description Favourites and history, limited to what the viewer can still open.
+         *
+         *     Loaded through the catalogue's own visibility filter rather than by bare id: a favourite that has since
+         *     been archived, expired out of its window or blocked in this territory otherwise becomes a card that leads
+         *     to a 404, and My List was the one screen that showed unpublished titles to the public.
+         */
         get: operations["my_list_v1_me_list_get"];
         put?: never;
         post?: never;
@@ -547,7 +558,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report */
+        /**
+         * Report
+         * @description File a report against a series or episode the viewer can actually see.
+         *
+         *     Checked against the visibility predicate, not bare existence: a report endpoint that accepts any id is an
+         *     oracle for which draft and archived series exist, which is not something a viewer should be able to probe.
+         */
         post: operations["report_v1_reports_post"];
         delete?: never;
         options?: never;
@@ -1120,7 +1137,14 @@ export interface paths {
         /** Update Episode */
         put: operations["update_episode_v1_admin_episodes__episode_id__put"];
         post?: never;
-        /** Delete Episode */
+        /**
+         * Delete Episode
+         * @description Delete an episode, unless someone has paid for it — then archive it, as `delete_series` does.
+         *
+         *     `episode_unlocks` cascades on episode delete, so removing an episode used to remove the record that a
+         *     viewer spent coins on it, with the ledger row left pointing at nothing. The unlock is the receipt; it is
+         *     kept and the episode is hidden instead.
+         */
         delete: operations["delete_episode_v1_admin_episodes__episode_id__delete"];
         options?: never;
         head?: never;
@@ -1287,36 +1311,15 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Users */
+        /**
+         * Users
+         * @description The accounts list. Sorting happens here, over the whole table: the console used to sort the page it
+         *     had, which put the richest account on page one only if it happened to be among the newest fifty.
+         */
         get: operations["users_v1_admin_users_get"];
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/admin/users/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * User Detail
-         * @description One call for the support drawer: the account, its VIP state and its purchases.
-         *
-         *     VIP was never shown, so a support agent granting it worked blind and could stack a second month onto an
-         *     already-active pass; and answering "I paid and got no coins" meant leaving for Purchases and searching by
-         *     hand for a user id.
-         */
-        get: operations["user_detail_v1_admin_users__user_id__get"];
-        put?: never;
-        post?: never;
-        /** Delete User */
-        delete: operations["delete_user_v1_admin_users__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1368,6 +1371,31 @@ export interface paths {
         /** Grant Vip */
         post: operations["grant_vip_v1_admin_users__user_id__vip_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/users/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * User Detail
+         * @description One call for the support drawer: the account, its VIP state and its purchases.
+         *
+         *     VIP was never shown, so a support agent granting it worked blind and could stack a second month onto an
+         *     already-active pass; and answering "I paid and got no coins" meant leaving for Purchases and searching by
+         *     hand for a user id.
+         */
+        get: operations["user_detail_v1_admin_users__user_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete User */
+        delete: operations["delete_user_v1_admin_users__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1680,10 +1708,13 @@ export interface paths {
         };
         /**
          * Moderation
-         * @description Open reports and AI-flagged series in one queue, oldest first within each kind.
+         * @description Open reports and AI-flagged series in one queue, oldest first.
          *
-         *     Both halves are counted over the whole table before anything is sliced, so the tab badges are workloads
-         *     rather than samples.
+         *     Both halves are counted over the whole table, so the tab badges are workloads rather than samples. The
+         *     page itself is cut in SQL: a UNION of (kind, id, created_at) over both sources, ordered and offset there,
+         *     then hydrated. The previous shape took the newest 200 of each, merged them in Python and sliced — so past
+         *     the four-hundredth item the pager showed empty pages while the total said otherwise, and the "oldest
+         *     first" promise held only within whatever slice had been fetched.
          */
         get: operations["moderation_v1_admin_moderation_get"];
         put?: never;
@@ -2238,7 +2269,14 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Retry Video */
+        /**
+         * Retry Video
+         * @description Re-run the transcode. 409 `job_in_progress` while the previous run is still queued or running.
+         *
+         *     The queue is asked first and the row updated second: the old order marked the asset queued and then let the
+         *     enqueue be refused, which left a "queued" asset that no worker would ever pick up. The worker resets `error`
+         *     and sets `transcoding` itself, so nothing it needs depends on this row update landing first.
+         */
         post: operations["retry_video_v1_admin_uploads_videos__asset_id__retry_post"];
         delete?: never;
         options?: never;
@@ -2257,6 +2295,60 @@ export interface paths {
         put?: never;
         /** Ingest */
         post: operations["ingest_v1_events_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stream/{asset_id}/master.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Master */
+        get: operations["master_v1_stream__asset_id__master_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stream/{asset_id}/v/{variant}/index.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Variant Playlist */
+        get: operations["variant_playlist_v1_stream__asset_id__v__variant__index_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stream/{asset_id}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Key
+         * @description Sixteen raw bytes. The signature is the only thing standing between a request and the episode.
+         */
+        get: operations["key_v1_stream__asset_id__key_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3160,7 +3252,14 @@ export interface components {
             /** Coin Balance */
             coin_balance: number;
         };
-        /** CheckoutIn */
+        /**
+         * CheckoutIn
+         * @description What the client may choose about a purchase.
+         *
+         *     There is deliberately no `country`: regional prices exist because some markets pay less, so the country
+         *     comes from the edge header the request arrived with (see `deps.client_country`), never from the body. A
+         *     client that still sends one is ignored rather than refused.
+         */
         CheckoutIn: {
             /**
              * Pack Id
@@ -3174,11 +3273,6 @@ export interface components {
              * @default INR
              */
             currency: string;
-            /**
-             * Country
-             * @default *
-             */
-            country: string;
             /** Success Url */
             success_url: string;
             /** Cancel Url */
@@ -4348,7 +4442,10 @@ export interface components {
             /** Error Rate */
             error_rate: number | null;
         };
-        /** QuoteIn */
+        /**
+         * QuoteIn
+         * @description Same shape as a checkout minus the gateway; the country is edge-resolved here too.
+         */
         QuoteIn: {
             /**
              * Pack Id
@@ -4360,11 +4457,6 @@ export interface components {
              * @default INR
              */
             currency: string;
-            /**
-             * Country
-             * @default *
-             */
-            country: string;
             /** Coupon Code */
             coupon_code?: string | null;
             /** Offer Id */
@@ -4684,10 +4776,6 @@ export interface components {
             window_starts_at?: string | null;
             /** Window Ends At */
             window_ends_at?: string | null;
-            /** Moderation Flags */
-            moderation_flags?: string[] | null;
-            /** Moderation Note */
-            moderation_note?: string | null;
             /**
              * Category Ids
              * @default []
@@ -7009,6 +7097,8 @@ export interface operations {
             query?: {
                 q?: string | null;
                 status?: components["schemas"]["PublishStatus"] | null;
+                sort?: ("title" | "status" | "episode_count" | "view_count" | "like_count" | "updated_at" | "created_at") | null;
+                order?: "asc" | "desc";
                 limit?: number;
                 offset?: number;
             };
@@ -7510,7 +7600,7 @@ export interface operations {
     purchases_v1_admin_purchases_get: {
         parameters: {
             query?: {
-                status?: string | null;
+                status?: components["schemas"]["PurchaseStatus"] | null;
                 q?: string | null;
                 date_from?: string | null;
                 date_to?: string | null;
@@ -7737,6 +7827,8 @@ export interface operations {
             query?: {
                 q?: string | null;
                 status?: components["schemas"]["UserStatus"] | null;
+                sort?: ("display_name" | "status" | "coin_balance" | "created_at" | "last_seen_at") | null;
+                order?: "asc" | "desc";
                 limit?: number;
                 offset?: number;
             };
@@ -7753,68 +7845,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AdminUserPage"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    user_detail_v1_admin_users__user_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AdminUserDetail"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_user_v1_admin_users__user_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Ok"];
                 };
             };
             /** @description Validation Error */
@@ -7912,6 +7942,68 @@ export interface operations {
                 "application/json": components["schemas"]["VipGrantIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    user_detail_v1_admin_users__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_user_v1_admin_users__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -9851,6 +9943,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Ok"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    master_v1_stream__asset_id__master_m3u8_get: {
+        parameters: {
+            query: {
+                exp: number;
+                uid: string;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    variant_playlist_v1_stream__asset_id__v__variant__index_m3u8_get: {
+        parameters: {
+            query: {
+                exp: number;
+                uid: string;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+                variant: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    key_v1_stream__asset_id__key_get: {
+        parameters: {
+            query: {
+                exp: number;
+                uid: string;
+                sig: string;
+            };
+            header?: never;
+            path: {
+                asset_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

@@ -80,7 +80,11 @@ class UnlockMethod(str, enum.Enum):
 
 class EpisodeUnlock(UUIDPrimaryKey, Base):
     __tablename__ = "episode_unlocks"
-    __table_args__ = (UniqueConstraint("user_id", "episode_id", name="uq_unlock_user_episode"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "episode_id", name="uq_unlock_user_episode"),
+        # The dashboard's top-series join and every "may this series be deleted" check look unlocks up by series.
+        Index("ix_episode_unlocks_series", "series_id"),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
@@ -146,6 +150,8 @@ class Purchase(UUIDPrimaryKey, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("gateway", "external_id", name="uq_purchase_gateway_external"),
         Index("ix_purchases_gateway_payment", "gateway", "gateway_payment_id"),
+        # The support drawer and the data export both read one user's purchases; without this that is a scan.
+        Index("ix_purchases_user", "user_id"),
     )
 
     user_id: Mapped[uuid.UUID] = mapped_column(

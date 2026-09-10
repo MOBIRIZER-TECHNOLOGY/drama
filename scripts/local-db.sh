@@ -19,8 +19,17 @@ ADMIN_PASSWORD="${KATHA_SEED_ADMIN_PASSWORD:-katha-local-admin}"
 
 # Docker Desktop does not always put its CLI on PATH for non-login shells.
 export PATH="$PATH:/c/Program Files/Docker/Docker/resources/bin"
-# uv is installed as a Python module here, so call it that way.
-UV="python -m uv"
+# Prefer the standalone launcher; Windows installations commonly expose uv only as a Python module.
+if command -v uv >/dev/null 2>&1; then
+  UV=uv
+elif command -v python >/dev/null 2>&1 && python -m uv --version >/dev/null 2>&1; then
+  UV="python -m uv"
+elif command -v python3 >/dev/null 2>&1 && python3 -m uv --version >/dev/null 2>&1; then
+  UV="python3 -m uv"
+else
+  echo "uv is not on PATH. Install uv and reopen the shell." >&2
+  exit 1
+fi
 
 say() { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 die() { printf '\n\033[1;31mx %s\033[0m\n' "$*" >&2; exit 1; }
@@ -58,8 +67,12 @@ say "Checking the migrations match the models"
 KATHA_DATABASE_URL="$DB_URL" $UV run alembic check
 
 if [ "${1:-}" != "--test" ]; then
-  say "Seeding katha (admin: ${ADMIN_EMAIL})"
-  KATHA_DATABASE_URL="$DB_URL" $UV run python scripts/seed.py \
+say "Seeding katha (admin: ${ADMIN_EMAIL})"
+  KATHA_DATABASE_URL="$DB_URL" \
+    KATHA_S3_ENDPOINT="http://localhost:9000" \
+    KATHA_S3_ACCESS_KEY="katha" \
+    KATHA_S3_SECRET_KEY="katha-secret" \
+    $UV run python scripts/seed.py \
     --admin-email "$ADMIN_EMAIL" --admin-password "$ADMIN_PASSWORD"
 fi
 

@@ -122,3 +122,12 @@ def test_no_project_id_configured_is_a_clean_refusal(monkeypatch, keys):
     monkeypatch.setattr(firebase.get_settings(), "firebase_project_id", None, raising=False)
     with pytest.raises(Unauthorized):
         firebase.verify_id_token(_token(good))
+
+
+def test_email_verified_is_carried_and_defaults_to_false(keys):
+    """Account linking by email keys off this flag; a token that omits it must not read as verified."""
+    good, _ = keys
+    assert firebase.verify_id_token(_token(good)).email_verified is False
+    assert firebase.verify_id_token(_token(good, email_verified=True)).email_verified is True
+    assert firebase.verify_id_token(_token(good, email_verified="yes")).email_verified is True
+    assert firebase.verify_id_token(_token(good, email_verified=False)).email_verified is False

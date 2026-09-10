@@ -62,8 +62,17 @@ async def transcribe(audio_path: Path, *, language: str | None = None) -> tuple[
     return cues, detected
 
 
-async def translate_cues(cues: list[Cue], *, target_lang: str) -> list[Cue]:
-    """Translate cue text with the chunked graph; keys are cue indexes so timings never move."""
+async def translate_cues(cues: list[Cue], *, target_lang: str) -> tuple[list[Cue], int]:
+    """Translate cue text with the chunked graph; keys are cue indexes so timings never move.
+
+    Returns the cues and how many of them the graph gave up on. Those keep their source text rather than
+    leaving a hole in the track, which is the right thing for a viewer mid-episode and the wrong thing to hide
+    from whoever decides whether the track is fit to publish. The count is the caller's to record.
+    """
     items = {str(c.index): c.text for c in cues}
     translated = await run_translation_batch(target_lang=target_lang, items=items, namespace="subtitles")
-    return [Cue(index=c.index, start=c.start, end=c.end, text=translated.get(str(c.index), c.text)) for c in cues]
+    missing = sum(1 for c in cues if str(c.index) not in translated)
+    if missing:
+        log.warning("subtitles.incomplete", lang=target_lang, missing=missing, cues=len(cues))
+    out = [Cue(index=c.index, start=c.start, end=c.end, text=translated.get(str(c.index), c.text)) for c in cues]
+    return out, missing

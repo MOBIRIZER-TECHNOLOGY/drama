@@ -27,6 +27,7 @@ from app.core.config import get_settings
 from app.core.errors import AppError, NotFound
 from app.models.identity import User
 from app.models.wallet import (
+    CoinLedger,
     CoinPack,
     Coupon,
     LedgerKind,
@@ -337,17 +338,82 @@ async def _reward_referrer_on_first_purchase(session: AsyncSession, purchase: Pu
         return
     amount = await config_svc.referral_reward_coins(session)
     if amount > 0:
+        variants = await config_svc.variant_map(session, ref.referrer_id)
+        # Keyed on the purchase as well as the referral: a refund reverses the reward and clears
+        # `rewarded_at`, and the next genuine purchase has to be able to pay it again under a fresh key.
         await ledger.post(
             session,
             user_id=ref.referrer_id,
             delta=amount,
             kind=LedgerKind.referral,
-            idempotency_key=f"referral:{ref.id}",
+            idempotency_key=f"referral:{ref.id}:{purchase.id}",
             ref_type="referral",
             ref_id=str(ref.id),
             note="Referral reward",
+            variant_map=variants or None,
         )
     ref.rewarded_at = datetime.now(UTC)
+
+
+async def _reverse_referrer_reward_on_refund(session: AsyncSession, purchase: Purchase) -> None:
+    """Take the referrer's reward back when the purchase that earned it is refunded.
+
+    Without this a referral pair could buy the smallest pack, collect the referrer's coins and refund the
+    purchase, netting the reward for free. Only the purchase that triggered the reward reverses it: newer
+    reward rows name that purchase in their key; for rows written before they did, the referee's earliest
+    paid purchase is by construction the one that paid out. `rewarded_at` is cleared so a later real purchase
+    earns it again — with the purchase in the key, that second grant is a new ledger row, not a replay.
+    """
+    ref = await session.scalar(
+        select(Referral)
+        .where(Referral.referee_id == purchase.user_id, Referral.rewarded_at.is_not(None))
+        .with_for_update()
+    )
+    if ref is None:
+        return
+    reward = await session.scalar(
+        select(CoinLedger)
+        .where(
+            CoinLedger.kind == LedgerKind.referral,
+            CoinLedger.ref_type == "referral",
+            CoinLedger.ref_id == str(ref.id),
+            CoinLedger.delta > 0,
+        )
+        .order_by(CoinLedger.created_at.desc())
+        .limit(1)
+    )
+    if reward is None:
+        return
+    key_parts = reward.idempotency_key.split(":")
+    if len(key_parts) == 3:
+        triggered_by = key_parts[2]
+    else:
+        earliest = await session.scalar(
+            select(Purchase.id)
+            .where(
+                Purchase.user_id == purchase.user_id,
+                Purchase.status.in_((PurchaseStatus.paid, PurchaseStatus.refunded)),
+                Purchase.paid_at.is_not(None),
+            )
+            .order_by(Purchase.paid_at, Purchase.created_at)
+            .limit(1)
+        )
+        triggered_by = str(earliest) if earliest else None
+    if triggered_by != str(purchase.id):
+        return
+    await ledger.post(
+        session,
+        user_id=ref.referrer_id,
+        delta=-reward.delta,
+        kind=LedgerKind.refund,
+        idempotency_key=f"referral-reversal:{ref.id}:{purchase.id}",
+        ref_type="referral",
+        ref_id=str(ref.id),
+        note="Referral reward reversed: purchase refunded",
+        variant_map=reward.variant_map,
+        allow_negative=True,
+    )
+    ref.rewarded_at = None
 
 
 async def mark_refunded(session: AsyncSession, purchase_id: uuid.UUID, *, raw: dict | None = None) -> Purchase:
@@ -370,6 +436,7 @@ async def mark_refunded(session: AsyncSession, purchase_id: uuid.UUID, *, raw: d
             variant_map=purchase.variant_map,
             allow_negative=True,
         )
+    await _reverse_referrer_reward_on_refund(session, purchase)
     now = datetime.now(UTC)
     vips = await session.scalars(
         select(VipMembership).where(VipMembership.purchase_id == purchase.id, VipMembership.ends_at > now)
@@ -390,7 +457,13 @@ async def mark_refunded(session: AsyncSession, purchase_id: uuid.UUID, *, raw: d
 async def record_event(
     session: AsyncSession, gateway: str, event_id: str, event_type: str | None, payload: dict
 ) -> WebhookEvent | None:
-    """Insert the inbox row. Returns None when this event id was already received (replay)."""
+    """Insert the inbox row. Returns None when this event id was already handled (replay).
+
+    An event whose previous delivery ended in an error is not "handled": the gateway retries because we asked
+    it to, and treating the retry as a duplicate would burn the event id on a transient failure — a database
+    blip during `checkout.session.completed` would leave the purchase pending forever. Such a row is handed
+    back, cleared, so the retry can run against it.
+    """
     row = WebhookEvent(
         gateway=gateway, event_id=event_id, event_type=event_type, payload=payload, received_at=datetime.now(UTC)
     )
@@ -399,7 +472,18 @@ async def record_event(
             session.add(row)
             await session.flush()
     except IntegrityError:
-        return None
+        existing = await session.scalar(
+            select(WebhookEvent)
+            .where(WebhookEvent.gateway == gateway, WebhookEvent.event_id == event_id)
+            .with_for_update()
+        )
+        if existing is None or existing.result != "error":
+            return None
+        existing.processed_at = None
+        existing.result = None
+        existing.error = None
+        existing.received_at = datetime.now(UTC)
+        return existing
     return row
 
 

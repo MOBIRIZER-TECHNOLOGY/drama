@@ -1,5 +1,6 @@
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Annotated
 
 import jwt
@@ -10,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.db import get_session
 from app.core.errors import Forbidden, Unauthorized
 from app.core.security import decode_token
-from app.models.identity import AdminRole, AdminUser, User, UserStatus
+from app.models.identity import AdminRole, AdminUser, Session, User, UserStatus
 
 DB = Annotated[AsyncSession, Depends(get_session)]
 _bearer = HTTPBearer(auto_error=False)
@@ -35,7 +36,15 @@ async def _resolve_user(db: AsyncSession, creds: HTTPAuthorizationCredentials | 
     if user.status != UserStatus.active:
         raise Forbidden("Account is not active")
     sid = payload.get("sid")
-    return AuthContext(user=user, session_id=uuid.UUID(sid) if sid else None)
+    session_id = uuid.UUID(sid) if sid else None
+    if session_id is not None:
+        # Access tokens are short-lived and stateless, but "sign out this device" and the refresh-reuse alarm
+        # both work by revoking the session row. Without this check a revoked session keeps its last access
+        # token for the rest of that token's life, which is exactly the window a stolen refresh token wants.
+        session_row = await db.get(Session, session_id)
+        if session_row is None or session_row.revoked_at is not None or session_row.expires_at <= datetime.now(UTC):
+            raise Unauthorized("Session was revoked. Sign in again.", code="session_revoked")
+    return AuthContext(user=user, session_id=session_id)
 
 
 async def current_user(db: DB, creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)]) -> AuthContext:
@@ -62,6 +71,10 @@ async def current_admin(db: DB, creds: Annotated[HTTPAuthorizationCredentials | 
         payload = decode_token(creds.credentials, "admin")
     except jwt.PyJWTError as exc:
         raise Unauthorized("Invalid or expired admin token") from exc
+    # Password-reset links are minted as their own kind, so `decode_token` already refuses them. This is the
+    # belt to that brace: if a future token ever carries a purpose claim on an admin kind, it is not a session.
+    if payload.get("purpose") is not None:
+        raise Unauthorized("Invalid or expired admin token")
     admin = await db.get(AdminUser, uuid.UUID(payload["sub"]))
     if admin is None or not admin.is_active:
         raise Unauthorized("Unknown admin")
@@ -100,7 +113,11 @@ def client_country(request: Request) -> str | None:
 
 
 def client_ip(request: Request) -> str | None:
-    fwd = request.headers.get("x-forwarded-for")
-    if fwd:
-        return fwd.split(",")[0].strip()
+    """The peer address as uvicorn sees it.
+
+    The proxy chain is resolved by uvicorn, not here: with `--proxy-headers` and `--forwarded-allow-ips` set to
+    the load balancer, it rewrites `request.client` from X-Forwarded-For only when the connecting peer is one
+    of those trusted proxies. Reading the raw header again in application code would undo that trust decision
+    and take the first hop's word for it — which is whatever the client chose to put there.
+    """
     return request.client.host if request.client else None

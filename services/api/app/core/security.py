@@ -10,7 +10,11 @@ from app.core.config import get_settings
 
 _pw = PasswordHash.recommended()
 
-TokenKind = Literal["access", "refresh", "admin"]
+# `admin_reset` is its own kind rather than an `admin` token with a purpose claim. A password-reset link travels
+# by email, which is the least trusted channel this service writes to, and the dependency that guards every
+# admin route checks the kind before anything else — so a kind of its own means a leaked link can never be
+# presented as a session, no matter what else the verifier forgets to look at.
+TokenKind = Literal["access", "refresh", "admin", "admin_reset"]
 
 
 def hash_password(raw: str) -> str:

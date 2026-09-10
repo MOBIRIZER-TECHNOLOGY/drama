@@ -31,7 +31,7 @@ from app.core.db import SessionLocal  # noqa: E402
 from app.models.catalog import AssetStatus, Series, VideoAsset  # noqa: E402
 
 ASSETS = Path(__file__).parent / "seed-assets"
-DURATION_SEC = 8
+DURATION_SEC = 30
 
 
 async def main() -> int:
@@ -51,10 +51,11 @@ async def main() -> int:
         attached = 0
         missing: list[int] = []
         for episode in sorted(series.episodes, key=lambda e: e.number):
-            key = f"media/heiress/ep{episode.number}/master.m3u8"
-            if not (ASSETS / key).exists():
+            local_key = f"media/heiress/ep{episode.number}/master.m3u8"
+            if not (ASSETS / local_key).exists():
                 missing.append(episode.number)
                 continue
+            key = f"hls/seed/heiress/ep{episode.number}/master.m3u8"
 
             asset = await db.get(VideoAsset, episode.video_asset_id) if episode.video_asset_id else None
             if asset is None:

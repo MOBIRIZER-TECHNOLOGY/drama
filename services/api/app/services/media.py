@@ -71,7 +71,6 @@ def media_url(value: str | None) -> str | None:
 PLACEHOLDER_KEY_URI = "katha:key"
 
 CONTENT_KEY_LABEL = b"katha:hls:aes128:v1:"
-CONTENT_IV_LABEL = b"katha:hls:aes128-iv:v1:"
 CONTENT_KEY_BYTES = 16  # AES-128, which is what HLS METHOD=AES-128 means.
 
 
@@ -83,17 +82,6 @@ def content_key(asset_id: uuid.UUID) -> bytes:
         salt=None,
         info=CONTENT_KEY_LABEL + asset_id.bytes,
     )
-    return hkdf.derive(get_settings().content_key_secret.encode())
-
-
-def content_iv(asset_id: uuid.UUID) -> bytes:
-    """The AES-CBC IV for one asset, derived like the key and from the same secret.
-
-    HLS carries one IV per playlist. Left unset, ffmpeg writes zeros into the playlist, and then every segment
-    of every rendition is encrypted under the same key and the same IV, so their identical opening bytes
-    encrypt identically. Deriving it costs nothing and stores nothing, exactly like the key.
-    """
-    hkdf = HKDF(algorithm=hashes.SHA256(), length=16, salt=None, info=CONTENT_IV_LABEL + asset_id.bytes)
     return hkdf.derive(get_settings().content_key_secret.encode())
 
 

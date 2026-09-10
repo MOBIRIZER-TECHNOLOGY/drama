@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -64,7 +64,16 @@ class AuthIdentity(UUIDPrimaryKey, TimestampMixin, Base):
 
 class Session(UUIDPrimaryKey, TimestampMixin, Base):
     __tablename__ = "sessions"
-    __table_args__ = (Index("ix_sessions_user_active", "user_id", "revoked_at"),)
+    __table_args__ = (
+        Index("ix_sessions_user_active", "user_id", "revoked_at"),
+        # Declared to match migration 0004, which is what `alembic check` compares against: every push send
+        # starts by finding live tokens for a set of users, and the partial index is what keeps that off a scan.
+        Index(
+            "ix_sessions_push_token",
+            "user_id",
+            postgresql_where=text("push_token IS NOT NULL AND revoked_at IS NULL"),
+        ),
+    )
 
     user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False

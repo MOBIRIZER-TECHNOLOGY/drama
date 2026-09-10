@@ -152,6 +152,7 @@ async def variant_playlist(
     viewer = _authorise(f"/v1/stream/{asset_id}/v/{variant}/index.m3u8", exp, uid, sig)
     asset = await _asset(db, asset_id)
     edge = _edge(asset)
+    asset_dir = _asset_dir(asset)
     source = await _fetch(f"{_origin(asset)}/{variant}/index.m3u8")
     expires = datetime.now(UTC) + LINK_TTL
 
@@ -178,7 +179,11 @@ async def variant_playlist(
                 # quietly hand out the episode in the clear. Better to fail loudly.
                 log.error("stream.unencrypted_variant", asset_id=str(asset_id), variant=variant)
                 raise NotFound("Video")
-            out.append(f"{edge}/{variant}/{stripped}?{sign_path(f'/{stripped}', user_id=viewer, expires=expires)}")
+            # Signed over the bucket-relative path, which is what the edge verifier (/v1/media/verify) checks
+            # after stripping its mount prefix. Signing the bare filename produced URLs the CDN could never
+            # verify, so every encrypted segment came back 403 the moment signing was switched on.
+            segment_path = f"/{asset_dir}/{variant}/{stripped}"
+            out.append(f"{edge}/{variant}/{stripped}?{sign_path(segment_path, user_id=viewer, expires=expires)}")
             continue
         out.append(line)
     return _no_store("\n".join(out) + "\n", PLAYLIST_MEDIA_TYPE)

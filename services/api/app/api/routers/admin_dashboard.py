@@ -5,6 +5,7 @@ from sqlalchemy import case, cast, func, select
 from sqlalchemy.types import Date
 
 from app.api.deps import DB, AdminRole, require_role
+from app.core.config import get_settings
 from app.models.catalog import Episode, PublishStatus, Series, SeriesTranslation
 from app.models.identity import User
 from app.models.wallet import CoinLedger, EpisodeUnlock, Purchase, PurchaseStatus
@@ -57,9 +58,12 @@ async def dashboard(db: DB, days: int = Query(30, ge=1, le=365)) -> DashboardOut
         or 0
     )
 
-    day = cast(User.created_at, Date)
+    # Bucketed in the product timezone, not UTC: the operator reads "yesterday" as a local day, and a UTC
+    # boundary at 05:30 IST put every late-evening purchase on the following date.
+    tz = get_settings().reward_timezone
+    day = cast(func.timezone(tz, User.created_at), Date)
     reg_rows = await db.execute(select(day, func.count()).where(User.created_at >= since).group_by(day).order_by(day))
-    pday = cast(Purchase.paid_at, Date)
+    pday = cast(func.timezone(tz, Purchase.paid_at), Date)
     rev_rows = await db.execute(
         select(pday, func.count(), func.sum(Purchase.amount))
         .where(Purchase.status == PurchaseStatus.paid, Purchase.paid_at >= since)
@@ -138,9 +142,7 @@ async def _previous_window(db, start: datetime, end: datetime) -> DashboardPrevi
         purchases_paid=await db.scalar(select(func.count()).select_from(paid)) or 0,
         paying_users=await db.scalar(select(func.count(func.distinct(paid.c.user_id)))) or 0,
         new_users=await db.scalar(select(func.count()).where(User.created_at >= start, User.created_at < end)) or 0,
-        active_users=await db.scalar(
-            select(func.count()).where(User.last_seen_at >= start, User.last_seen_at < end)
-        )
+        active_users=await db.scalar(select(func.count()).where(User.last_seen_at >= start, User.last_seen_at < end))
         or 0,
         unlocks=await db.scalar(
             select(func.count()).where(EpisodeUnlock.created_at >= start, EpisodeUnlock.created_at < end)

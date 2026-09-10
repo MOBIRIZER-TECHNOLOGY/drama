@@ -66,6 +66,10 @@ async def exchange(request: Request, body: ExchangeRequest, db: DB) -> TokenPair
 async def refresh(request: Request, body: RefreshRequest, db: DB) -> TokenPair:
     result = await users_svc.rotate_refresh(db, body.refresh_token)
     if result is None:
+        # A refusal can carry a write: presenting an already-rotated token marks the whole session revoked,
+        # which is the theft signal this endpoint exists to act on. Raising before the commit would have
+        # rolled that revocation back with the request, so the alarm never actually rang.
+        await db.commit()
         raise Unauthorized("Refresh token rejected")
     access, new_refresh, _ = result
     await db.commit()

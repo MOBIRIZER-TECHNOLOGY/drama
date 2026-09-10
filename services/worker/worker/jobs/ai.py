@@ -180,11 +180,24 @@ async def transcribe_episode(ctx: dict, episode_id: str, target_langs: list[str]
         if not cues:
             return {"status": "no_speech"}
         written = await _write_vtt(eid, source_lang, to_vtt(cues), tmp)
+        # Cues the graph could not translate keep the source text, so the track plays through. The count per
+        # language goes into the job result, which is what /admin/ai/jobs/{id} shows, so a track that is
+        # a third untranslated is visible as such rather than reported as a clean success.
+        incomplete: dict[str, int] = {}
         for lang in target_langs:
-            translated = await translate_cues(cues, target_lang=lang)
+            translated, missing = await translate_cues(cues, target_lang=lang)
+            if missing:
+                incomplete[lang] = missing
             written += await _write_vtt(eid, lang, to_vtt(translated), tmp)
-        log.info("subtitles.done", episode_id=episode_id, languages=1 + len(target_langs), detected=detected)
-        return {"status": "ok", "cues": len(cues), "files": written}
+        log.info(
+            "subtitles.done",
+            episode_id=episode_id,
+            languages=1 + len(target_langs),
+            detected=detected,
+            incomplete=incomplete or None,
+        )
+        status = "incomplete" if incomplete else "ok"
+        return {"status": status, "cues": len(cues), "files": written, "incomplete": incomplete}
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

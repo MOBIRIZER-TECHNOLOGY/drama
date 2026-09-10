@@ -48,10 +48,10 @@ jobs:
         run: uv run pytest -q
       - name: ai deps and tests
         working-directory: services/ai
-        run: uv sync --extra dev && uv run ruff check . && uv run pytest -q
+        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
       - name: worker deps and tests
         working-directory: services/worker
-        run: uv sync --extra dev && uv run ruff check . && uv run pytest -q
+        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
       - name: openapi export matches committed client schema
         working-directory: services/api
         run: |
@@ -62,15 +62,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
+      - uses: pnpm/action-setup@v4  # version comes from package.json's packageManager
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @katha/api-client generate
+      # The generated client is committed so editors and CI agree on the types. Regenerating in CI only helps
+      # if a stale commit is refused rather than silently overwritten.
+      - name: generated client is committed
+        run: git diff --exit-code -- packages/api-client/src/schema.d.ts
       - run: pnpm -r --if-present typecheck
       - run: pnpm -r --if-present lint
       # One key means one English string across both clients: they share the server's translation table, so a

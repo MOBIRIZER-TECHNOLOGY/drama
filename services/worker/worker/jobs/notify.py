@@ -5,11 +5,15 @@ series someone is watching, a streak about to lapse, and an episode left unfinis
 day 7 exists for a dripping-content app — without them a viewer has to remember the app on their own.
 
 Every job resolves its own audience, sends through `app.services.push`, and commits. All of them are safe to
-re-run: delivery is keyed on rows that already exist, and a double send is bounded by the daily cron schedule.
+re-run. `send_push` and `new_episode_alert` are keyed on rows that already exist. The daily reminders have no
+row of their own to key on, and arq re-runs a job that was cancelled mid-way (a worker restart), which would
+mean a second "your streak ends tonight" to everyone the first run had already reached. So each records who it
+notified in a Redis set keyed by job and day, and skips them on the re-run; the set expires after two days.
 """
 
 import uuid
-from datetime import UTC, datetime, timedelta
+from collections import defaultdict
+from datetime import UTC, date, datetime, time, timedelta
 
 import structlog
 from app.core.db import SessionLocal
@@ -25,6 +29,29 @@ log = structlog.get_logger()
 # A viewer who has not opened the app in this long is churned, not dormant; stop paying to reach them.
 MAX_IDLE_DAYS = 45
 BATCH = 500
+# How long the "already notified today" sets live. Longer than a day so a re-run just after midnight of a job
+# that was cancelled just before it still sees yesterday's set, and short because after that it is only noise.
+NOTIFIED_TTL = timedelta(days=2)
+
+
+def _notified_key(job: str, day: date) -> str:
+    return f"notify:{job}:{day.isoformat()}"
+
+
+async def _already_notified(redis, job: str, day: date) -> set[uuid.UUID]:
+    """Who this job reached on `day` in an earlier run. Empty when there is no Redis to ask (tests)."""
+    if redis is None:
+        return set()
+    members = await redis.smembers(_notified_key(job, day))
+    return {uuid.UUID(m.decode() if isinstance(m, bytes) else m) for m in members}
+
+
+async def _record_notified(redis, job: str, day: date, user_ids: list[uuid.UUID]) -> None:
+    if redis is None or not user_ids:
+        return
+    key = _notified_key(job, day)
+    await redis.sadd(key, *(str(u) for u in user_ids))
+    await redis.expire(key, int(NOTIFIED_TTL.total_seconds()))
 
 
 def _title_for(series: Series, lang: str = "en") -> str:
@@ -65,20 +92,19 @@ async def _resolve_segment(db, segment: dict) -> list[uuid.UUID]:
 
     if segment.get("user_id"):
         return [uuid.UUID(str(segment["user_id"]))]
+    # The idle cutoff applies to every broad segment. A locale is a narrower "everyone", not a different
+    # audience, and a churned viewer is no less churned for speaking Hindi.
+    cutoff = datetime.now(UTC) - timedelta(days=MAX_IDLE_DAYS)
+    active = select(User.id).where(
+        User.status == UserStatus.active,
+        User.last_seen_at.is_not(None),
+        User.last_seen_at >= cutoff,
+    )
     if segment.get("all"):
-        cutoff = datetime.now(UTC) - timedelta(days=MAX_IDLE_DAYS)
-        rows = await db.scalars(
-            select(User.id).where(
-                User.status == UserStatus.active,
-                User.last_seen_at.is_not(None),
-                User.last_seen_at >= cutoff,
-            )
-        )
+        rows = await db.scalars(active)
         return list(rows.all())
     if segment.get("locale"):
-        rows = await db.scalars(
-            select(User.id).where(User.status == UserStatus.active, User.locale == str(segment["locale"]))
-        )
+        rows = await db.scalars(active.where(User.locale == str(segment["locale"])))
         return list(rows.all())
     log.warning("push.unknown_segment", segment=segment)
     return []
@@ -137,30 +163,38 @@ async def streak_reminder(ctx: dict) -> dict:
         tz = ZoneInfo(get_settings().reward_timezone)
         today = datetime.now(tz).date()
         yesterday = today - timedelta(days=1)
+        yesterday_start = datetime.combine(yesterday, time.min, tzinfo=tz)
 
         # Everyone whose most recent check-in was yesterday: a streak that is still alive and lapses tonight.
+        # Only rows since yesterday's start are read: anyone whose last check-in is older has already lost the
+        # streak, and without the bound the query aggregated every check-in ever written, every evening.
         rows = await db.execute(
             select(CoinLedger.user_id, func.max(CoinLedger.created_at))
-            .where(CoinLedger.kind == LedgerKind.checkin)
+            .where(CoinLedger.kind == LedgerKind.checkin, CoinLedger.created_at >= yesterday_start)
             .group_by(CoinLedger.user_id)
         )
         due = [uid for uid, last in rows.all() if last is not None and last.astimezone(tz).date() == yesterday]
+        redis = ctx.get("redis")
+        done = await _already_notified(redis, "streak", today)
+        due = [uid for uid in due if uid not in done]
         if not due:
-            return {"status": "no_audience"}
+            return {"status": "no_audience", "skipped": len(done)}
 
         sent = 0
         for start in range(0, len(due), BATCH):
+            batch = due[start : start + BATCH]
             result = await push.deliver(
                 db,
-                user_ids=due[start : start + BATCH],
+                user_ids=batch,
                 channel="streak",
                 title="Your streak ends tonight",
                 body="Check in now to keep it going and collect today's coins.",
                 data={"route": "rewards"},
             )
             sent += result.delivered
+            await _record_notified(redis, "streak", today, batch)
         await db.commit()
-        return {"status": "sent", "delivered": sent, "audience": len(due)}
+        return {"status": "sent", "delivered": sent, "audience": len(due), "skipped": len(done)}
 
 
 async def resume_reminder(ctx: dict) -> dict:
@@ -187,30 +221,40 @@ async def resume_reminder(ctx: dict) -> dict:
             if user_id not in latest or updated > latest[user_id][1]:
                 latest[user_id] = (series_id, updated)
 
-        series_rows = {
-            s.id: s
-            for s in (
-                await db.scalars(
-                    select(Series).where(Series.id.in_({sid for sid, _ in latest.values()}))
-                )
-            ).all()
-        }
+        redis = ctx.get("redis")
+        today = now.date()
+        done = await _already_notified(redis, "resume", today)
+
+        # Then one delivery per series, not per viewer: the message is the same for everyone who abandoned the
+        # same show, and `push.deliver` resolves tokens and sends in bulk. Per-viewer calls made this job one
+        # round trip to the token table and one to Expo for every single person, every evening.
+        by_series: dict[uuid.UUID, list[uuid.UUID]] = defaultdict(list)
+        for user_id, (series_id, _) in latest.items():
+            if user_id not in done:
+                by_series[series_id].append(user_id)
+        if not by_series:
+            return {"status": "no_audience", "skipped": len(done)}
+
+        series_rows = {s.id: s for s in (await db.scalars(select(Series).where(Series.id.in_(by_series)))).all()}
         for s in series_rows.values():
             await db.refresh(s, ["translations"])
 
         sent = 0
-        for user_id, (series_id, _) in latest.items():
+        audience = 0
+        for series_id, user_ids in by_series.items():
             series = series_rows.get(series_id)
             if series is None or series.status != PublishStatus.published:
                 continue
             result = await push.deliver(
                 db,
-                user_ids=[user_id],
+                user_ids=user_ids,
                 channel="resume",
                 title="Still watching?",
                 body=f"You left {_title_for(series)} part way through. Pick it up where you stopped.",
                 data={"series_id": str(series.id), "slug": series.slug, "route": "series"},
             )
             sent += result.delivered
+            audience += len(user_ids)
+            await _record_notified(redis, "resume", today, user_ids)
         await db.commit()
-        return {"status": "sent", "delivered": sent, "audience": len(latest)}
+        return {"status": "sent", "delivered": sent, "audience": audience, "skipped": len(done)}

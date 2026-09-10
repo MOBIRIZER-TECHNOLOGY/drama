@@ -171,7 +171,9 @@ async def test_ad_unlock_rejected_without_verified_event(session):
     assert row.method == UnlockMethod.ad
 
     # Replaying the same request is idempotent: the same unlock comes back and nothing further is consumed.
-    again = await access.unlock_episode(session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="tx1")
+    again = await access.unlock_episode(
+        session, user=u, episode_id=eps[1].id, method=UnlockMethod.ad, ad_event_id="tx1"
+    )
     assert again.id == row.id
 
     # The fraud case: one verified ad completion must not unlock a second episode.
@@ -376,3 +378,84 @@ async def test_ad_unlocks_are_capped_per_day(session):
     await ledger.post(session, user_id=u.id, delta=100, kind=LedgerKind.signup_bonus, idempotency_key=f"top-{u.id}")
     row = await access.unlock_episode(session, user=u, episode_id=eps[3].id, method=UnlockMethod.coins)
     assert row is not None
+
+
+async def test_webhook_inbox_lets_a_failed_event_be_retried(session):
+    """A transient error must not burn the event id, or the gateway's retry is answered "duplicate" forever."""
+    first = await payments.record_event(session, "stripe", "evt_retry", "x", {})
+    assert first is not None
+    payments.finish_event(first, "error", "database went away")
+    await session.flush()
+
+    retry = await payments.record_event(session, "stripe", "evt_retry", "x", {})
+    assert retry is not None and retry.id == first.id
+    assert retry.result is None and retry.processed_at is None and retry.error is None
+
+    payments.finish_event(retry, "paid")
+    await session.flush()
+    assert await payments.record_event(session, "stripe", "evt_retry", "x", {}) is None, "success is final"
+
+
+async def test_refunding_the_purchase_that_paid_the_referrer_takes_the_reward_back(session):
+    """Buy the smallest pack, collect the referrer's coins, refund: without this the reward was free money."""
+    from app.models.wallet import Referral
+
+    referrer = await _user(session)
+    referee = await _user(session)
+    session.add(
+        Referral(
+            referrer_id=referrer.id, referee_id=referee.id, code=referrer.referral_code, created_at=datetime.now(UTC)
+        )
+    )
+    pack = CoinPack(sku=f"p-{uuid.uuid4().hex[:6]}", name="Test", kind=PackKind.coins, coins=100)
+    session.add(pack)
+    await session.flush()
+
+    def purchase():
+        return Purchase(
+            user_id=referee.id,
+            pack_id=pack.id,
+            gateway="test",
+            external_id=uuid.uuid4().hex,
+            status=PurchaseStatus.pending,
+            currency="INR",
+            amount=99,
+        )
+
+    first, second = purchase(), purchase()
+    session.add_all([first, second])
+    await session.flush()
+
+    await payments.mark_paid(session, first.id)
+    reward = (await session.get(User, referrer.id)).coin_balance
+    assert reward > 0, "the first purchase pays the referrer"
+    await payments.mark_paid(session, second.id)
+    assert (await session.get(User, referrer.id)).coin_balance == reward, "only once"
+
+    # Refunding the second purchase is not the one that earned the reward: nothing to reverse.
+    await payments.mark_refunded(session, second.id)
+    assert (await session.get(User, referrer.id)).coin_balance == reward
+
+    # Refunding the first one is.
+    await payments.mark_refunded(session, first.id)
+    assert (await session.get(User, referrer.id)).coin_balance == 0
+    ref = await session.scalar(sel_referral(referee.id))
+    assert ref.rewarded_at is None, "a later genuine purchase can earn it again"
+
+    # And it does — as a new ledger row, not a replay of the reversed one.
+    third = purchase()
+    session.add(third)
+    await session.flush()
+    await payments.mark_paid(session, third.id)
+    assert (await session.get(User, referrer.id)).coin_balance == reward
+    # Replaying the refund of the first purchase changes nothing: the state machine is terminal.
+    await payments.mark_refunded(session, first.id)
+    assert (await session.get(User, referrer.id)).coin_balance == reward
+
+
+def sel_referral(referee_id):
+    from sqlalchemy import select
+
+    from app.models.wallet import Referral
+
+    return select(Referral).where(Referral.referee_id == referee_id)

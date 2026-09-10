@@ -13,6 +13,9 @@ matter, and are easy to get wrong:
 * `signature` is base64url with padding stripped;
 * the key is chosen by `key_id`, so keys can be rotated without a deploy;
 * an unrecognised `key_id` is a rejection, never a fallback to "any key".
+* only the *signed* parameters may be acted on. The framework parses the whole query string, so a parameter
+  appended after the signature — or repeated, where the parser keeps whichever copy it prefers — would be
+  read as if Google had vouched for it. `signed_params` is the only reader of user-facing values.
 
 The key set is fetched over HTTPS and cached; a fetch failure fails the verification rather than skipping it.
 """
@@ -20,6 +23,7 @@ The key set is fetched over HTTPS and cached; a fetch failure fails the verifica
 import base64
 import time
 from dataclasses import dataclass
+from urllib.parse import parse_qsl
 
 import httpx
 from cryptography.exceptions import InvalidSignature
@@ -54,6 +58,31 @@ def signed_content(query_string: str) -> str | None:
         # A callback whose only parameter is the signature is malformed either way.
         return None
     return query_string[:index]
+
+
+def signed_params(query_string: str) -> dict[str, str] | None:
+    """The parameters Google signed, as sent, or None when the callback is not shaped the way Google sends it.
+
+    Google's format is `<signed content>&signature=<sig>&key_id=<id>`, with nothing after `key_id`. Three
+    things are refused here rather than tolerated, because each one is a way to smuggle an unsigned value past
+    a verifier that only checks the signed prefix:
+
+    * anything after `key_id` — the framework would parse it, but nobody signed it;
+    * a signed key that appears twice — `parse_qs` keeps a list and callers take the first or last, and
+      which one Google signed is not something to argue about per parameter;
+    * `signature` or `key_id` inside the signed prefix, which would shadow the real ones.
+    """
+    content = signed_content(query_string)
+    if content is None:
+        return None
+    trailer = parse_qsl(query_string[len(content) + 1 :], keep_blank_values=True)
+    if [k for k, _ in trailer] != ["signature", "key_id"]:
+        return None
+    pairs = parse_qsl(content, keep_blank_values=True)
+    keys = [k for k, _ in pairs]
+    if len(set(keys)) != len(keys) or "signature" in keys or "key_id" in keys:
+        return None
+    return dict(pairs)
 
 
 def _decode_signature(raw: str) -> bytes:

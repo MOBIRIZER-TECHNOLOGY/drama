@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -33,10 +34,17 @@ def requires_age_gate(series: Series) -> bool:
     carries mature titles the safe reading of an omission is "not yet cleared", never "safe for everyone" —
     otherwise forgetting one dropdown ships ungated adult content. `unrated_is_adult` turns this off for a
     catalogue that is entirely general-audience.
+
+    A rating that is set but recognised as neither adult nor general — a typo, a scheme from another market —
+    is treated as adult for the same reason: "not in the adult list" is not the same as "cleared".
     """
     s = get_settings()
     rating = (series.content_rating or "").strip()
-    return s.unrated_is_adult if not rating else rating in s.adult_ratings
+    if not rating:
+        return s.unrated_is_adult
+    if rating in s.adult_ratings:
+        return True
+    return rating not in s.general_ratings
 
 
 def episode_price(series: Series, episode: Episode) -> int:
@@ -48,8 +56,13 @@ def episode_price(series: Series, episode: Episode) -> int:
 
 
 async def ad_unlocks_used_today(session: AsyncSession, user_id: uuid.UUID) -> int:
-    """Ad unlocks this user has already taken today, counted from the ledger."""
-    start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    """Ad unlocks this user has already taken today, counted from the ledger.
+
+    "Today" is the product day, the same one check-ins and daily tasks use. A UTC midnight would reset the
+    allowance at 05:30 for the audience this is built for, and the counter the app shows is computed from the
+    same day, so the two have to agree.
+    """
+    start = rewards.start_of_today_utc()
     return int(
         await session.scalar(
             select(func.count())
@@ -189,8 +202,20 @@ async def unlock_series_bundle(
         )
         for ep in quote.episodes
     ]
-    session.add_all(unlocks)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add_all(unlocks)
+            await session.flush()
+    except IntegrityError:
+        # A double-tap: the other request inserted the same unlocks between our quote and our flush. The
+        # ledger row was idempotent, so the viewer paid once; hand back what the winner wrote.
+        rows = await session.scalars(
+            select(EpisodeUnlock).where(
+                EpisodeUnlock.user_id == user.id,
+                EpisodeUnlock.episode_id.in_([ep.id for ep in quote.episodes]),
+            )
+        )
+        return list(rows.all())
     return unlocks
 
 
@@ -272,6 +297,18 @@ async def unlock_episode(
         variant_map=variant_map,
         created_at=datetime.now(UTC),
     )
-    session.add(unlock)
-    await session.flush()
+    try:
+        async with session.begin_nested():
+            session.add(unlock)
+            await session.flush()
+    except IntegrityError:
+        # Two taps on the same button: both passed the `existing` check above, both posted the (idempotent)
+        # ledger row, and the second insert met the unique constraint. Idempotent means the second tap gets the
+        # same answer as the first, not a 409.
+        winner = await session.scalar(
+            select(EpisodeUnlock).where(EpisodeUnlock.user_id == user.id, EpisodeUnlock.episode_id == episode.id)
+        )
+        if winner is None:
+            raise
+        return winner
     return unlock

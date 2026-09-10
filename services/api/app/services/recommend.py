@@ -1,16 +1,28 @@
 """For You, version one: nearest neighbours of the viewer's recent series, blended with popularity."""
 
 import uuid
-from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.catalog import Embedding, PublishStatus, Series
+from app.models.catalog import Embedding, Series
 from app.models.engagement import WatchProgress
+from app.services.visibility import published_series_predicates
 
 
-async def for_you_ids(session: AsyncSession, user_id: uuid.UUID, *, limit: int = 12) -> list[uuid.UUID]:
+async def for_you_ids(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    *,
+    limit: int = 12,
+    lang: str | None = None,
+    country: str | None = None,
+) -> list[uuid.UUID]:
+    """Series ids nearest the centroid of what the viewer watched recently.
+
+    Filtered by language and territory like every other rail: a recommendation the viewer cannot open on the
+    page it links to is a broken card, and a geo-blocked title on the home screen is a licensing breach.
+    """
     recent = list(
         (
             await session.scalars(
@@ -37,16 +49,13 @@ async def for_you_ids(session: AsyncSession, user_id: uuid.UUID, *, limit: int =
             centroid[i] += float(v)
     n = sum(1 for e in vectors if e.model == model)
     centroid = [c / n for c in centroid]
-    now = datetime.now(UTC)
     rows = await session.scalars(
         select(Embedding.series_id)
         .join(Series, Series.id == Embedding.series_id)
         .where(
             Embedding.model == model,
-            Series.status == PublishStatus.published,
             Embedding.series_id.not_in(watched),
-            (Series.window_starts_at.is_(None)) | (Series.window_starts_at <= now),
-            (Series.window_ends_at.is_(None)) | (Series.window_ends_at > now),
+            *published_series_predicates(lang, country),
         )
         .order_by(Embedding.vector.cosine_distance(centroid))
         .limit(limit)

@@ -55,6 +55,19 @@ PACKS = [
     ("vip_30", "VIP Monthly", PackKind.vip, 0, 0, 30, {"INR": 299, "USD": 4.99}),
 ]
 
+EPISODES = [
+    (1, "The Wrong Invitation", 108, True, None),
+    (2, "A Name She Cannot Use", 116, True, None),
+    (3, "The Man from the Rain", 126, False, 25),
+    (4, "Dinner with the Enemy", 134, False, 25),
+    (5, "The Photograph", 117, False, 30),
+    (6, "One Night, One Promise", 141, False, 30),
+    (7, "Her Father's Secret", 129, False, 30),
+    (8, "The Engagement Trap", 138, False, 35),
+    (9, "No More Disguises", 146, False, 35),
+    (10, "The Heiress Returns", 158, False, 40),
+]
+
 
 def upload_seed_art() -> dict[str, str]:
     """Put the demo artwork in the bucket and hand back public URLs, or `{}` if storage is unavailable."""
@@ -85,7 +98,13 @@ def upload_seed_art() -> dict[str, str]:
     return urls
 
 
-async def main(email: str, password: str) -> None:
+async def main(email: str, password: str) -> int:
+    settings = get_settings()
+    if settings.env not in ("local", "test"):
+        # The same guard the other seed scripts carry: this creates an owner account with a password given on
+        # the command line, and a published sample series. Neither belongs in a real environment.
+        print(f"Refusing to run in env={settings.env}: this creates an owner account and demo content.")
+        return 1
     async with SessionLocal() as db:
         if not await db.scalar(select(AdminUser).where(AdminUser.email == email.lower())):
             db.add(
@@ -131,8 +150,9 @@ async def main(email: str, password: str) -> None:
             # Re-seeding an existing database should still pick up artwork added since it was first seeded.
             existing.cover_url = art.get("cover")
             existing.banner_url = art.get("banner")
-        if existing is None:
-            s = Series(
+        series = existing
+        if series is None:
+            series = Series(
                 slug="sample-series",
                 cover_url=art.get("cover"),
                 banner_url=art.get("banner"),
@@ -147,12 +167,12 @@ async def main(email: str, password: str) -> None:
                 completion_status="Ongoing",
                 release_note="New episodes every Friday",
             )
-            s.categories.append(cats["romance"])
-            db.add(s)
+            series.categories.append(cats["romance"])
+            db.add(series)
             await db.flush()
             db.add(
                 SeriesTranslation(
-                    series_id=s.id,
+                    series_id=series.id,
                     lang="en",
                     title="The Heiress in Disguise",
                     synopsis="A wealthy heiress hides her identity and falls for the wrong man.",
@@ -160,25 +180,28 @@ async def main(email: str, password: str) -> None:
             )
             db.add(
                 SeriesTranslation(
-                    series_id=s.id,
+                    series_id=series.id,
                     lang="hi",
                     title="भेष में वारिस",
                     synopsis="एक अमीर वारिस अपनी पहचान छुपाती है और गलत आदमी से प्यार कर बैठती है।",
                 )
             )
-            for n in range(1, 11):
-                db.add(
-                    Episode(
-                        series_id=s.id,
-                        number=n,
-                        title=f"Episode {n}",
-                        status=PublishStatus.published,
-                        published_at=datetime.now(UTC),
-                        duration_sec=120,
-                    )
-                )
+        for number, title, duration, is_free, price in EPISODES:
+            episode = await db.scalar(select(Episode).where(Episode.series_id == series.id, Episode.number == number))
+            if episode is None:
+                episode = Episode(series_id=series.id, number=number)
+                db.add(episode)
+            episode.title = title
+            episode.status = PublishStatus.published
+            episode.published_at = episode.published_at or datetime.now(UTC)
+            episode.duration_sec = duration
+            episode.is_free_override = is_free
+            episode.price_override = price
+            if art.get("cover"):
+                episode.thumbnail_url = art["cover"]
         await db.commit()
     print("seeded")
+    return 0
 
 
 if __name__ == "__main__":
@@ -186,4 +209,4 @@ if __name__ == "__main__":
     p.add_argument("--admin-email", required=True)
     p.add_argument("--admin-password", required=True)
     a = p.parse_args()
-    asyncio.run(main(a.admin_email, a.admin_password))
+    raise SystemExit(asyncio.run(main(a.admin_email, a.admin_password)))

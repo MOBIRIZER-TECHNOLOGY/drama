@@ -6,7 +6,12 @@ from pydantic import BaseModel, Field, field_validator
 from app.models.catalog import AssetStatus, PublishStatus
 from app.models.identity import AdminRole, Platform, UserStatus
 from app.models.wallet import PackKind, PurchaseStatus, RewardFrequency, RewardTaskKind
-from app.schemas.common import ORMModel
+from app.schemas.common import ORMModel, UtcDatetime
+
+# The Indian CBFC scheme the catalogue is rated under. `access.requires_age_gate` treats anything it does not
+# recognise as adult, so a rating typed with a stray space or in another market's scheme would silently gate
+# a family title; refusing it at the edge turns that into a 422 the editor can act on.
+CONTENT_RATING_PATTERN = r"^(U|UA7|UA13|UA16|A)$"
 
 # ---- catalogue ----
 
@@ -30,18 +35,26 @@ class SeriesIn(BaseModel):
     is_featured: bool = False
     is_premium: bool = False
     status: PublishStatus = PublishStatus.draft
-    released_at: datetime | None = None
-    content_rating: str | None = None
+    released_at: UtcDatetime | None = None
+    content_rating: str | None = Field(default=None, pattern=CONTENT_RATING_PATTERN)
     sort_weight: int = 0
     visible_languages: list[str] | None = None  # None = visible in every language
     territories: list[str] | None = None  # None = every country
-    window_starts_at: datetime | None = None
-    window_ends_at: datetime | None = None
-    moderation_flags: list[str] | None = None
-    moderation_note: str | None = None
+    window_starts_at: UtcDatetime | None = None
+    window_ends_at: UtcDatetime | None = None
+    # `moderation_flags` and `moderation_note` are deliberately not accepted here. They are cleared through the
+    # moderation route, which records who cleared them and why; a plain save must not be a way around that.
     category_ids: list[uuid.UUID] = []
     tags: list[str] = []
     translations: list[SeriesTranslationIn] = Field(min_length=1)
+
+    @field_validator("content_rating", mode="before")
+    @classmethod
+    def _blank_rating_is_unrated(cls, v: str | None) -> str | None:
+        """The console sends "" for an empty dropdown; that means unrated, not a rating called ""."""
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v.strip() if isinstance(v, str) else v
 
 
 class SeriesTranslationOut(ORMModel):
@@ -110,7 +123,7 @@ class EpisodeIn(BaseModel):
     price_override: int | None = Field(default=None, ge=0)
     is_free_override: bool | None = None
     status: PublishStatus = PublishStatus.draft
-    scheduled_at: datetime | None = None  # drip release: the worker publishes it at this time
+    scheduled_at: UtcDatetime | None = None  # drip release: the worker publishes it at this time
 
 
 class CategoryIn(BaseModel):

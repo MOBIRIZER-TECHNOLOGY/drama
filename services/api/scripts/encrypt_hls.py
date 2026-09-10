@@ -36,43 +36,70 @@ from sqlalchemy.orm import selectinload  # noqa: E402
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
 from app.models.catalog import Episode, Series  # noqa: E402
-from app.services.media import PLACEHOLDER_KEY_URI, content_iv, content_key  # noqa: E402
+from app.services.media import PLACEHOLDER_KEY_URI, content_key  # noqa: E402
 
 RENDITIONS = ("1080p", "720p", "540p", "360p")
 DEFAULT_LIBRARY = Path(__file__).resolve().parents[3] / "ref" / "videos"
 
 
-def _package(source: Path, out_dir: Path, key: bytes, iv: str) -> None:
-    """Write one encrypted rendition ladder entry. Overwrites `out_dir` in place."""
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        key_file = tmp_path / "hls.key"
-        key_file.write_bytes(key)
-        # ffmpeg's key info file: the URI to write into the playlist, the key, then the IV. Without that
-        # third line ffmpeg writes IV=0 into the playlist, so every segment of every rendition is encrypted
-        # under the same key and IV and their identical opening bytes encrypt identically. The IV is derived
-        # per asset, so it needs no storage either.
-        info = tmp_path / "hls.keyinfo"
-        info.write_text(f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n{iv}\n", encoding="utf-8")
+def _package(source: Path, work_dir: Path, key: bytes) -> None:
+    """Write one encrypted rendition into `work_dir`, a scratch directory the caller swaps in afterwards.
 
-        out_dir.mkdir(parents=True, exist_ok=True)
-        for old in out_dir.glob("*.ts"):
-            old.unlink()
-        subprocess.run(
-            [
-                "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-                "-i", str(source),
-                "-c", "copy",
-                "-f", "hls",
-                "-hls_time", "4",
-                "-hls_playlist_type", "vod",
-                "-hls_flags", "independent_segments",
-                "-hls_key_info_file", str(info),
-                "-hls_segment_filename", str(out_dir / "seg_%04d.ts"),
-                str(out_dir / "index.m3u8"),
-            ],
-            check=True,
-        )
+    ffmpeg never writes into the live rendition directory. The previous shape deleted the existing segments
+    first and then ran ffmpeg over the top, so a failed run — a missing source, a bad key file, a killed
+    process — left the episode with no segments at all and a playlist pointing at nothing. Now a failure
+    leaves the originals exactly as they were.
+    """
+    key_file = work_dir / "hls.key"
+    key_file.write_bytes(key)
+    # ffmpeg's key info file: the URI to write into the playlist, then the key. No third line on purpose:
+    # given an explicit IV ffmpeg applies it to every segment, so their identical opening bytes encrypt
+    # identically; left out, it uses each segment's media sequence number and writes that IV into the
+    # playlist line the stream route preserves.
+    info = work_dir / "hls.keyinfo"
+    info.write_text(f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n", encoding="utf-8")
+    out_dir = work_dir / "out"
+    out_dir.mkdir()
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(source),
+            "-c",
+            "copy",
+            "-f",
+            "hls",
+            "-hls_time",
+            "4",
+            "-hls_playlist_type",
+            "vod",
+            "-hls_flags",
+            "independent_segments",
+            "-hls_key_info_file",
+            str(info),
+            "-hls_segment_filename",
+            str(out_dir / "seg_%04d.ts"),
+            str(out_dir / "index.m3u8"),
+        ],
+        check=True,
+    )
+    # The key file must not outlive the run; the API derives it again on demand.
+    key_file.unlink()
+    info.unlink()
+
+
+def _swap_in(packaged: Path, live: Path) -> None:
+    """Replace the live rendition's segments and playlist with the packaged ones. Only called once every
+    rendition of the asset packaged cleanly, so an asset is either wholly encrypted or untouched."""
+    live.mkdir(parents=True, exist_ok=True)
+    for old in live.glob("*.ts"):
+        old.unlink()
+    for new in packaged.iterdir():
+        shutil.move(str(new), str(live / new.name))
 
 
 async def main() -> int:
@@ -112,18 +139,34 @@ async def main() -> int:
 
             hls_root = args.library / Path(asset.hls_master_key).parent
             key = content_key(asset.id)
-            iv = content_iv(asset.id).hex()
-            for rendition in RENDITIONS:
-                out_dir = hls_root / rendition
-                if not out_dir.exists():  # noqa: ASYNC240 - one-off script, not a request path
+            with tempfile.TemporaryDirectory() as tmp:
+                # Every rendition is packaged into scratch space first and the swap happens only once all of
+                # them succeeded. A failure part-way therefore leaves the asset playable and unflagged; the
+                # `is_encrypted` flag is committed per asset, so the ones already done are not lost if a later
+                # one aborts the run.
+                staged: list[tuple[Path, Path]] = []
+                try:
+                    for rendition in RENDITIONS:
+                        live = hls_root / rendition
+                        if not live.exists():  # noqa: ASYNC240 - one-off script, not a request path
+                            continue
+                        work = Path(tmp) / rendition
+                        work.mkdir()
+                        _package(source, work, key)
+                        staged.append((work / "out", live))
+                except (subprocess.CalledProcessError, OSError) as exc:
+                    print(f"  failed ep{episode.number} ({asset.hls_master_key}): {exc}; originals left in place")
                     continue
-                _package(source, out_dir, key, iv)
+                if not staged:
+                    print(f"  skip ep{episode.number}: no rendition directories under {hls_root}")
+                    continue
+                for packaged, live in staged:
+                    _swap_in(packaged, live)
 
             asset.is_encrypted = True
+            await db.commit()
             done += 1
             print(f"  encrypted {asset.hls_master_key}")
-
-        await db.commit()
 
     print(f"Re-packaged {done} asset(s) with AES-128.")
     return 0

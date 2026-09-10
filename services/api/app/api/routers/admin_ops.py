@@ -2,13 +2,15 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
+import structlog
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal, or_, select, union_all
+from sqlalchemy.exc import IntegrityError
 
 from app.api.deps import DB, AdminRole, CurrentAdmin, require_role
 from app.core.errors import Conflict, NotFound
-from app.models.catalog import Series, SeriesTranslation
+from app.models.catalog import PublishStatus, Series, SeriesTranslation
 from app.models.engagement import ContactMessage, Report, ReportStatus
 from app.models.identity import User
 from app.models.ops import CmsPage, CmsPageTranslation, Language, Notification, UiTranslation
@@ -31,7 +33,9 @@ from app.schemas.admin import (
 from app.schemas.common import Ok
 from app.services import audit, jobs
 from app.services.html import sanitize_body_html
+from app.services.search import LIKE_ESCAPE, like_pattern
 
+log = structlog.get_logger()
 router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[require_role(AdminRole.editor, AdminRole.support)])
 
 
@@ -47,14 +51,8 @@ async def languages(db: DB) -> list[AdminLanguageOut]:
     """
     rows = list((await db.scalars(select(Language).order_by(Language.sort_order))).all())
 
-    ui_total = (
-        await db.scalar(select(func.count()).select_from(UiTranslation).where(UiTranslation.lang == "en"))
-    ) or 0
-    ui_by_lang = dict(
-        (
-            await db.execute(select(UiTranslation.lang, func.count()).group_by(UiTranslation.lang))
-        ).all()
-    )
+    ui_total = (await db.scalar(select(func.count()).select_from(UiTranslation).where(UiTranslation.lang == "en"))) or 0
+    ui_by_lang = dict((await db.execute(select(UiTranslation.lang, func.count()).group_by(UiTranslation.lang))).all())
     pages_total = (await db.scalar(select(func.count()).select_from(CmsPage))) or 0
     pages_by_lang = dict(
         (
@@ -90,12 +88,22 @@ async def upsert_language(code: str, body: LanguageIn, db: DB) -> AdminLanguageO
 
 
 @router.delete("/languages/{code}", response_model=Ok)
-async def delete_language(code: str, db: DB) -> Ok:
+async def delete_language(code: str, db: DB, admin: CurrentAdmin) -> Ok:
     if code == "en":
         raise Conflict("English is the source language", code="cannot_delete_source")
     row = await db.get(Language, code)
     if row is None:
         raise NotFound("Language")
+    # Every UI string in this language cascades away with the row. That is a lot of work to lose to one click.
+    strings = await db.scalar(select(func.count()).select_from(UiTranslation).where(UiTranslation.lang == code))
+    audit.record(
+        db,
+        admin=admin,
+        action="language.delete",
+        target_type="language",
+        target_id=code,
+        before={"name": row.name, "is_active": row.is_active, "ui_strings": int(strings or 0)},
+    )
     await db.delete(row)
     await db.commit()
     return Ok()
@@ -141,7 +149,9 @@ async def ai_translate(lang: str, body: TranslateJobIn, db: DB) -> dict:
     payload = {k: data["source"][k] for k in keys if k in data["source"]}
     if not payload:
         return {"queued": 0}
-    job_id = await jobs.enqueue("run_translation", lang, payload, namespace="ui", job_id=f"ui-translate:{lang}")
+    job_id = await jobs.enqueue_or_raise(
+        "run_translation", lang, payload, namespace="ui", job_id=f"ui-translate:{lang}", retry=True
+    )
     return {"queued": len(payload), "job_id": job_id}
 
 
@@ -174,9 +184,9 @@ async def pages(
     stmt = select(CmsPage).order_by(CmsPage.slug)
     count_stmt = select(func.count()).select_from(CmsPage)
     if q:
-        needle = f"%{q.strip()}%"
-        match = CmsPage.slug.ilike(needle) | CmsPage.id.in_(
-            select(CmsPageTranslation.page_id).where(CmsPageTranslation.title.ilike(needle))
+        needle = like_pattern(q)
+        match = CmsPage.slug.ilike(needle, escape=LIKE_ESCAPE) | CmsPage.id.in_(
+            select(CmsPageTranslation.page_id).where(CmsPageTranslation.title.ilike(needle, escape=LIKE_ESCAPE))
         )
         stmt = stmt.where(match)
         count_stmt = count_stmt.where(match)
@@ -224,8 +234,13 @@ async def create_page(body: CmsPageIn, db: DB) -> AdminCmsPageOut:
     if await db.scalar(select(CmsPage.id).where(CmsPage.slug == body.slug)):
         raise Conflict("Slug already exists", code="slug_taken")
     p = CmsPage(slug=body.slug, show_in_footer=body.show_in_footer, is_published=body.is_published)
-    db.add(p)
-    await db.flush()
+    # The lookup above is advisory; the unique index is the guard, and the savepoint makes a lost race a 409.
+    try:
+        async with db.begin_nested():
+            db.add(p)
+            await db.flush()
+    except IntegrityError:
+        raise Conflict("Slug already exists", code="slug_taken") from None
     for t in body.translations:
         db.add(CmsPageTranslation(page_id=p.id, lang=t.lang, title=t.title, body_html=sanitize_body_html(t.body_html)))
     await db.commit()
@@ -237,6 +252,9 @@ async def update_page(page_id: uuid.UUID, body: CmsPageIn, db: DB) -> AdminCmsPa
     p = await db.get(CmsPage, page_id)
     if p is None:
         raise NotFound("Page")
+    if body.slug != p.slug and await db.scalar(select(CmsPage.id).where(CmsPage.slug == body.slug, CmsPage.id != p.id)):
+        # Renaming onto another page's slug used to reach the unique index and come back as a 500.
+        raise Conflict("Slug already exists", code="slug_taken")
     p.slug, p.show_in_footer, p.is_published = body.slug, body.show_in_footer, body.is_published
     existing = {
         t.lang: t
@@ -314,11 +332,23 @@ async def reports(
 
 
 @router.put("/reports/{report_id}", response_model=Ok)
-async def set_report_status(report_id: uuid.UUID, body: ReportStatusIn, db: DB) -> Ok:
+async def set_report_status(report_id: uuid.UUID, body: ReportStatusIn, db: DB, admin: CurrentAdmin) -> Ok:
     r = await db.get(Report, report_id)
     if r is None:
         raise NotFound("Report")
+    previous = r.status
     r.status = ReportStatus(body.status)
+    # `resolved_by` existed on the row and was never written, so a dismissed complaint had no name on it.
+    r.resolved_by = admin.id if r.status != ReportStatus.open else None
+    audit.record(
+        db,
+        admin=admin,
+        action="report.resolve" if r.status != ReportStatus.open else "report.reopen",
+        target_type="report",
+        target_id=r.id,
+        before={"status": previous.value},
+        after={"status": r.status.value, "series_id": str(r.series_id) if r.series_id else None},
+    )
     await db.commit()
     return Ok()
 
@@ -342,12 +372,12 @@ async def inbox(
         stmt = stmt.where(ContactMessage.is_read.is_(False))
         count_stmt = count_stmt.where(ContactMessage.is_read.is_(False))
     if q:
-        needle = f"%{q.strip()}%"
+        needle = like_pattern(q)
         match = or_(
-            ContactMessage.name.ilike(needle),
-            ContactMessage.email.ilike(needle),
-            ContactMessage.subject.ilike(needle),
-            ContactMessage.message.ilike(needle),
+            ContactMessage.name.ilike(needle, escape=LIKE_ESCAPE),
+            ContactMessage.email.ilike(needle, escape=LIKE_ESCAPE),
+            ContactMessage.subject.ilike(needle, escape=LIKE_ESCAPE),
+            ContactMessage.message.ilike(needle, escape=LIKE_ESCAPE),
         )
         stmt = stmt.where(match)
         count_stmt = count_stmt.where(match)
@@ -356,9 +386,7 @@ async def inbox(
     # Counted over the whole table, not the page: the header badge is a workload, not a sample.
     unread = await db.scalar(select(func.count()).where(ContactMessage.is_read.is_(False))) or 0
     rows = await db.scalars(stmt.order_by(ContactMessage.created_at.desc()).offset(offset).limit(limit))
-    return AdminContactPage(
-        items=[AdminContactOut.model_validate(m) for m in rows.all()], total=total, unread=unread
-    )
+    return AdminContactPage(items=[AdminContactOut.model_validate(m) for m in rows.all()], total=total, unread=unread)
 
 
 @router.put("/inbox/{message_id}/read", response_model=Ok)
@@ -416,56 +444,70 @@ async def moderation(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> ModerationPage:
-    """Open reports and AI-flagged series in one queue, oldest first within each kind.
+    """Open reports and AI-flagged series in one queue, oldest first.
 
-    Both halves are counted over the whole table before anything is sliced, so the tab badges are workloads
-    rather than samples.
+    Both halves are counted over the whole table, so the tab badges are workloads rather than samples. The
+    page itself is cut in SQL: a UNION of (kind, id, created_at) over both sources, ordered and offset there,
+    then hydrated. The previous shape took the newest 200 of each, merged them in Python and sliced — so past
+    the four-hundredth item the pager showed empty pages while the total said otherwise, and the "oldest
+    first" promise held only within whatever slice had been fetched.
     """
-    from app.models.catalog import Series as S
-
+    flagged_where = (Series.moderation_flags.is_not(None), func.cardinality(Series.moderation_flags) > 0)
     report_count = (
         await db.scalar(select(func.count()).select_from(Report).where(Report.status == ReportStatus.open))
     ) or 0
-    flagged_count = (
-        await db.scalar(
-            select(func.count())
-            .select_from(S)
-            .where(S.moderation_flags.is_not(None), func.cardinality(S.moderation_flags) > 0)
-        )
-    ) or 0
+    flagged_count = (await db.scalar(select(func.count()).select_from(Series).where(*flagged_where))) or 0
 
-    items: list[ModerationItem] = []
-    # `reports` returns a page, not a list. Iterating the model itself yields (field, value) pairs, which is a
-    # silent 500 rather than a type error — hence `.items`, and the regression test that calls this endpoint.
-    open_reports = (
-        await reports(db, status=ReportStatus.open, limit=200)
-        if kind != "flagged_series"
-        else AdminReportPage(items=[], total=0)
-    )
-    for r in open_reports.items:
-        items.append(
-            ModerationItem(
+    report_keys = select(
+        literal("report").label("kind"), Report.id.label("id"), Report.created_at.label("created_at")
+    ).where(Report.status == ReportStatus.open)
+    flagged_keys = select(
+        literal("flagged_series").label("kind"), Series.id.label("id"), Series.updated_at.label("created_at")
+    ).where(*flagged_where)
+    if kind == "report":
+        keys = report_keys.subquery()
+    elif kind == "flagged_series":
+        keys = flagged_keys.subquery()
+    else:
+        keys = union_all(report_keys, flagged_keys).subquery()
+    # Oldest first: a moderation queue is worked from the back, and newest-first buried the report that had
+    # been waiting longest under every fresh one. The id tiebreak keeps paging stable.
+    page = (
+        await db.execute(
+            select(keys.c.kind, keys.c.id).order_by(keys.c.created_at, keys.c.id).offset(offset).limit(limit)
+        )
+    ).all()
+    report_ids = [i for k, i in page if k == "report"]
+    series_ids = [i for k, i in page if k == "flagged_series"]
+
+    by_key: dict[tuple[str, uuid.UUID], ModerationItem] = {}
+    if report_ids:
+        rows = await db.execute(
+            select(Report, User.public_id, SeriesTranslation.title)
+            .outerjoin(User, User.id == Report.reporter_id)
+            .outerjoin(Series, Series.id == Report.series_id)
+            .outerjoin(SeriesTranslation, (SeriesTranslation.series_id == Series.id) & (SeriesTranslation.lang == "en"))
+            .where(Report.id.in_(report_ids))
+        )
+        for r, _pub, title in rows.all():
+            by_key[("report", r.id)] = ModerationItem(
                 kind="report",
                 id=r.id,
                 series_id=r.series_id,
-                series_title=r.series_title,
+                series_title=title,
                 series_status=None,
                 reason=r.reason,
                 details=r.details,
                 created_at=r.created_at,
             )
+    if series_ids:
+        rows = await db.execute(
+            select(Series, SeriesTranslation.title)
+            .outerjoin(SeriesTranslation, (SeriesTranslation.series_id == Series.id) & (SeriesTranslation.lang == "en"))
+            .where(Series.id.in_(series_ids))
         )
-    flagged_stmt = (
-        select(S, SeriesTranslation.title)
-        .outerjoin(SeriesTranslation, (SeriesTranslation.series_id == S.id) & (SeriesTranslation.lang == "en"))
-        .where(S.moderation_flags.is_not(None), func.cardinality(S.moderation_flags) > 0)
-        .order_by(S.updated_at.desc())
-        .limit(200)
-    )
-    flagged = await db.execute(flagged_stmt) if kind != "report" else None
-    for s_, title in (flagged.all() if flagged is not None else []):
-        items.append(
-            ModerationItem(
+        for s_, title in rows.all():
+            by_key[("flagged_series", s_.id)] = ModerationItem(
                 kind="flagged_series",
                 id=s_.id,
                 series_id=s_.id,
@@ -475,14 +517,10 @@ async def moderation(
                 details=s_.moderation_note,
                 created_at=s_.updated_at,
             )
-        )
 
-    # Oldest first: a moderation queue is worked from the back, and newest-first buried the report that had
-    # been waiting longest under every fresh one.
-    items.sort(key=lambda i: i.created_at)
     total = report_count + flagged_count if kind is None else (report_count if kind == "report" else flagged_count)
     return ModerationPage(
-        items=items[offset : offset + limit],
+        items=[by_key[(k, i)] for k, i in page if (k, i) in by_key],
         total=total,
         reports=report_count,
         flagged=flagged_count,
@@ -508,10 +546,7 @@ async def moderate_series(series_id: uuid.UUID, body: ModerateSeriesIn, db: DB, 
     Clearing an AI safety flag, unpublishing a title and changing its rating are all content decisions someone
     may have to defend later — a takedown dispute, a store review, a complaint. None of them left a trace.
     """
-    from app.models.catalog import PublishStatus
-    from app.models.catalog import Series as S
-
-    s_ = await db.get(S, series_id)
+    s_ = await db.get(Series, series_id)
     if s_ is None:
         raise NotFound("Series")
 
@@ -657,5 +692,7 @@ async def create_notification(body: NotificationIn, db: DB, admin: CurrentAdmin)
     )
     await db.commit()
     # Enqueued after the commit so the worker cannot read a row that is not there yet.
-    await jobs.enqueue("send_push", str(row.id), job_id=f"send-push:{row.id}")
+    if await jobs.enqueue("send_push", str(row.id), job_id=f"send-push:{row.id}") is None:
+        # The row is committed and the id is fixed, so this can only mean a send for it is already queued.
+        log.warning("push.send_already_queued", notification_id=str(row.id))
     return out
