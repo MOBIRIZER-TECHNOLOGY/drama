@@ -4,7 +4,8 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { localeHref } from "@/lib/languages";
 import { fetchLanguages, fetchShorts, fetchTranslations } from "@/lib/server-data";
 
-export const revalidate = 60;
+// Rendered per request (the root layout is force-dynamic for the CSP nonce). The first page of the feed is
+// still fetched without a session, so the client treats its like/save flags as the anonymous answer.
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/shorts">): Promise<Metadata> {
   const { lang } = await params;

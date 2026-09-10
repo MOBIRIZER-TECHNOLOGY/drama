@@ -8,7 +8,7 @@ import { stripLang } from "@/lib/languages";
 import { IconGift, IconGrid, IconHome, IconShorts, IconUser } from "./ui/icons";
 
 /**
- * Primary navigation below `md`, where the header's inline nav is hidden.
+ * Primary navigation below `lg`, where the header's inline nav is hidden.
  *
  * Without this the majority of the audience — Android phones at 360px — can reach Shorts, Browse, Rewards and
  * their account only by guessing a URL. It is fixed rather than sticky so it survives the shorts feed's own
@@ -34,7 +34,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label={t("nav.primary", "Primary")}
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ground/95 backdrop-blur md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-ground/95 backdrop-blur lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <ul className="mx-auto flex max-w-lg items-stretch">

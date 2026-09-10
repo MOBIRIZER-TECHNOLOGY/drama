@@ -73,14 +73,15 @@ export function useSaveShortcut(onSave: () => void, enabled = true) {
  * Download rows as CSV.
  *
  * Every table in the console was a dead end for finance and support: reconciliation and any marketing list
- * meant "ask an engineer to query the database". Values are escaped per RFC 4180, and a leading =, +, - or @ is
- * prefixed with a quote so a spreadsheet does not execute a cell as a formula.
+ * meant "ask an engineer to query the database". Values are escaped per RFC 4180, and a *string* starting with
+ * =, +, - or @ is prefixed with a quote so a spreadsheet does not execute a cell as a formula. Numbers are left
+ * alone: a negative coin delta is a number finance sums, not a formula, and "'-50" breaks that sum.
  */
 export function downloadCsv(filename: string, columns: { key: string; label: string }[], rows: Record<string, unknown>[]): void {
   const cell = (value: unknown): string => {
     if (value == null) return "";
     const text = String(value);
-    const guarded = /^[=+\-@]/.test(text) ? `'${text}` : text;
+    const guarded = typeof value === "string" && /^[=+\-@]/.test(text) ? `'${text}` : text;
     return /[",\n\r]/.test(guarded) ? `"${guarded.replace(/"/g, '""')}"` : guarded;
   };
 

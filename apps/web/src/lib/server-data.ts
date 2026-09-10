@@ -1,6 +1,6 @@
 import { cache } from "react";
 import { api, timeoutSignal } from "./api";
-import { FALLBACK_LANGS } from "./languages";
+import { SUPPORTED_LANGS } from "./languages";
 import type {
   AppConfig,
   CategoryOut,
@@ -39,11 +39,27 @@ async function cached<T>(key: string, ttlMs: number, fn: () => Promise<T | null>
   }
 }
 
-const FALLBACK_LANGUAGE_ROWS: LanguageOut[] = FALLBACK_LANGS.map((code) => ({
+const RTL_LANGS = new Set(["ar", "fa", "he", "ur"]);
+
+/** A language's name as a given locale writes it, from the runtime's own data; the code itself failing that. */
+function languageName(code: string, inLocale: string): string {
+  try {
+    return new Intl.DisplayNames([inLocale], { type: "language" }).of(code) ?? code;
+  } catch {
+    return code;
+  }
+}
+
+/**
+ * What the layout and sitemap use when the API cannot answer: the build-time list the proxy routes by, so
+ * an outage never turns a language that exists into a 404. Names come from the runtime's locale data rather
+ * than a hand-written table, which only knew two of them.
+ */
+const FALLBACK_LANGUAGE_ROWS: LanguageOut[] = SUPPORTED_LANGS.map((code) => ({
   code,
-  name: code === "hi" ? "Hindi" : "English",
-  native_name: code === "hi" ? "हिन्दी" : "English",
-  rtl: false,
+  name: languageName(code, "en"),
+  native_name: languageName(code, code),
+  rtl: RTL_LANGS.has(code.split("-")[0]),
 }));
 
 export const fetchLanguages = cache(async (): Promise<LanguageOut[]> => {

@@ -1,5 +1,6 @@
 import type { FirebaseApp } from "firebase/app";
 import type { Auth } from "firebase/auth";
+import type { Translate } from "./app-context";
 import type { FirebaseWebConfig as RemoteFirebaseConfig } from "./types";
 
 export type FirebaseWebConfig = {
@@ -49,38 +50,45 @@ export async function getFirebaseAuth(remote?: RemoteFirebaseConfig | null): Pro
   return getAuth(app);
 }
 
-/** Map Firebase auth error codes to friendly copy. */
-export function firebaseErrorMessage(err: unknown): string {
+/**
+ * Map Firebase auth error codes to copy in the viewer's language. `t` is the caller's translator: this module
+ * has no React context of its own, and the strings live in the catalogue like every other piece of UI copy.
+ */
+export function firebaseErrorMessage(err: unknown, t: Translate): string {
   const code = (err as { code?: string })?.code ?? "";
   switch (code) {
     case "auth/invalid-email":
-      return "That email address does not look right.";
+      return t("auth.error.invalid_email", "That email address does not look right.");
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-credential":
-      return "Email or password is incorrect.";
+      return t("auth.error.wrong_credentials", "Email or password is incorrect.");
     case "auth/email-already-in-use":
-      return "An account with this email already exists. Try signing in.";
+      return t("auth.error.email_in_use", "An account with this email already exists. Try signing in.");
     case "auth/weak-password":
-      return "Choose a password with at least 6 characters.";
+      return t("auth.error.weak_password", "Choose a password with at least 6 characters.");
     case "auth/too-many-requests":
-      return "Too many attempts. Please wait a moment and try again.";
+      return t("auth.error.too_many_requests", "Too many attempts. Please wait a moment and try again.");
     case "auth/popup-closed-by-user":
     case "auth/cancelled-popup-request":
-      return "The sign-in window was closed before finishing.";
+      return t("auth.error.popup_closed", "The sign-in window was closed before finishing.");
     case "auth/popup-blocked":
-      return "Your browser blocked the sign-in popup. Allow popups and try again.";
+      return t("auth.error.popup_blocked", "Your browser blocked the sign-in popup. Allow popups and try again.");
     case "auth/invalid-phone-number":
-      return "Enter the phone number in international format, e.g. +91 98765 43210.";
+      return t("auth.error.invalid_phone", "Enter the phone number in international format, e.g. +91 98765 43210.");
     case "auth/invalid-verification-code":
-      return "That code is not correct.";
+      return t("auth.error.invalid_code", "That code is not correct.");
     case "auth/code-expired":
-      return "The code has expired. Request a new one.";
+      return t("auth.error.code_expired", "The code has expired. Request a new one.");
     case "auth/network-request-failed":
-      return "Network error. Check your connection and try again.";
+      return t("auth.error.network", "Network error. Check your connection and try again.");
     case "auth/operation-not-allowed":
-      return "This sign-in method is not enabled for this project.";
-    default:
-      return (err as { message?: string })?.message ?? "Sign-in failed. Please try again.";
+      return t("auth.error.not_enabled", "This sign-in method is not enabled for this project.");
+    default: {
+      // Errors this app raised itself (`notConfigured()`) carry no code and already-translated copy. The
+      // SDK's own English messages are not shown: a code we do not recognise is not one the viewer can act on.
+      const message = (err as { message?: string })?.message;
+      return !code && message ? message : t("auth.error.generic", "Sign-in failed. Please try again.");
+    }
   }
 }

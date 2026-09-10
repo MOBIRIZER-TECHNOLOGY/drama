@@ -38,6 +38,7 @@ export default function RewardsPage() {
   const { data, loading, error, refetch, setData } = useQuery("reward-tasks", () => call(api.GET("/v1/admin/reward-tasks")));
   const [editing, setEditing] = useState<{ task: Task | null; platform: Platform } | null>(null);
   const [deleting, setDeleting] = useState<Task | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<Task | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function remove() {
@@ -56,7 +57,9 @@ export default function RewardsPage() {
     }
   }
 
+  /** Optimistic once confirmed: a live task pays coins to every viewer who completes it. */
   async function toggleActive(t: Task) {
+    setPendingToggle(null);
     const next = { ...t, is_active: !t.is_active };
     setData((prev) => (prev ?? []).map((x) => (x.id === t.id ? next : x)));
     try {
@@ -139,7 +142,7 @@ export default function RewardsPage() {
                           <Td className="capitalize">{t.frequency}</Td>
                           <Td className="text-muted">{t.timer_seconds ? `${t.timer_seconds}s` : "—"}</Td>
                           <Td>
-                            <Toggle label={`${t.title} active`} hideLabel checked={t.is_active} onChange={() => toggleActive(t)} />
+                            <Toggle label={`${t.title} active`} hideLabel checked={t.is_active} onChange={() => setPendingToggle(t)} />
                           </Td>
                           <Td className="text-right">
                             <div className="flex justify-end gap-1">
@@ -176,6 +179,22 @@ export default function RewardsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingToggle != null}
+        title={pendingToggle?.is_active ? "Deactivate task" : "Activate task"}
+        message={
+          pendingToggle
+            ? pendingToggle.is_active
+              ? `Stop offering “${pendingToggle.title}” on ${platformLabel(pendingToggle.platform)}? Viewers who already claimed it keep their coins.`
+              : `Offer “${pendingToggle.title}” on ${platformLabel(pendingToggle.platform)}? It pays ${pendingToggle.coins} coins per ${pendingToggle.frequency} completion from now on.`
+            : ""
+        }
+        confirmLabel={pendingToggle?.is_active ? "Deactivate" : "Activate"}
+        destructive={Boolean(pendingToggle?.is_active)}
+        onConfirm={() => pendingToggle && void toggleActive(pendingToggle)}
+        onCancel={() => setPendingToggle(null)}
+      />
 
       <ConfirmDialog
         open={deleting != null}

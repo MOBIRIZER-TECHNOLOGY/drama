@@ -46,6 +46,7 @@ export default function AdsPage() {
   );
   const [editing, setEditing] = useState<AdPlacement | "new" | null>(null);
   const [deleting, setDeleting] = useState<AdPlacement | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<AdPlacement | null>(null);
   const [busy, setBusy] = useState(false);
 
   const upsert = (saved: AdPlacement) =>
@@ -58,9 +59,10 @@ export default function AdsPage() {
     });
 
   async function toggleActive(p: AdPlacement) {
+    setPendingToggle(null);
     const next = { ...p, is_active: !p.is_active };
-    // Optimistic, because flipping a placement is the action an operator takes most and a round trip on every
-    // toggle makes the switch feel broken. Rolled back below if the write is refused.
+    // Optimistic once confirmed, because flipping a placement is the action an operator takes most and a
+    // round trip on every toggle makes the switch feel broken. Rolled back below if the write is refused.
     upsert(next);
     try {
       upsert(
@@ -173,7 +175,7 @@ export default function AdsPage() {
                   <Td className="text-right tabular-nums">{p.reward_coins != null ? `${p.reward_coins} coins` : <span className="text-muted">—</span>}</Td>
                   <Td className="text-right tabular-nums">{p.frequency_cap_sec ? `${p.frequency_cap_sec}s` : <span className="text-muted">none</span>}</Td>
                   <Td>
-                    <Toggle label={`${p.name} active`} hideLabel checked={p.is_active} onChange={() => toggleActive(p)} />
+                    <Toggle label={`${p.name} active`} hideLabel checked={p.is_active} onChange={() => setPendingToggle(p)} />
                   </Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
@@ -208,6 +210,26 @@ export default function AdsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingToggle != null}
+        title={pendingToggle?.is_active ? "Stop placement" : "Go live"}
+        message={
+          pendingToggle
+            ? pendingToggle.is_active
+              ? `Stop serving “${pendingToggle.name}” (${SLOT_LABEL[pendingToggle.slot]})? Apps stop requesting it on their next config refresh.`
+              : `Serve “${pendingToggle.name}” (${SLOT_LABEL[pendingToggle.slot]}) on ${
+                  pendingToggle.platforms.length ? pendingToggle.platforms.join(", ") : "no platforms"
+                }? Apps start requesting it on their next config refresh${
+                  pendingToggle.reward_coins != null ? `, paying ${pendingToggle.reward_coins} coins per rewarded view` : ""
+                }.`
+            : ""
+        }
+        confirmLabel={pendingToggle?.is_active ? "Stop" : "Go live"}
+        destructive={Boolean(pendingToggle?.is_active)}
+        onConfirm={() => pendingToggle && void toggleActive(pendingToggle)}
+        onCancel={() => setPendingToggle(null)}
+      />
 
       <ConfirmDialog
         open={deleting != null}

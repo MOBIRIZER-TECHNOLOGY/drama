@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
 
 const FALLBACK_LANGS = ["en", "hi"];
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
-const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const IS_DEV = process.env.NODE_ENV === "development";
+const LANG_CODE = /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/;
 
 /** Media/CDN origins (HLS, covers, subtitles, avatars). Comma-separated, e.g. https://cdn.katha.app,http://localhost:9000 */
 const MEDIA_ORIGINS = (process.env.NEXT_PUBLIC_MEDIA_ORIGINS ?? "")
@@ -18,20 +18,52 @@ const INDEXNOW_KEY = (process.env.NEXT_PUBLIC_INDEXNOW_KEY ?? "").trim().match(/
 const PROVIDER_IMAGE_HOSTS = ["lh3.googleusercontent.com", "graph.facebook.com"];
 
 /**
- * Supported language prefixes are resolved once at build/start time from the API so the proxy can
- * route `/hi/...` without a network call per request. Falls back to en/hi when the API is unreachable.
+ * The language prefixes the proxy routes, resolved once at build/start time so `/hi/...` needs no network
+ * call per request (see src/proxy.ts for why the proxy cannot take the live list).
+ *
+ * Resolution order: an explicit `NEXT_PUBLIC_LANGS` wins, otherwise `GET /v1/languages`. A production build
+ * with neither fails outright. It used to fall back to en/hi silently, which meant a build whose API was
+ * down shipped a site where every other language's URL was a 404 and nothing in the build log said so.
+ * Outside a production build — `next dev`, `next typegen` in CI — the fallback stays, with a warning, so a
+ * typecheck does not need a running API. `next typegen` loads the config with the build phase, so it is
+ * told apart by the subcommand: it emits route types, not a deployable site, and the list does not matter.
  */
-async function resolveLanguages(): Promise<string[]> {
+const IS_TYPEGEN = process.argv.includes("typegen");
+
+async function resolveLanguages(phase: string): Promise<string[]> {
+  const explicit = (process.env.NEXT_PUBLIC_LANGS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (explicit.length) {
+    const bad = explicit.filter((c) => !LANG_CODE.test(c));
+    if (bad.length) throw new Error(`NEXT_PUBLIC_LANGS contains invalid language codes: ${bad.join(", ")}`);
+    return explicit.includes("en") ? explicit : ["en", ...explicit];
+  }
+
+  let failure: string;
   try {
     const res = await fetch(`${API_URL}/v1/languages`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return FALLBACK_LANGS;
-    const rows = (await res.json()) as { code?: string }[];
-    const codes = rows.map((r) => r.code ?? "").filter((c) => /^[a-z]{2,3}(-[A-Za-z]{2,4})?$/.test(c));
-    if (!codes.includes("en")) codes.unshift("en");
-    return codes.length ? codes : FALLBACK_LANGS;
-  } catch {
-    return FALLBACK_LANGS;
+    if (res.ok) {
+      const rows = (await res.json()) as { code?: string }[];
+      const codes = rows.map((r) => r.code ?? "").filter((c) => LANG_CODE.test(c));
+      if (codes.length) return codes.includes("en") ? codes : ["en", ...codes];
+      failure = `${API_URL}/v1/languages returned no languages`;
+    } else {
+      failure = `${API_URL}/v1/languages answered ${res.status}`;
+    }
+  } catch (err) {
+    failure = `${API_URL}/v1/languages is unreachable (${err instanceof Error ? err.message : String(err)})`;
   }
+
+  if (phase === PHASE_PRODUCTION_BUILD && !IS_TYPEGEN) {
+    throw new Error(
+      `Cannot resolve the language list for the build: ${failure}. Either start the API before building or ` +
+        `set NEXT_PUBLIC_LANGS explicitly (comma-separated codes, e.g. NEXT_PUBLIC_LANGS=en,hi,ta).`,
+    );
+  }
+  console.warn(`[next.config] ${failure}; using ${FALLBACK_LANGS.join(",")} for this ${phase} run.`);
+  return FALLBACK_LANGS;
 }
 
 function originToPattern(origin: string): { protocol: "http" | "https"; hostname: string; port?: string } | null {
@@ -43,43 +75,8 @@ function originToPattern(origin: string): { protocol: "http" | "https"; hostname
   }
 }
 
-/**
- * Content-Security-Policy. Third parties: Razorpay Checkout, Cloudflare Turnstile, Firebase Auth (Google popup),
- * and the video hosts that may appear in `embed_html`. Media (HLS, VTT, covers) comes from NEXT_PUBLIC_MEDIA_ORIGINS.
- * TODO: move script-src to a per-request nonce once the app has a place to thread it (Next 16 needs a proxy that sets
- * the nonce header and a matching <Script nonce>); 'unsafe-inline' is accepted for now.
- */
-function contentSecurityPolicy(): string {
-  const media = MEDIA_ORIGINS.join(" ");
-  const directives = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-    "form-action 'self' https://checkout.stripe.com",
-    `script-src 'self' 'unsafe-inline'${IS_DEV ? " 'unsafe-eval'" : ""} https://checkout.razorpay.com https://challenges.cloudflare.com https://apis.google.com https://*.firebaseapp.com https://*.googleapis.com`,
-    `connect-src 'self' ${API_URL} ${media} https://*.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://checkout.razorpay.com https://api.razorpay.com https://lumberjack.razorpay.com https://challenges.cloudflare.com${IS_DEV ? " ws: wss:" : ""}`,
-    // `https:` covers the media host in production, which is why the missing origins here went unnoticed:
-    // the moment media is served over http — dev, a LAN preview, a staging box, a production build behind a
-    // proxy that has not terminated TLS yet — every cover and thumbnail is blocked, and the page renders with
-    // holes and a console full of CSP violations rather than anything that points at the cause.
-    `img-src 'self' data: blob: https: ${media}`,
-    `media-src 'self' blob: ${media}`,
-    "worker-src 'self' blob:",
-    "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://player.vimeo.com https://www.dailymotion.com https://geo.dailymotion.com https://checkout.razorpay.com https://api.razorpay.com https://challenges.cloudflare.com https://*.firebaseapp.com",
-    "style-src 'self' 'unsafe-inline'",
-    "font-src 'self' data:",
-  ];
-  // upgrade-insecure-requests rewrites every http:// subresource to https://, which silently strips the
-  // stylesheet and media from any deployment actually served over http (dev, LAN preview, a staging box or a
-  // production build fronted by a proxy that has not terminated TLS yet). Emit it only when the site itself
-  // is https, where it is free protection rather than a self-inflicted outage.
-  if (SITE_URL.startsWith("https://")) directives.push("upgrade-insecure-requests");
-  return directives.join("; ");
-}
-
-export default async function config(): Promise<NextConfig> {
-  const langs = await resolveLanguages();
+export default async function config(phase: string): Promise<NextConfig> {
+  const langs = await resolveLanguages(phase);
   // Comma-separated hosts allowed to load dev assets, e.g. a phone on the LAN: NEXT_DEV_ALLOWED_ORIGINS=192.168.1.20
   const devOrigins = (process.env.NEXT_DEV_ALLOWED_ORIGINS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const remotePatterns = [
@@ -102,12 +99,13 @@ export default async function config(): Promise<NextConfig> {
     async rewrites() {
       return INDEXNOW_KEY ? [{ source: `/${INDEXNOW_KEY}.txt`, destination: "/api/indexnow" }] : [];
     },
+    // Content-Security-Policy is not here: it carries a per-response nonce, so src/proxy.ts sets it on every
+    // page response (src/lib/csp.ts builds it). What remains is the static set.
     async headers() {
       return [
         {
           source: "/(.*)",
           headers: [
-            { key: "Content-Security-Policy", value: contentSecurityPolicy() },
             { key: "X-Content-Type-Options", value: "nosniff" },
             { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
             { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },

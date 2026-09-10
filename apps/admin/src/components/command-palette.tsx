@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, call } from "@/lib/api";
 import { NAV, canAccess, type Role } from "@/lib/nav";
 import { seriesTitle } from "@/lib/series";
+import { Modal } from "@/components/ui";
 
 type Command = { id: string; label: string; hint?: string; href: string; group: string };
 
@@ -17,6 +18,10 @@ type Command = { id: string; label: string; hint?: string; href: string; group: 
  *
  * Remote results are debounced and keyed by the query they belong to, so a slow response for "rev" can never
  * overwrite the results for "revenge".
+ *
+ * Rendered on the shared <Modal> (a native <dialog>) rather than a fixed overlay, so the focus trap, Escape and
+ * focus restore come from the platform instead of a document-level key handler that also fired while some
+ * other dialog was the one the operator wanted to close.
  */
 export function CommandPalette({ role }: { role: Role }) {
   const router = useRouter();
@@ -24,21 +29,27 @@ export function CommandPalette({ role }: { role: Role }) {
   const [query, setQuery] = useState("");
   const [remote, setRemote] = useState<Command[]>([]);
   const [active, setActive] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
   const latest = useRef("");
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+    setRemote([]);
+    setActive(0);
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen((v) => !v);
-      } else if (e.key === "Escape") {
-        setOpen(false);
-      }
+      if (e.key.toLowerCase() !== "k" || !(e.metaKey || e.ctrlKey)) return;
+      // Another modal dialog owns the screen: a shortcut that opened the palette over an unsaved episode form
+      // (or a delete confirmation) is not what the keystroke meant.
+      if (!open && document.querySelector("dialog[open]")) return;
+      e.preventDefault();
+      setOpen((v) => !v);
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, []);
+  }, [open]);
 
   // Static destinations, filtered by what this role can actually reach.
   const routes = useMemo<Command[]>(
@@ -101,30 +112,17 @@ export function CommandPalette({ role }: { role: Role }) {
 
   const go = useCallback(
     (command: Command) => {
-      setOpen(false);
-      setQuery("");
-      setRemote([]);
+      close();
       router.push(command.href);
     },
-    [router],
+    [router, close],
   );
 
-  if (!open) return null;
-
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command palette"
-      className="fixed inset-0 z-[100] flex items-start justify-center bg-black/40 p-4 pt-[12vh]"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) setOpen(false);
-      }}
-    >
-      <div className="w-full max-w-lg overflow-hidden rounded-xl border border-line bg-surface shadow-lg">
+    <Modal open={open} onClose={close} title="Go to" width="max-w-lg">
+      <div className="-mx-5 -my-4">
         <input
-          ref={inputRef}
-          autoFocus
+          data-autofocus
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -144,7 +142,7 @@ export function CommandPalette({ role }: { role: Role }) {
           }}
           placeholder="Search screens, series and users…"
           aria-label="Search screens, series and users"
-          className="w-full border-b border-line bg-transparent px-4 py-3 text-sm text-ink outline-none placeholder:text-muted"
+          className="w-full border-b border-line bg-transparent px-5 py-3 text-sm text-ink outline-none placeholder:text-muted"
         />
         <ul className="max-h-80 overflow-y-auto py-1">
           {results.length === 0 ? (
@@ -168,10 +166,10 @@ export function CommandPalette({ role }: { role: Role }) {
             ))
           )}
         </ul>
-        <p className="border-t border-line px-4 py-2 text-[11px] text-muted">
+        <p className="border-t border-line px-5 py-2 text-[11px] text-muted">
           ↑↓ to move · Enter to open · Esc to close
         </p>
       </div>
-    </div>
+    </Modal>
   );
 }

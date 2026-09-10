@@ -3,8 +3,29 @@ import { clearToken, tokenStore } from "./token";
 
 export const baseUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
-/** Admin client: attaches the admin JWT as Bearer; a 401 anywhere sends the admin back to /login. */
+/**
+ * Admin client: attaches the admin JWT as Bearer. A 401 that means the *session* is gone sends the admin back
+ * to /login; a 401 that refuses a factor or a password is left for the form that asked.
+ */
 export const api = createKathaClient({ baseUrl, platform: "web", tokens: tokenStore });
+
+/**
+ * Messages `current_admin` in the API sends alongside code `unauthorized` when the bearer token itself is the
+ * problem. The same code is also used for "Invalid credentials" on `/auth/login` and `/auth/totp/disable`, and
+ * `totp_invalid` / `totp_required` for the second factor — none of which mean the session is over. Logging out
+ * on those threw away the enrolment secret on a single mistyped digit.
+ */
+const SESSION_LOST = /invalid or expired|authentication required|unknown admin/i;
+
+/** Why the session is over, or null when the 401 is about something other than the session. */
+function sessionLostReason(body: unknown): "expired" | "revoked" | null {
+  const detail = body && typeof body === "object" && "detail" in body ? (body as { detail: unknown }).detail : null;
+  if (!detail || typeof detail !== "object") return "expired"; // no structured body: the classic expiry
+  const { code, message } = detail as { code?: unknown; message?: unknown };
+  if (code === "session_revoked") return "revoked";
+  if (code === "unauthorized" && typeof message === "string" && SESSION_LOST.test(message)) return "expired";
+  return null;
+}
 
 api.use({
   async onResponse({ response }) {
@@ -13,18 +34,19 @@ api.use({
       if (!pathname.startsWith("/login")) {
         // "Expired" and "someone ended your session" call for different reassurance on the sign-in screen.
         // The body is read from a clone so the caller still gets an unconsumed stream.
-        let reason = "expired";
+        let reason: "expired" | "revoked" | null = "expired";
         try {
-          const body = await response.clone().json();
-          if (body?.detail?.code === "session_revoked") reason = "revoked";
+          reason = sessionLostReason(await response.clone().json());
         } catch {
           /* a 401 without a JSON body is still an expiry as far as the viewer is concerned */
         }
-        clearToken();
-        const url = new URL("/login", window.location.origin);
-        url.searchParams.set("next", pathname + search);
-        url.searchParams.set("reason", reason);
-        window.location.href = url.toString();
+        if (reason) {
+          clearToken();
+          const url = new URL("/login", window.location.origin);
+          url.searchParams.set("next", pathname + search);
+          url.searchParams.set("reason", reason);
+          window.location.href = url.toString();
+        }
       }
     }
     return response;

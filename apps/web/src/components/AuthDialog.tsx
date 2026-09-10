@@ -79,7 +79,7 @@ function AuthBody({ onHeading }: { onHeading: (h: string | null) => void }) {
     try {
       await fn();
     } catch (e) {
-      setError(firebaseErrorMessage(e));
+      setError(firebaseErrorMessage(e, t));
     } finally {
       setBusy(null);
     }

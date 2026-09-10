@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useApp, useHref, useT } from "@/lib/app-context";
 import type { EpisodeOut } from "@/lib/types";
 import { Button, buttonClass } from "../ui/Button";
 import { Dialog } from "../ui/Dialog";
 import { IconCheck, IconCoin, IconLock, IconStar } from "../ui/icons";
+import { ShowArtwork } from "../ShowArtwork";
 
 export type UnlockStatus =
   | { kind: "idle" }
@@ -51,6 +52,19 @@ export function UnlockDialog({
   const href = useHref();
   const { config } = useApp();
   const price = episode?.price ?? 0;
+  // Paid controls do not take pointer events in the first moments after the sheet opens. The sheet appears
+  // under the pointer that just chose an episode tile, and a click delivered late enough to reach the bundle
+  // button spent 315 coins in one test session without anyone choosing it. Nobody reads a price and decides
+  // inside a quarter of a second, so the window costs nothing real; done with pointer-events rather than a
+  // swallowed click so an automated driver waits for the control instead of clicking into nothing.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    // Closing resets on the next tick rather than synchronously, which is what keeps the effect free of
+    // cascading renders; nothing can be clicked in a closed sheet anyway.
+    const id = window.setTimeout(() => setSettled(!!episode), episode ? 250 : 0);
+    return () => window.clearTimeout(id);
+  }, [episode]);
+  const guard = settled ? "" : "pointer-events-none";
   const canAfford = balance >= price;
   const rewardedAds = config?.flags?.rewarded_ads === true;
   const busy = status.kind === "busy" || status.kind === "bundle-busy";
@@ -78,16 +92,14 @@ export function UnlockDialog({
         <div className="flex flex-col gap-4">
           {/* Show the thing being sold. A paywall with no image is a receipt; competitors put the cliffhanger here. */}
           <div className="relative aspect-video overflow-hidden rounded-md border border-line bg-surface2">
-            {episode.thumbnail_url ? (
-              <Image
-                src={episode.thumbnail_url}
-                alt=""
-                fill
-                sizes="420px"
-                unoptimized
-                className="scale-105 object-cover blur-[6px]"
-              />
-            ) : null}
+            <ShowArtwork
+              src={episode.thumbnail_url}
+              kind="poster"
+              alt=""
+              fill
+              sizes="420px"
+              className="scale-105 object-cover blur-[6px]"
+            />
             <div className="absolute inset-0 bg-gradient-to-t from-ground/90 to-ground/40" />
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-4 text-center">
               <IconLock size={26} className="text-gold" />
@@ -120,7 +132,7 @@ export function UnlockDialog({
               loading={status.kind === "busy"}
               disabled={busy}
               onClick={() => onUnlock("coins")}
-              className="w-full flex-col !h-auto py-2.5"
+              className={`w-full flex-col !h-auto py-2.5 ${guard}`}
             >
               <span className="inline-flex items-center gap-1.5">
                 <IconCoin size={18} />
@@ -162,7 +174,7 @@ export function UnlockDialog({
                   loading={status.kind === "bundle-busy"}
                   disabled={busy}
                   onClick={onUnlockBundle}
-                  className="mt-2.5 w-full"
+                  className={`mt-2.5 w-full ${guard}`}
                 >
                   <IconCheck size={16} />
                   {t("unlock.bundle_cta", "Unlock the whole series")}

@@ -26,6 +26,9 @@ type ItemState =
   | { kind: "age_gate" }
   | { kind: "error"; message: string };
 
+/** The viewer's own relationship with a series. */
+type Engagement = { liked: boolean; saved: boolean };
+
 /** Load the next page once the viewer is within this many items of the end. */
 const PREFETCH_WITHIN = 4;
 
@@ -38,6 +41,14 @@ const PREFETCH_WITHIN = 4;
  *
  * Only the centred item holds a video element; everything else is a poster, so the feed never keeps more than
  * one HLS session alive.
+ *
+ * Like and save state is owned here rather than per item. The first page arrives from the server, which
+ * requested it without a session, so its `is_liked`/`is_favorite` are the anonymous answer — false for
+ * everyone — and must never be shown to a signed-in viewer as theirs: a series they had saved rendered
+ * unsaved, and one tap silently removed it. Once the session resolves the same page is requested again with
+ * the viewer's token and the truth merged in by series; anything that request did not cover is fetched for
+ * the item on screen. Until a series' state is known the buttons stay disabled, and a toggle is never sent
+ * against state that has not been seen.
  */
 export function ShortsFeed({
   initial,
@@ -52,6 +63,7 @@ export function ShortsFeed({
   startAt?: { slug: string; episode: number } | null;
 }) {
   const t = useT();
+  const { status, user } = useAuth();
   const [extra, setExtra] = useState<ShortItemData[]>([]);
   const [cursor, setCursor] = useState<string | null>(nextCursor);
   const openAt =
@@ -61,7 +73,41 @@ export function ShortsFeed({
   const containerRef = useRef<HTMLDivElement>(null);
   const loadingMore = useRef(false);
 
+  // The signed-in viewer's engagement by series id, tagged with whose it is. Absent means not known yet, and
+  // a map that belongs to a previous account counts as absent: sign out and in as someone else and nothing
+  // is inherited, without an effect to clear it.
+  const userId = user?.id ?? null;
+  const [engagement, setEngagement] = useState<{ owner: string; bySeries: Record<string, Engagement> } | null>(null);
+  // Series the viewer liked or saved while a fetch was in flight: a response assembled before that tap must
+  // not land afterwards and undo it, which looks exactly like a button that does not work.
+  const edited = useRef(new Set<string>());
+  const hydratedFor = useRef<string | null>(null);
+  const detailInFlight = useRef(new Set<string>());
+
   const items = useMemo(() => [...initial, ...extra], [initial, extra]);
+
+  /** Write the current viewer's map, starting afresh if what is held belongs to someone else. */
+  const updateEngagement = useCallback(
+    (update: (bySeries: Record<string, Engagement>) => Record<string, Engagement>) => {
+      if (!userId) return;
+      setEngagement((prev) => ({ owner: userId, bySeries: update(prev?.owner === userId ? prev.bySeries : {}) }));
+    },
+    [userId],
+  );
+
+  /** Merge server-reported engagement for several series, leaving anything the viewer changed since alone. */
+  const mergeEngagement = useCallback(
+    (rows: { series_id: string; is_liked: boolean; is_favorite: boolean }[]) =>
+      updateEngagement((bySeries) => {
+        const next = { ...bySeries };
+        for (const row of rows) {
+          if (edited.current.has(row.series_id)) continue;
+          next[row.series_id] = { liked: row.is_liked, saved: row.is_favorite };
+        }
+        return next;
+      }),
+    [updateEngagement],
+  );
 
   const loadMore = useCallback(async () => {
     if (loadingMore.current || !cursor) return;
@@ -73,9 +119,46 @@ export function ShortsFeed({
         return [...prev, ...data.items.filter((i) => !seen.has(i.episode_id))];
       });
       setCursor(data.next_cursor ?? null);
+      // Requested with the viewer's token, so these carry their state — but only once the session is known
+      // to be theirs; a page fetched while the session was still resolving is checked per item instead.
+      if (status === "authenticated") mergeEngagement(data.items);
     }
     loadingMore.current = false;
-  }, [cursor, lang, initial]);
+  }, [cursor, lang, initial, status, mergeEngagement]);
+
+  // Once signed in, ask for the first page again with the session attached and take its like/save state.
+  useEffect(() => {
+    if (status !== "authenticated" || !user || hydratedFor.current === user.id) return;
+    hydratedFor.current = user.id;
+    edited.current.clear();
+    (async () => {
+      const { data } = await call(() => clientApi.GET("/v1/shorts", { params: { query: { lang } } }));
+      if (data) mergeEngagement(data.items);
+      // On failure nothing is recorded: the active item falls back to its own lookup below.
+    })();
+  }, [status, user, lang, mergeEngagement]);
+
+  /** One series' state, for an item the page-level request did not cover (a page fetched mid-sign-in, or a failure). */
+  const ensureEngagement = useCallback(
+    async (seriesId: string) => {
+      if (detailInFlight.current.has(seriesId)) return;
+      detailInFlight.current.add(seriesId);
+      const { data } = await call(() =>
+        clientApi.GET("/v1/series/{id_or_slug}", { params: { path: { id_or_slug: seriesId }, query: { lang } } }),
+      );
+      detailInFlight.current.delete(seriesId);
+      if (data) mergeEngagement([{ series_id: seriesId, is_liked: data.is_liked, is_favorite: data.is_favorite }]);
+    },
+    [lang, mergeEngagement],
+  );
+
+  const recordEngagement = useCallback(
+    (seriesId: string, next: Engagement) => {
+      edited.current.add(seriesId);
+      updateEngagement((bySeries) => ({ ...bySeries, [seriesId]: next }));
+    },
+    [updateEngagement],
+  );
 
   // Open on the requested short. Runs once: after that the observer owns which item is active.
   const scrolledToStart = useRef(false);
@@ -124,6 +207,16 @@ export function ShortsFeed({
 
   if (items.length === 0) return null;
 
+  /**
+   * What an item may show. A guest's state is the anonymous answer the server gave, which is correct for
+   * them; a signed-in viewer's is whatever has been fetched for the series, or nothing yet.
+   */
+  const engagementFor = (item: ShortItemData): Engagement | null => {
+    if (status === "anonymous") return { liked: item.is_liked, saved: item.is_favorite };
+    if (status === "authenticated" && engagement?.owner === userId) return engagement.bySeries[item.series_id] ?? null;
+    return null;
+  };
+
   return (
     <div
       ref={containerRef}
@@ -139,6 +232,9 @@ export function ShortsFeed({
           showSwipeHint={index === 0}
           muted={muted}
           onToggleMuted={() => setMuted((m) => !m)}
+          engagement={engagementFor(item)}
+          onEngagement={(next) => recordEngagement(item.series_id, next)}
+          onNeedEngagement={() => void ensureEngagement(item.series_id)}
         />
       ))}
     </div>
@@ -152,6 +248,9 @@ function ShortItem({
   showSwipeHint,
   muted,
   onToggleMuted,
+  engagement,
+  onEngagement,
+  onNeedEngagement,
 }: {
   item: ShortItemData;
   active: boolean;
@@ -159,6 +258,11 @@ function ShortItem({
   showSwipeHint: boolean;
   muted: boolean;
   onToggleMuted: () => void;
+  /** The viewer's like/save state for this series, or null while it is still unknown. */
+  engagement: Engagement | null;
+  onEngagement: (next: Engagement) => void;
+  /** Ask the feed to find out; called while this item is on screen and its state is unknown. */
+  onNeedEngagement: () => void;
 }) {
   const t = useT();
   const href = useHref();
@@ -166,10 +270,6 @@ function ShortItem({
   const { status, user, openAuth, refreshUser } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [state, setState] = useState<ItemState>({ kind: "idle" });
-  // Seeded from the server. Both used to start `false` regardless of the truth, so a series the viewer had
-  // already saved rendered unsaved and one tap silently removed it.
-  const [liked, setLiked] = useState(item.is_liked);
-  const [saved, setSaved] = useState(item.is_favorite);
   const [ageGateBusy, setAgeGateBusy] = useState(false);
   const [ageGateOpen, setAgeGateOpen] = useState(false);
   const [ageGateError, setAgeGateError] = useState<string | null>(null);
@@ -177,6 +277,11 @@ function ShortItem({
   const seriesId = item.series_id;
 
   const beacons = useMemo(() => new PlaybackBeacons({ episodeId, seriesId, surface: "shorts" }), [episodeId, seriesId]);
+
+  // The item on screen is the one whose buttons the viewer can reach, so it is the one worth a lookup.
+  useEffect(() => {
+    if (active && status === "authenticated" && !engagement) onNeedEngagement();
+  }, [active, status, engagement, onNeedEngagement]);
 
   /** Ask for a playback grant. State is only written after the request resolves, so activation never cascades renders. */
   const loadGrant = useCallback(async () => {
@@ -215,6 +320,7 @@ function ShortItem({
     labels: {
       unsupported: t("player.unsupported", "This browser cannot play HLS video."),
       networkError: t("player.network_error", "Playback stopped. Tap to reload."),
+      mediaError: t("player.media_error", "This video could not be decoded. Tap to reload."),
     },
     onReload: () => void loadGrant(),
     onLevelSwitch: (kbps, height) => beacons?.levelSwitch(kbps, height),
@@ -224,13 +330,15 @@ function ShortItem({
 
   const toggle = async (kind: "like" | "favorite") => {
     if (status !== "authenticated") return openAuth();
+    // Never flip state that has not been seen: the server toggles, so a blind POST can remove as easily as add.
+    if (!engagement) return;
     const path = kind === "like" ? "/v1/series/{series_id}/like" : "/v1/series/{series_id}/favorite";
     const { data, error } = await call(() => clientApi.POST(path, { params: { path: { series_id: seriesId } } }));
     if (error) return toast(error.message, "error");
     if (kind === "like") {
-      setLiked(data.active);
+      onEngagement({ ...engagement, liked: data.active });
     } else {
-      setSaved(data.active);
+      onEngagement({ ...engagement, saved: data.active });
       toast(data.active ? t("series.added_to_list", "Added to My List") : t("series.removed_from_list", "Removed from My List"), "success");
     }
   };
@@ -278,6 +386,10 @@ function ShortItem({
   const watchFull = href(`/series/${item.slug}?ep=${item.episode_number}`);
   const poster = item.thumbnail_url ?? item.cover_url;
   const genre = item.categories[0]?.name;
+  // Neutral until known: not pressed, not filled, and not clickable.
+  const liked = engagement?.liked ?? false;
+  const saved = engagement?.saved ?? false;
+  const engagementUnknown = engagement === null;
 
   return (
     <section
@@ -305,7 +417,7 @@ function ShortItem({
               loop
               preload="metadata"
               poster={poster ?? undefined}
-              className="absolute inset-0 h-full w-full object-cover"
+              className="absolute inset-0 h-full w-full object-contain"
               onClick={() => {
                 const v = videoRef.current;
                 if (!v) return;
@@ -405,6 +517,7 @@ function ShortItem({
               label={liked ? t("series.liked", "Liked") : t("series.like", "Like")}
               onClick={() => void toggle("like")}
               pressed={liked}
+              disabled={engagementUnknown}
             >
               <IconHeart size={22} filled={liked} className={liked ? "text-accent" : ""} />
             </RailButton>
@@ -412,6 +525,7 @@ function ShortItem({
               label={saved ? t("series.in_list", "In My List") : t("series.add_to_list", "My List")}
               onClick={() => void toggle("favorite")}
               pressed={saved}
+              disabled={engagementUnknown}
             >
               <IconStar size={22} filled={saved} className={saved ? "text-gold" : ""} />
             </RailButton>
@@ -437,12 +551,15 @@ function RailButton({
   label,
   onClick,
   pressed,
+  disabled,
   caption,
   children,
 }: {
   label: string;
   onClick: () => void;
   pressed?: boolean;
+  /** Shown but inert: used while the viewer's own state for the control is still being fetched. */
+  disabled?: boolean;
   caption?: string;
   children: React.ReactNode;
 }) {
@@ -450,10 +567,11 @@ function RailButton({
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       aria-pressed={pressed}
       title={label}
-      className="flex flex-col items-center gap-0.5 rounded-pill p-2 text-ink hover:bg-ink/15 focus-visible:outline-2 focus-visible:outline-accent"
+      className="flex flex-col items-center gap-0.5 rounded-pill p-2 text-ink hover:bg-ink/15 focus-visible:outline-2 focus-visible:outline-accent disabled:cursor-default disabled:opacity-50 disabled:hover:bg-transparent"
     >
       {children}
       {caption && <span className="text-[11px] tabular-nums text-ink2">{caption}</span>}

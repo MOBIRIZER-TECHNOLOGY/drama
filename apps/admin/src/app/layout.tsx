@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import type { CSSProperties } from "react";
 import { colors } from "@katha/tokens";
 import { ToastProvider } from "@/components/toast";
@@ -20,10 +21,16 @@ const tokenVars = {
   "--danger": "#d9425c",
 } as CSSProperties;
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Minted per request by `proxy.ts`. Reading it here makes every page dynamic, which a nonce requires: a
+  // page rendered at build time would ship a nonce the browser had never been told about.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" className="h-full" style={tokenVars}>
       <head>
+        {/* Next puts the nonce on the scripts it emits itself; this is where a client library that has to
+            inject one (or a later inline <script> in this layout) reads it from. */}
+        {nonce && <meta property="csp-nonce" nonce={nonce} />}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* Loaded via <link> rather than next/font so `next build` has no network dependency; this is the root layout so it applies to every page. */}

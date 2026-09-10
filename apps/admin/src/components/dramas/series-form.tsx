@@ -62,6 +62,14 @@ const emptyTranslation = (): TranslationDraft => ({
   keywords: [],
 });
 
+/** The part of the form the series save owns; moderation flags and note travel through the moderation route. */
+function trackable(f: FormState): string {
+  const rest: Partial<FormState> = { ...f };
+  delete rest.moderation_flags;
+  delete rest.moderation_note;
+  return JSON.stringify(rest);
+}
+
 function fromSeries(s?: SeriesOut): FormState {
   const translations: Record<string, TranslationDraft> = {};
   for (const t of s?.translations ?? []) {
@@ -132,8 +140,6 @@ function toPayload(f: FormState): SeriesIn {
     territories: parseTerritories(f.territories),
     window_starts_at: fromLocalInput(f.window_starts_at),
     window_ends_at: fromLocalInput(f.window_ends_at),
-    moderation_flags: f.moderation_flags.length ? f.moderation_flags : null,
-    moderation_note: f.moderation_note.trim() || null,
     category_ids: f.category_ids,
     tags: f.tags,
     translations,
@@ -156,7 +162,10 @@ export function SeriesForm({
   const toast = useToast();
   const tabsId = useId();
   const [form, setForm] = useState<FormState>(() => fromSeries(initial));
-  const [baseline, setBaseline] = useState(() => JSON.stringify(fromSeries(initial)));
+  // Moderation fields are not part of the series payload: flags are cleared through the audited moderation
+  // route, so they are left out of the dirty comparison too.
+  const [baseline, setBaseline] = useState(() => trackable(fromSeries(initial)));
+  const [moderating, setModerating] = useState(false);
   const [lang, setLang] = useState<string>(initial?.original_language ?? "hi");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +175,7 @@ export function SeriesForm({
   const languages = useQuery("languages", () => call(api.GET("/v1/admin/languages")));
   const categories = useQuery("categories", () => call(api.GET("/v1/admin/categories")));
 
-  const dirty = JSON.stringify(form) !== baseline;
+  const dirty = trackable(form) !== baseline;
   // Ten minutes of typing used to be discarded by a tab close, a sidebar link, or the 8-hour token expiring.
   useUnsavedChanges(dirty && !saving);
   // An editor saves this form dozens of times a day; the browser's own Save Page dialog is never what they want.
@@ -211,6 +220,25 @@ export function SeriesForm({
     return Object.keys(next).length === 0;
   }
 
+  async function clearFlags() {
+    if (!initial) return;
+    setModerating(true);
+    try {
+      await call(
+        api.POST("/v1/admin/moderation/series/{series_id}", {
+          params: { path: { series_id: initial.id } },
+          body: { action: "clear_flags", note: form.moderation_note.trim() || null },
+        }),
+      );
+      patch({ moderation_flags: [] });
+      toast.success("Flags cleared");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not clear the flags");
+    } finally {
+      setModerating(false);
+    }
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError(null);
@@ -221,7 +249,7 @@ export function SeriesForm({
       const saved = initial
         ? await call(api.PUT("/v1/admin/series/{series_id}", { params: { path: { series_id: initial.id } }, body: payload }))
         : await call(api.POST("/v1/admin/series", { body: payload }));
-      setBaseline(JSON.stringify(form));
+      setBaseline(trackable(form));
       toast.success(initial ? "Series saved" : "Series created");
       onSaved(saved);
     } catch (err) {
@@ -537,44 +565,41 @@ export function SeriesForm({
           </div>
         </Card>
 
-        <Card
-          title="Moderation"
-          actions={
-            form.moderation_flags.length > 0 ? (
-              <Button size="sm" onClick={() => patch({ moderation_flags: [] })}>
-                Clear all flags
-              </Button>
-            ) : undefined
-          }
-        >
-          <div className="grid gap-4 px-5 py-4">
-            <div>
-              <p className="mb-1.5 text-[13px] font-medium text-ink-2">Flags</p>
-              {form.moderation_flags.length === 0 ? (
-                <p className="text-xs text-muted">No flags. The metadata AI raises these; clearing them saves with the series.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {form.moderation_flags.map((flag) => (
-                    <span key={flag} className="inline-flex items-center gap-1 rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
-                      {flag}
-                      <button
-                        type="button"
-                        aria-label={`Clear flag ${flag}`}
-                        onClick={() => patch({ moderation_flags: form.moderation_flags.filter((f) => f !== flag) })}
-                        className="text-danger/70 hover:text-danger"
-                      >
-                        ×
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
+        {initial ? (
+          <Card
+            title="Moderation"
+            actions={
+              form.moderation_flags.length > 0 ? (
+                <Button size="sm" onClick={clearFlags} disabled={moderating}>
+                  {moderating ? "Clearing…" : "Clear flags"}
+                </Button>
+              ) : undefined
+            }
+          >
+            <div className="grid gap-4 px-5 py-4">
+              <div>
+                <p className="mb-1.5 text-[13px] font-medium text-ink-2">Flags</p>
+                {form.moderation_flags.length === 0 ? (
+                  <p className="text-xs text-muted">No flags. The metadata AI raises these.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {form.moderation_flags.map((flag) => (
+                      <span key={flag} className="inline-flex items-center rounded-full border border-danger/30 bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                        {flag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <Field
+                label="Decision note"
+                hint="Recorded in the audit log when the flags are cleared, so the decision can be defended later."
+              >
+                <Textarea value={form.moderation_note} onChange={(e) => patch({ moderation_note: e.target.value })} className="min-h-16" />
+              </Field>
             </div>
-            <Field label="Moderation note" hint="Why this series was flagged, or what a reviewer decided.">
-              <Textarea value={form.moderation_note} onChange={(e) => patch({ moderation_note: e.target.value })} className="min-h-16" />
-            </Field>
-          </div>
-        </Card>
+          </Card>
+        ) : null}
       </div>
 
       <aside className="flex flex-col gap-6">

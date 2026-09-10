@@ -11,7 +11,8 @@ import { localeHref } from "@/lib/languages";
 import { breadcrumbJsonLd } from "@/lib/seo";
 import { fetchCategories, fetchLanguages, fetchSeriesList, fetchTranslations } from "@/lib/server-data";
 
-export const revalidate = 60;
+// Rendered per request: the root layout is force-dynamic for the CSP nonce, and server-data.ts memoises
+// the API calls behind this page for a minute, which is what `revalidate = 60` used to buy here.
 
 const PAGE_SIZE = 40;
 

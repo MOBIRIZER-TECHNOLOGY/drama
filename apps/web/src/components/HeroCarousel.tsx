@@ -1,12 +1,12 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useHref, useT } from "@/lib/app-context";
 import type { SeriesCard } from "@/lib/types";
 import { buttonClass } from "./ui/Button";
 import { IconChevronLeft, IconChevronRight, IconPause, IconPlay } from "./ui/icons";
+import { ShowArtwork } from "./ShowArtwork";
 
 const INTERVAL_MS = 6000;
 
@@ -63,7 +63,6 @@ export function HeroCarousel({ items }: { items: SeriesCard[] }) {
       >
         {items.map((s, i) => {
           if (!mounted(i)) return null;
-          const img = s.banner_url || s.cover_url;
           const active = i === index;
           return (
             <div
@@ -74,11 +73,15 @@ export function HeroCarousel({ items }: { items: SeriesCard[] }) {
               aria-hidden={!active}
               className={`absolute inset-0 transition-opacity duration-700 ${active ? "opacity-100" : "pointer-events-none opacity-0"}`}
             >
-              {img ? (
-                <Image src={img} alt="" fill priority={i === 0} sizes="(min-width: 1400px) 1400px, 100vw" className="object-cover" />
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-surface2 to-ground" />
-              )}
+              <ShowArtwork
+                src={s.banner_url || s.cover_url}
+                kind="banner"
+                alt=""
+                fill
+                priority={i === 0}
+                sizes="(min-width: 1400px) 1400px, 100vw"
+                className="object-cover"
+              />
               <div className="absolute inset-0 bg-gradient-to-t from-ground via-ground/60 to-transparent sm:bg-gradient-to-r sm:from-ground/95 sm:via-ground/50 sm:to-transparent" />
               <div className="absolute inset-x-0 bottom-0 flex flex-col gap-3 p-5 sm:inset-y-0 sm:max-w-xl sm:justify-center sm:p-10">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-ink2">
@@ -89,7 +92,7 @@ export function HeroCarousel({ items }: { items: SeriesCard[] }) {
                     </span>
                   ))}
                   <span className="text-muted">
-                    {s.episode_count} {t("series.episodes_count", "episodes")}
+                    {s.episode_count} {s.episode_count === 1 ? t("series.episode", "Episode") : t("series.episodes_count", "episodes")}
                   </span>
                 </div>
                 <h2 className="font-display text-2xl font-bold leading-tight text-ink sm:text-4xl lg:text-5xl">{s.title}</h2>

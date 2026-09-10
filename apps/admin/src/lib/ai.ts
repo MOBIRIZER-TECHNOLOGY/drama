@@ -1,16 +1,10 @@
-import { api, ApiError, baseUrl, call, errorMessage, type Schemas } from "./api";
+import { api, ApiError, call, type Schemas } from "./api";
 import { startPolling } from "./polling";
-import { getToken } from "./token";
 
 export type MetadataDraft = Schemas["MetadataOut"];
 export type JobOut = Schemas["JobOut"];
-
-/**
- * `GET /v1/admin/ai/jobs/{job_id}` is not in the generated client yet (coordinator will regenerate);
- * typed locally from the contract and fetched directly with the admin token.
- */
-export type AiJobStatus = "queued" | "running" | "complete" | "failed" | "not_found";
-export type AiJob = { job_id: string; status: AiJobStatus; result?: unknown; error?: string | null };
+/** A queued AI/media job as `GET /v1/admin/ai/jobs/{job_id}` reports it: queued, running, complete, failed or not_found. */
+export type AiJob = Schemas["JobStatusOut"];
 
 /** Readable messages for the AI router's failure modes. */
 export function aiErrorMessage(e: unknown, fallback = "AI request failed"): string {
@@ -52,20 +46,8 @@ export function generateEpisodeSubtitles(episodeId: string, languages: string[] 
   return call(api.POST("/v1/admin/ai/episodes/{episode_id}/subtitles", { params: { path: { episode_id: episodeId } }, body: { languages } }));
 }
 
-export async function getAiJob(jobId: string): Promise<AiJob> {
-  const res = await fetch(`${baseUrl}/v1/admin/ai/jobs/${encodeURIComponent(jobId)}`, {
-    headers: { Authorization: `Bearer ${getToken() ?? ""}`, "X-Katha-Platform": "web" },
-  });
-  if (!res.ok) {
-    let body: unknown = null;
-    try {
-      body = await res.json();
-    } catch {
-      /* no body */
-    }
-    throw new ApiError(errorMessage(body, res), res.status);
-  }
-  return (await res.json()) as AiJob;
+export function getAiJob(jobId: string): Promise<AiJob> {
+  return call(api.GET("/v1/admin/ai/jobs/{job_id}", { params: { path: { job_id: jobId } } }));
 }
 
 export const AI_JOB_TIMEOUT_MS = 3 * 60 * 1000;

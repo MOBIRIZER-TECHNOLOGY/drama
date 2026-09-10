@@ -11,7 +11,7 @@ export type UseHlsOptions = {
   autoPlay: boolean;
   /** ISO time the signed URL stops working; a fatal network error after this asks for a new grant once. */
   expiresAt?: string;
-  labels: { unsupported: string; networkError: string };
+  labels: { unsupported: string; networkError: string; mediaError: string };
   /** Ask the parent for a fresh playback grant (signed URLs expire). */
   onReload?: () => void;
   /** hls.js switched rendition (kbps, height). Not called on native HLS. */
@@ -21,6 +21,14 @@ export type UseHlsOptions = {
   /** Source attached and loading started. */
   onSourceAttached?: () => void;
 };
+
+/**
+ * How many times a fatal media error is answered with `recoverMediaError()` before the next one tries
+ * `swapAudioCodec()` and the one after that is surfaced. Unbounded, a stream the decoder will never accept
+ * looped forever behind a black frame with no way to reload: every recovery re-buffered, failed the same way
+ * and recovered again.
+ */
+const MAX_MEDIA_RECOVERIES = 3;
 
 /**
  * Attach an HLS source to a `<video>`: native HLS on Safari, hls.js elsewhere (dynamic import). Re-runs when `src`
@@ -78,6 +86,8 @@ export function useHls(videoRef: RefObject<HTMLVideoElement | null>, options: Us
       }
       const hls = new HlsCtor({ startPosition: start || -1, enableWorker: true, lowLatencyMode: false, autoStartLoad: true });
       hlsRef.current = hls;
+      // Per source: a new grant (or a reload) gets a fresh budget.
+      let mediaRecoveries = 0;
       hls.loadSource(src);
       hls.attachMedia(video);
       hls.on(HlsCtor.Events.MANIFEST_PARSED, () => {
@@ -91,7 +101,20 @@ export function useHls(videoRef: RefObject<HTMLVideoElement | null>, options: Us
         if (!data.fatal) return;
         opts.current.onFatalError?.(data.details);
         if (data.type === HlsCtor.ErrorTypes.MEDIA_ERROR) {
-          hls.recoverMediaError();
+          mediaRecoveries += 1;
+          if (mediaRecoveries <= MAX_MEDIA_RECOVERIES) {
+            hls.recoverMediaError();
+            return;
+          }
+          if (mediaRecoveries === MAX_MEDIA_RECOVERIES + 1) {
+            // hls.js's own last resort for a decoder that rejects the audio track: change codec, then recover.
+            hls.swapAudioCodec();
+            hls.recoverMediaError();
+            return;
+          }
+          hls.destroy();
+          hlsRef.current = null;
+          setError(opts.current.labels.mediaError);
           return;
         }
         hls.destroy();

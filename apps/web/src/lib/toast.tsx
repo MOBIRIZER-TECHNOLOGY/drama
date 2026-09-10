@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { IconAlert, IconCheck, IconCoin, IconClose } from "@/components/ui/icons";
+import { useT } from "./app-context";
 
 type Tone = "info" | "success" | "error" | "gold";
 type Toast = { id: number; message: string; tone: Tone };
@@ -21,6 +22,7 @@ const tones: Record<Tone, { className: string; icon: ReactNode; accent: string }
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const t = useT();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const seq = useRef(0);
   const timers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
@@ -54,7 +56,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const map = timers.current;
-    return () => map.forEach((t) => clearTimeout(t));
+    return () => map.forEach((timer) => clearTimeout(timer));
   }, []);
 
   return (
@@ -72,19 +74,19 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         aria-atomic="false"
         className="pointer-events-none fixed inset-x-0 bottom-[4.75rem] z-[80] flex flex-col items-center gap-2 px-4 md:bottom-4"
       >
-        {toasts.map((t) => {
-          const tone = tones[t.tone];
+        {toasts.map((item) => {
+          const tone = tones[item.tone];
           return (
             <div
-              key={t.id}
+              key={item.id}
               className={`k-rise pointer-events-auto flex max-w-md items-center gap-2.5 rounded-md border bg-surface px-4 py-2.5 text-sm text-ink shadow-[var(--k-elevation-overlay)] ${tone.className}`}
             >
               {tone.icon && <span className={`shrink-0 ${tone.accent}`}>{tone.icon}</span>}
-              <span className="flex-1">{t.message}</span>
+              <span className="flex-1">{item.message}</span>
               <button
                 type="button"
-                onClick={() => dismiss(t.id)}
-                aria-label="Dismiss"
+                onClick={() => dismiss(item.id)}
+                aria-label={t("common.dismiss", "Dismiss")}
                 className="-me-1 shrink-0 rounded-sm p-1.5 text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
               >
                 <IconClose size={14} />

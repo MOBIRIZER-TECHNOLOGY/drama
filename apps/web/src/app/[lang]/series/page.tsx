@@ -11,8 +11,8 @@ import { fetchBrowse, fetchCategories, fetchLanguages, fetchSeriesList, fetchTra
 
 const PAGE_SIZE = 60;
 
-/** Catalogue pages are cached per language and refreshed in the background every minute. */
-export const revalidate = 60;
+// Rendered per request: the root layout is force-dynamic for the CSP nonce, and server-data.ts memoises
+// the API calls behind this page for a minute, which is what `revalidate = 60` used to buy here.
 
 export async function generateMetadata({ params }: PageProps<"/[lang]/series">): Promise<Metadata> {
   const { lang } = await params;

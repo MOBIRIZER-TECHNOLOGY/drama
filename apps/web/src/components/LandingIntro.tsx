@@ -17,7 +17,7 @@ import { IconCheck, IconCoin, IconGift, IconPlay } from "./ui/icons";
  * The numbers come from config rather than copy, so the free-episode count and signup bonus can never contradict
  * what the paywall actually does.
  */
-export function LandingIntro() {
+export function LandingIntro({ filmCatalogue = false }: { filmCatalogue?: boolean }) {
   const t = useT();
   const href = useHref();
   const { config } = useApp();
@@ -25,6 +25,30 @@ export function LandingIntro() {
 
   // Returning viewers get the catalogue. Rendering nothing while auth resolves avoids a flash of the pitch.
   if (status !== "anonymous") return null;
+
+  if (filmCatalogue) {
+    return (
+      <section className="border-b border-line bg-surface/40" aria-labelledby="landing-heading">
+        <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 sm:py-10 lg:px-8">
+          <h1 id="landing-heading" className="font-display text-3xl font-bold leading-tight text-ink sm:text-4xl">
+            {t("landing.films_headline", "Short films. Complete stories.")}
+          </h1>
+          <p className="mt-3 max-w-2xl text-base text-ink2">
+            {t("landing.films_description", "Discover our starter collection of complete short films. Every film in this collection is free to watch, with original credits included.")}
+          </p>
+          <div className="mt-5 flex flex-wrap gap-3">
+            <Link href={href("/series")} className={buttonClass("primary", "lg")}>
+              <IconPlay size={18} />
+              {t("landing.films_browse", "Explore the films")}
+            </Link>
+            <Link href={href("/p/film-credits")} className={buttonClass("secondary", "lg")}>
+              {t("landing.films_credits", "Film credits & licences")}
+            </Link>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const freeEpisodes = config?.economy?.free_episodes ?? 0;
   const signupBonus = config?.rewards?.signup_bonus ?? 0;

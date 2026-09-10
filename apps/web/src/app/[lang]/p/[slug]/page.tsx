@@ -7,7 +7,8 @@ import { formatDay } from "@/lib/format";
 import { localeHref } from "@/lib/languages";
 import { fetchLanguages, fetchPage, fetchTranslations } from "@/lib/server-data";
 
-export const revalidate = 60;
+// Rendered per request: the root layout is force-dynamic for the CSP nonce, and server-data.ts memoises
+// the API calls behind this page for a minute, which is what `revalidate = 60` used to buy here.
 
 /** The API sanitises body_html on save; this render-time allow-list is defence in depth. */
 const SANITIZE = {

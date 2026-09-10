@@ -10,8 +10,8 @@ import { EmptyState, ErrorState } from "@/components/ui/states";
 import { webSiteJsonLd } from "@/lib/seo";
 import { fetchCategories, fetchHome, fetchTranslations } from "@/lib/server-data";
 
-/** Catalogue pages are cached per language and refreshed in the background every minute. */
-export const revalidate = 60;
+// Rendered per request: the root layout is force-dynamic for the CSP nonce, and server-data.ts memoises
+// the API calls behind this page for a minute, which is what `revalidate = 60` used to buy here.
 
 export default async function HomePage({ params }: PageProps<"/[lang]">) {
   const { lang } = await params;
@@ -34,7 +34,15 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
   const rails = home.data.rails.filter((r) => r.items.length > 0 && r.key !== "continue" && r.key !== "for_you");
   const featured = rails.find((r) => r.key === "featured") ?? null;
   const heroItems = featured?.items ?? rails.flatMap((r) => r.items).filter((s) => s.is_featured).slice(0, 6);
-  const others = rails.filter((r) => r !== featured);
+  const catalogueItems = [...new Map(rails.flatMap((rail) => rail.items).map((series) => [series.id, series])).values()];
+  const filmCatalogue = catalogueItems.length > 0 && catalogueItems.every((series) =>
+    series.episode_count >= 1 && series.free_episodes >= series.episode_count && !series.is_premium &&
+    series.categories.some((category) => category.slug === "short-films"),
+  );
+  const others = rails.filter((rail) => rail !== featured && (!filmCatalogue || rail.key === "top_picks"));
+  const visibleCategories = filmCatalogue
+    ? categories.filter((category) => catalogueItems.some((series) => series.categories.some((item) => item.id === category.id)))
+    : categories;
 
   if (rails.length === 0) {
     return (
@@ -51,7 +59,7 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
     <div className="pb-8">
       <JsonLd data={webSiteJsonLd(lang, t("meta.site_name", "Katha"))} />
       {/* What Katha is — shown to anonymous visitors only. Returning viewers want their rails, not a pitch. */}
-      <LandingIntro />
+      <LandingIntro filmCatalogue={filmCatalogue} />
       {heroItems.length > 0 && (
         <div className="pt-0 sm:pt-6">
           <HeroCarousel items={heroItems.slice(0, 8)} />
@@ -60,10 +68,10 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
       {/* Genres, right under the hero. Home had no way into the catalogue by genre at all — a visitor who
           wanted "revenge" had to know to open Browse — and these are also the internal links that make the
           category pages findable. */}
-      {categories.length > 0 && (
+      {visibleCategories.length > 0 && (
         <div className="mx-auto mt-6 max-w-[1400px] px-4 sm:px-6 lg:px-8">
           <CategoryBar
-            categories={categories}
+            categories={visibleCategories}
             lang={lang}
             activeSlug={null}
             allLabel={t("home.all_genres", "All")}
@@ -81,7 +89,7 @@ export default async function HomePage({ params }: PageProps<"/[lang]">) {
           return (
             <Rail
               key={rail.key}
-              title={ranked ? t("home.top_10", "Top 10 this week") : rail.title}
+              title={ranked ? t("home.top_picks", "Top picks") : rail.title}
               id={`rail-${rail.key}`}
             >
               {(ranked ? rail.items.slice(0, 10) : rail.items).map((s, i) => (

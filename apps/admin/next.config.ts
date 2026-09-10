@@ -1,32 +1,9 @@
 import type { NextConfig } from "next";
 
-const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-const apiOrigin = safeOrigin(apiUrl);
-const isProd = process.env.NODE_ENV === "production";
-
-/** Extra origins the browser talks to directly: presigned upload PUTs and public media (MinIO/S3/CDN). */
-const uploadOrigins = (process.env.NEXT_PUBLIC_UPLOAD_ORIGINS ?? (isProd ? "" : "http://localhost:9000"))
-  .split(/\s+/)
-  .map(safeOrigin)
-  .filter((o): o is string => Boolean(o));
-
-const csp = [
-  "default-src 'self'",
-  // Next.js hydration relies on inline scripts; dev tooling needs eval. Nonce-based CSP is a later phase.
-  `script-src 'self' 'unsafe-inline'${isProd ? "" : " 'unsafe-eval'"}`,
-  `connect-src 'self' ${[apiOrigin, ...uploadOrigins].filter(Boolean).join(" ")}`.trim(),
-  `img-src 'self' https: data: blob:${isProd ? "" : " http:"}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  // `'self'` is not optional here: `next/font` serves the console's own faces from this origin — from
-  // `/__nextjs_font/` in development and `/_next/static/media/` in a build — so a policy naming only the
-  // Google host blocks every font the app actually ships and silently falls back to system faces.
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "frame-ancestors 'none'",
-  "base-uri 'none'",
-  "form-action 'self'",
-  "object-src 'none'",
-].join("; ");
-
+/**
+ * The Content-Security-Policy is not here: it carries a per-request script nonce, so `src/proxy.ts` builds it
+ * (from `src/lib/csp.ts`) and sets it on every document response. Only the static headers remain.
+ */
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   async headers() {
@@ -34,7 +11,6 @@ const nextConfig: NextConfig = {
       {
         source: "/(.*)",
         headers: [
-          { key: "Content-Security-Policy", value: csp },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "same-origin" },
           { key: "X-Frame-Options", value: "DENY" },
@@ -44,13 +20,5 @@ const nextConfig: NextConfig = {
     ];
   },
 };
-
-function safeOrigin(u: string): string | null {
-  try {
-    return new URL(u).origin;
-  } catch {
-    return null;
-  }
-}
 
 export default nextConfig;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { api, call } from "@/lib/api";
+import { api, call, type Schemas } from "@/lib/api";
 import { downloadCsv } from "@/lib/editing";
 import { fmtDateTime, fmtMoney, shortId } from "@/lib/format";
 import { useQuery } from "@/lib/use-query";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui";
 
 export default function PurchasesPage() {
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<"" | Schemas["PurchaseStatus"]>("");
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [from, setFrom] = useState("");
@@ -133,7 +133,7 @@ export default function PurchasesPage() {
             aria-label="Status filter"
             value={status}
             onChange={(e) => {
-              setStatus(e.target.value);
+              setStatus(e.target.value as "" | Schemas["PurchaseStatus"]);
               reset();
             }}
             className="w-40"
@@ -158,7 +158,15 @@ export default function PurchasesPage() {
           </label>
           <label className="flex items-center gap-2 text-xs text-muted">
             To
-            <Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8 w-36" />
+            <Input
+              type="date"
+              value={to}
+              onChange={(e) => {
+                setTo(e.target.value);
+                reset();
+              }}
+              className="h-8 w-36"
+            />
           </label>
           {loading && data && <span className="text-xs text-muted">Refreshing…</span>}
         </div>
@@ -267,6 +275,7 @@ export default function PurchasesPage() {
                 limit={limit}
                 count={data.items.length}
                 hasNext={data.hasNext}
+                total={data.total}
                 onChange={setOffset}
                 onLimitChange={(n) => {
                   setLimit(n);

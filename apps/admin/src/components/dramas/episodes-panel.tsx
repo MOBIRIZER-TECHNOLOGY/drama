@@ -5,6 +5,7 @@ import { aiErrorMessage, generateEpisodeSubtitles, jobOutcomeText, jobQueuedText
 import { api, call, type Schemas } from "@/lib/api";
 import { fmtDateTime, fromLocalInput, toLocalInput } from "@/lib/format";
 import { useFieldErrors, validateEmbedHtml } from "@/lib/forms";
+import { mediaSrc } from "@/lib/media";
 import {
   isCancelled,
   MAX_VIDEO_BYTES,
@@ -177,9 +178,10 @@ export function EpisodesPanel({
                 <Td>
                   <div className="flex items-center gap-3">
                     <div className="h-12 w-7 shrink-0 overflow-hidden rounded bg-surface-2">
-                      {ep.thumbnail_url && (
+                      {/* Stored as a key, like covers: rendered raw it resolves against the console's own origin and 404s. */}
+                      {mediaSrc(ep.thumbnail_url) && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={ep.thumbnail_url} alt="" className="h-full w-full object-cover" />
+                        <img src={mediaSrc(ep.thumbnail_url) ?? ""} alt="" className="h-full w-full object-cover" />
                       )}
                     </div>
                     <span className="font-medium">{ep.title || <span className="text-muted">Untitled</span>}</span>
@@ -262,7 +264,7 @@ export function EpisodesPanel({
       <BulkIngestDialog
         open={ingestOpen}
         seriesId={seriesId}
-        existingNumbers={episodes.map((e) => e.number)}
+        existing={episodes}
         onClose={() => setIngestOpen(false)}
         onDone={onChanged}
       />
@@ -333,7 +335,8 @@ function EpisodeDialog({
 }) {
   const toast = useToast();
   const { errors, setErrors, clearError, formRef } = useFieldErrors<EpErrorKey>();
-  const [number, setNumber] = useState(episode?.number ?? defaultNumber);
+  // Kept as text so the field can be emptied while retyping; parsed once, on submit.
+  const [number, setNumber] = useState(String(episode?.number ?? defaultNumber));
   const [title, setTitle] = useState(episode?.title ?? "");
   const [thumb, setThumb] = useState<string | null>(episode?.thumbnail_url ?? null);
   const [mode, setMode] = useState<VideoMode>(episode?.video_asset_id ? "keep" : episode?.embed_html ? "embed" : "none");
@@ -417,7 +420,8 @@ function EpisodeDialog({
 
   function validate(): boolean {
     const next: Partial<Record<EpErrorKey, string>> = {};
-    if (!Number.isInteger(number) || number < 1) next.number = "Episode number must be 1 or more.";
+    const n = number.trim() === "" ? NaN : Number(number);
+    if (!Number.isInteger(n) || n < 1) next.number = "Episode number must be 1 or more.";
     if (mode === "upload" && !asset) next.video = "Choose a video file first, or switch to another video source.";
     if (mode === "embed") {
       const err = validateEmbedHtml(embed);
@@ -433,7 +437,7 @@ function EpisodeDialog({
     e.preventDefault();
     if (!validate()) return;
     const body: EpisodeIn = {
-      number,
+      number: Number(number),
       title: title.trim() || null,
       thumbnail_url: thumb || null,
       video_asset_id: mode === "keep" ? (episode?.video_asset_id ?? null) : mode === "upload" ? (asset?.id ?? null) : null,
@@ -490,7 +494,7 @@ function EpisodeDialog({
             value={number}
             data-autofocus
             onChange={(e) => {
-              setNumber(Number(e.target.value));
+              setNumber(e.target.value);
               clearError("number");
             }}
           />

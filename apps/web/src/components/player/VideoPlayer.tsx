@@ -36,6 +36,7 @@ export type PlayerLabels = {
   retry: string;
   unsupported: string;
   networkError: string;
+  mediaError: string;
   speed: string;
   subtitles: string;
   subtitlesOff: string;
@@ -66,6 +67,7 @@ export type VideoPlayerProps = {
   onProgress: (positionSec: number, durationSec: number | null) => void;
   /** Ask the parent for a fresh playback grant (signed URLs expire). */
   onReload: () => void;
+  onAspectRatio?: (ratio: number) => void;
 };
 
 const PROGRESS_INTERVAL_MS = 15_000;
@@ -119,6 +121,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
     onEnded,
     onProgress,
     onReload,
+    onAspectRatio,
   } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -159,7 +162,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
     startAt: resumeAt,
     autoPlay,
     expiresAt,
-    labels: { unsupported: labels.unsupported, networkError: labels.networkError },
+    labels: { unsupported: labels.unsupported, networkError: labels.networkError, mediaError: labels.mediaError },
     onReload: () => callbacks.current.onReload(),
     onLevelSwitch: (kbps, height) => beacons?.levelSwitch(kbps, height),
     onFatalError: (code) => beacons?.error(code, true),
@@ -419,6 +422,10 @@ export function VideoPlayer(props: VideoPlayerProps) {
         preload="metadata"
         crossOrigin={needsCors ? "anonymous" : undefined}
         className="h-full w-full object-contain"
+        onLoadedMetadata={(event) => {
+          const video = event.currentTarget;
+          if (video.videoWidth && video.videoHeight) onAspectRatio?.(video.videoWidth / video.videoHeight);
+        }}
         onPlay={() => {
           setPlaying(true);
           showControls();
@@ -519,17 +526,17 @@ export function VideoPlayer(props: VideoPlayerProps) {
         onBlur={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocusWithin(false);
         }}
-        className={`absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/85 to-transparent px-3 pb-2 pt-10 transition-opacity ${controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
+        className={`pointer-events-none absolute inset-x-0 bottom-0 flex flex-col gap-1 bg-gradient-to-t from-black/85 to-transparent px-3 pb-2 pt-10 transition-opacity ${controlsVisible ? "opacity-100" : "opacity-0"}`}
         onPointerDown={(e) => e.stopPropagation()}
       >
-        <div className="relative h-5">
+        <div className={`relative h-5 ${controlsVisible ? "pointer-events-auto" : ""}`}>
           <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-pill bg-ink/20">
             <div className="absolute inset-y-0 start-0 bg-ink/35" style={{ width: `${bufPct}%` }} />
             <div className="absolute inset-y-0 start-0 bg-accent" style={{ width: `${pct}%` }} />
           </div>
           <input
             type="range"
-            className="k-range absolute inset-0"
+            className="k-range absolute inset-0 w-full"
             min={0}
             max={duration || 0}
             step={0.1}
@@ -539,7 +546,7 @@ export function VideoPlayer(props: VideoPlayerProps) {
             onChange={(e) => seekTo(Number(e.target.value))}
           />
         </div>
-        <div className="flex items-center gap-1">
+        <div className={`flex flex-wrap items-center gap-1 ${controlsVisible ? "pointer-events-auto" : ""}`}>
           <ControlButton label={labels.back10} onClick={() => seekBy(-10)}>
             <IconBack10 size={20} />
           </ControlButton>

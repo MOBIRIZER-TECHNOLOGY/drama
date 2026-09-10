@@ -54,8 +54,18 @@ export async function generateMetadata({ params }: LayoutProps<"/[lang]">): Prom
 
 export const viewport: Viewport = { themeColor: colors.ground, width: "device-width", initialScale: 1 };
 
+/**
+ * Every page is rendered per request. The CSP carries a nonce that src/proxy.ts mints per response and
+ * Next stamps onto its inline scripts; an ISR-cached page would replay yesterday's nonce against today's
+ * header and hydrate nothing. The API calls behind a page are memoised in server-data.ts for 60 seconds,
+ * which is what the pages' own `revalidate = 60` used to buy, so the API sees the same load as before.
+ */
+export const dynamic = "force-dynamic";
+
 export default async function RootLayout({ children, params }: LayoutProps<"/[lang]">) {
   const { lang } = await params;
+  // The build-time list first: it is what the proxy routes, so anything else never gets here and is not
+  // worth five API calls to reject.
   if (!isSupportedLang(lang)) notFound();
 
   const [languages, messages, pages, config, categories] = await Promise.all([
@@ -65,6 +75,10 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
     fetchConfig(),
     fetchCategories(lang),
   ]);
+  // Then the live list, so a language switched off in the admin console stops serving without a rebuild.
+  // (`fetchLanguages` falls back to the build-time list when the API is down, so an outage cannot 404 a
+  // language that exists.)
+  if (!languages.some((l) => l.code === lang)) notFound();
   const dir: "ltr" | "rtl" = languages.find((l) => l.code === lang)?.rtl ? "rtl" : "ltr";
   const t = (key: string, fallback: string) => messages[key] || fallback;
 
@@ -82,8 +96,7 @@ export default async function RootLayout({ children, params }: LayoutProps<"/[la
           </a>
           <Header />
           <OfflineBanner />
-          {/* pb-14 clears the fixed bottom tab bar below md; it is `hidden` from md up, where the header nav takes over. */}
-          <main id="main" tabIndex={-1} className="flex-1 pb-14 md:pb-0">
+          <main id="main" tabIndex={-1} className="flex-1 pb-14 lg:pb-0">
             {children}
           </main>
           <Footer

@@ -57,13 +57,13 @@ function HeaderInner({ pathname }: { pathname: string }) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-ground/90 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-3 px-4 sm:h-16 sm:px-6 lg:px-8">
-        <Link href={href("/")} className="font-display flex items-center gap-2 text-2xl font-bold tracking-tight text-ink" aria-label="Katha home">
+      <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
+        <Link href={href("/")} className="font-display flex shrink-0 items-center gap-2 text-xl font-bold tracking-tight text-ink sm:text-2xl" aria-label={t("nav.home_link", "Katha home")}>
           <Logo size={26} />
           Katha
         </Link>
 
-        <nav className="ms-4 hidden items-center gap-1 md:flex" aria-label="Primary">
+        <nav className="ms-4 hidden shrink-0 items-center gap-1 lg:flex" aria-label={t("nav.primary", "Primary")}>
           {nav.map((n) => (
             <Link
               key={n.to}
@@ -76,11 +76,11 @@ function HeaderInner({ pathname }: { pathname: string }) {
           ))}
         </nav>
 
-        <div className="mx-auto hidden w-full max-w-md sm:block">
+        <div className="mx-auto hidden min-w-0 w-full max-w-md sm:block">
           <SearchBox />
         </div>
 
-        <div className="ms-auto flex items-center gap-2 sm:ms-0">
+        <div className="ms-auto flex shrink-0 items-center gap-1.5 sm:ms-0 sm:gap-2">
           <button
             type="button"
             onClick={() => setMobileSearch((v) => !v)}
@@ -169,10 +169,11 @@ function HeaderInner({ pathname }: { pathname: string }) {
                   <LanguageSwitcher compact />
                 </Suspense>
               </div>
-              <Button onClick={openAuth}>
-                {signupBonus > 0
+              <Button onClick={openAuth} className="px-3 text-xs sm:px-4 sm:text-sm">
+                <span className="sm:hidden">{t("auth.sign_in", "Sign in")}</span>
+                <span className="hidden sm:inline">{signupBonus > 0
                   ? t("auth.sign_up_bonus", "Get {n} free coins", { n: signupBonus })
-                  : t("auth.sign_up", "Sign up free")}
+                  : t("auth.sign_up", "Sign up free")}</span>
               </Button>
             </div>
           )}

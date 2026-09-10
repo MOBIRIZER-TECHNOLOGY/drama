@@ -1,9 +1,12 @@
 import type { MetadataRoute } from "next";
 import { SITE_URL } from "@/lib/api";
-import { DEFAULT_LANG, SUPPORTED_LANGS, localeHref } from "@/lib/languages";
-import { fetchSitemap } from "@/lib/server-data";
+import { DEFAULT_LANG, localeHref } from "@/lib/languages";
+import { fetchLanguages, fetchSitemap } from "@/lib/server-data";
 
-/** Rebuilt hourly; the feed is one call to GET /v1/sitemap. */
+/**
+ * Rebuilt hourly; the feed is one call to GET /v1/sitemap, plus the live language list so a language
+ * activated after the build appears in the alternates without a redeploy.
+ */
 export const revalidate = 3600;
 
 const STATIC_PATHS = ["/", "/series", "/shorts"];
@@ -23,15 +26,16 @@ function alternates(path: string, langs: string[]): { languages: Record<string, 
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [languages, feed] = await Promise.all([fetchLanguages(), fetchSitemap()]);
+  const langs = languages.map((l) => l.code);
   const entries: MetadataRoute.Sitemap = STATIC_PATHS.map((path) => ({
     url: url(DEFAULT_LANG, path),
     lastModified: new Date(),
     changeFrequency: "daily" as const,
     priority: path === "/" ? 1 : 0.7,
-    alternates: alternates(path, SUPPORTED_LANGS),
+    alternates: alternates(path, langs),
   }));
 
-  const feed = await fetchSitemap();
   if (!feed.ok) return entries;
 
   for (const s of feed.data.series) {
@@ -42,7 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(s.updated_at),
       changeFrequency: "weekly",
       priority: 0.8,
-      alternates: alternates(path, SUPPORTED_LANGS),
+      alternates: alternates(path, langs),
     });
 
     // One URL per episode. "<series> episode 12 watch online" is the highest-volume query class in this
@@ -56,7 +60,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: new Date(s.updated_at),
         changeFrequency: "monthly",
         priority: 0.5,
-        alternates: alternates(episodePath, SUPPORTED_LANGS),
+        alternates: alternates(episodePath, langs),
       });
     }
   }
@@ -67,7 +71,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: new Date(),
       changeFrequency: "monthly",
       priority: 0.3,
-      alternates: alternates(path, SUPPORTED_LANGS),
+      alternates: alternates(path, langs),
     });
   }
   return entries;

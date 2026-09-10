@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { track } from "@/lib/analytics";
 import { useApp, useT } from "@/lib/app-context";
@@ -20,6 +19,7 @@ import { EpisodeGrid } from "./EpisodeGrid";
 import { highestAccessibleNumber, lockState } from "./lock-state";
 import { ReportDialog } from "./ReportDialog";
 import { UnlockDialog, type BundleQuote, type UnlockStatus } from "./UnlockDialog";
+import { ShowArtwork } from "../ShowArtwork";
 
 /**
  * Result of POST /play for one episode, keyed by `${authStatus}:${episodeId}` so a sign-in/out naturally refetches.
@@ -71,6 +71,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   const [favorite, setFavorite] = useState(series.is_favorite);
   const [reportOpen, setReportOpen] = useState(false);
   const [synopsisOpen, setSynopsisOpen] = useState(false);
+  const [videoShape, setVideoShape] = useState<{ episodeId: string; ratio: number } | null>(null);
   const synopsisRef = useRef<HTMLParagraphElement>(null);
   const [synopsisClamped, setSynopsisClamped] = useState(false);
   const [continueNumber, setContinueNumber] = useState(series.continue_episode_number);
@@ -476,6 +477,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
     retry: t("common.retry", "Try again"),
     unsupported: t("player.unsupported", "This browser cannot play HLS video."),
     networkError: t("player.network_error", "Playback stopped. Tap to reload."),
+    mediaError: t("player.media_error", "This video could not be decoded. Tap to reload."),
     speed: t("player.speed", "speed"),
     subtitles: t("player.subtitles", "Subtitles"),
     subtitlesOff: t("player.subtitles_off", "Off"),
@@ -486,20 +488,21 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
   };
 
   const grant = play.kind === "ready" ? play.grant : null;
+  const aspectRatio = videoShape?.episodeId === currentId ? videoShape.ratio : 9 / 16;
+  const landscape = aspectRatio > 1;
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 sm:py-8 lg:px-8">
-      {/* The player track is sized from the viewport height (9:16), never from its content, so placeholders keep the width. */}
-      <div className="flex flex-col gap-6 lg:grid lg:grid-cols-[min(calc(82svh*9/16),420px)_minmax(0,1fr)] lg:items-start lg:gap-10">
+      <div className={`flex flex-col gap-6 lg:grid lg:items-start lg:gap-10 ${landscape ? "lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]" : "lg:grid-cols-[min(calc(82svh*9/16),420px)_minmax(0,1fr)]"}`}>
         {/* Player column */}
-        <div className="mx-auto w-[min(100%,calc(82svh*9/16))] lg:mx-0 lg:w-full">
-          <div className="relative aspect-[9/16] w-full">
+        <div className={`mx-auto lg:mx-0 lg:w-full ${landscape ? "w-full" : "w-[min(100%,calc(82svh*9/16))]"}`}>
+          <div className="relative w-full" style={{ aspectRatio }}>
             {grant && current ? (
               <VideoPlayer
                 key={`${grant.episode_id}-${grant.expires_at}`}
                 src={grant.hls_url}
                 embedHtml={grant.embed_html}
-                poster={current.thumbnail_url ?? series.cover_url}
+                poster={current.thumbnail_url ?? series.cover_url ?? "/images/show-fallback-poster.jpg"}
                 title={`${series.title} – ${t("series.episode", "Episode")} ${current.number}`}
                 resumeAt={grant.resume_position_sec}
                 expiresAt={grant.expires_at}
@@ -514,6 +517,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
                 onEnded={onEnded}
                 onProgress={(pos, dur) => putProgress(current.id, pos, dur != null && pos >= dur - 2)}
                 onReload={() => dropGrant(current.id)}
+                onAspectRatio={(ratio) => setVideoShape({ episodeId: current.id, ratio })}
               />
             ) : (
               <PlayerPlaceholder
@@ -540,11 +544,9 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
         {/* Info column */}
         <div className="min-w-0">
           <div className="flex gap-4">
-            {series.cover_url && (
-              <div className="relative hidden aspect-[9/16] w-24 shrink-0 overflow-hidden rounded-md border border-line sm:block">
-                <Image src={series.cover_url} alt="" fill sizes="96px" className="object-cover" />
-              </div>
-            )}
+            <div className="relative hidden aspect-[9/16] w-24 shrink-0 overflow-hidden rounded-md border border-line sm:block">
+              <ShowArtwork src={series.cover_url} kind="poster" alt="" fill sizes="96px" className="object-cover" />
+            </div>
             <div className="min-w-0 flex-1">
               <h1 className="font-display text-2xl font-bold leading-tight text-ink sm:text-3xl">{series.title}</h1>
               {/* Classification and the next-episode promise: the two things a viewer decides on and neither was
@@ -566,7 +568,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
               </div>
               <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm text-muted">
                 <span>
-                  {series.episode_count} {t("series.episodes_count", "episodes")}
+                  {series.episode_count} {series.episode_count === 1 ? t("series.episode", "Episode") : t("series.episodes_count", "episodes")}
                 </span>
                 <span>
                   {formatNumber(series.view_count, lang)} {t("series.views", "views")}
@@ -602,7 +604,7 @@ export function SeriesView({ series, initialEpisode }: { series: SeriesDetail; i
             <div className="mt-4">
               <p
                 ref={synopsisRef}
-                className={`text-sm leading-relaxed text-ink2 ${synopsisOpen ? "" : "line-clamp-3"}`}
+                className={`break-words text-sm leading-relaxed text-ink2 ${synopsisOpen ? "" : "line-clamp-3"}`}
               >
                 {series.synopsis}
               </p>
@@ -697,7 +699,15 @@ function PlayerPlaceholder({
   const img = episode?.thumbnail_url ?? series.cover_url;
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg border border-line bg-surface">
-      {img && <Image src={img} alt="" fill sizes="(min-width: 1024px) 460px, 100vw" className="object-cover opacity-40" priority />}
+      <ShowArtwork
+        src={img}
+        kind="poster"
+        alt=""
+        fill
+        sizes="(min-width: 1024px) 460px, 100vw"
+        className="object-cover opacity-40"
+        priority
+      />
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center">
         {state.kind === "loading" || state.kind === "idle" || state.kind === "ready" ? (
           <Spinner size={36} className="text-ink" />

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { track } from "./analytics";
+import { authBff } from "./auth-bff";
 import { clientApi } from "./client-api";
 import { call, type ApiError } from "./errors";
 import { clearReferral, pendingReferral } from "./referral";
@@ -90,16 +91,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const idToken = await result.user.getIdToken();
       const referral = pendingReferral();
       const { data } = await call(() =>
-        clientApi.POST("/v1/auth/exchange", {
-          body: {
-            firebase_id_token: idToken,
-            platform: "web",
-            device_id: tokenStore.deviceId(),
-            device_name: describeDevice(navigator.userAgent),
-            app_version: "web-0.1.0",
-            locale: lang,
-            referral_code: referral,
-          },
+        authBff.exchange({
+          firebase_id_token: idToken,
+          device_id: tokenStore.deviceId(),
+          device_name: describeDevice(navigator.userAgent),
+          app_version: "web-0.1.0",
+          locale: lang,
+          referral_code: referral,
         }),
       );
       if (data) {
@@ -116,31 +114,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useLoader(finishRedirect);
 
+  // Read inside the token listener, which is registered once and must not go stale.
+  const statusRef = useRef(status);
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   useEffect(
     () =>
-      tokenStore.subscribe((tokens) => {
+      tokenStore.subscribe((tokens, source) => {
         if (!tokens) {
           setUser(null);
           setStatus("anonymous");
+          return;
         }
+        // Signed in from another tab. This tab was handed a token it never asked for, so load the profile
+        // that goes with it — otherwise it stays on "Sign up" until a reload while every request already
+        // carries the session. A token this tab wrote itself is followed by its own `loadUser`, and a
+        // rotation done elsewhere while already signed in changes nothing the profile shows.
+        if (source === "storage" && statusRef.current !== "authenticated") void loadUser();
       }),
-    [],
+    [loadUser],
   );
 
   const exchange = useCallback(
     async (firebaseIdToken: string, method = "email"): Promise<ApiError | null> => {
       const referral = pendingReferral();
+      // Through the BFF, not the API: the refresh token in the reply stays in an httpOnly cookie on this
+      // origin and only the access token reaches the page (see src/app/api/auth).
       const { data, error } = await call(() =>
-        clientApi.POST("/v1/auth/exchange", {
-          body: {
-            firebase_id_token: firebaseIdToken,
-            platform: "web",
-            device_id: tokenStore.deviceId(),
-            device_name: typeof navigator !== "undefined" ? describeDevice(navigator.userAgent) : "Web",
-            app_version: "web-0.1.0",
-            locale: lang,
-            referral_code: referral,
-          },
+        authBff.exchange({
+          firebase_id_token: firebaseIdToken,
+          device_id: tokenStore.deviceId(),
+          device_name: typeof navigator !== "undefined" ? describeDevice(navigator.userAgent) : "Web",
+          app_version: "web-0.1.0",
+          locale: lang,
+          referral_code: referral,
         }),
       );
       if (error) return error;
@@ -156,7 +165,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signOut = useCallback(async () => {
-    if (tokenStore.has()) await call(() => clientApi.POST("/v1/auth/logout"));
+    // The BFF clears the refresh cookie and revokes the session at the API; the access token goes with it
+    // so an expired one can still be traded for something to revoke with. Best-effort: the local sign-out
+    // below happens whatever the network says.
+    await call(() => authBff.logout(tokenStore.current()));
     tokenStore.clear();
     setUser(null);
     setStatus("anonymous");

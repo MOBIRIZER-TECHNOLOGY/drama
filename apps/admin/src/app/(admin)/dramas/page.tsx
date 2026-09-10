@@ -28,10 +28,14 @@ import {
   Td,
   Th,
   statusTone,
+  type SortState,
 } from "@/components/ui";
 
 type Series = Schemas["AdminSeriesOut"];
 const LIMIT = 20;
+
+/** Columns the list endpoint can order by. A subset of its `sort` enum: `created_at` has no column here. */
+type SortKey = "title" | "status" | "episode_count" | "view_count" | "like_count" | "updated_at";
 
 export default function DramasPage() {
   const toast = useToast();
@@ -43,13 +47,21 @@ export default function DramasPage() {
   const [busy, setBusy] = useState(false);
   const [reembedOpen, setReembedOpen] = useState(false);
   const [reembedding, setReembedding] = useState(false);
+  // Sorting is done by the API over the whole table, so it is query state like the search and the filter:
+  // part of the cache key, and a change sends the operator back to the first page of the new order.
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const key = `series:${debounced}:${status}:${offset}`;
+  function changeSort(next: SortState<SortKey>) {
+    setSort(next);
+    setOffset(0);
+  }
+
+  const key = `series:${debounced}:${status}:${sort?.key ?? ""}:${sort?.direction ?? ""}:${offset}`;
   const { data, loading, error, refetch } = useQuery(key, async () => {
     // One extra row tells us whether a next page exists.
     const page = await call(
@@ -58,6 +70,8 @@ export default function DramasPage() {
           query: {
             q: debounced || undefined,
             status: (status || undefined) as Schemas["PublishStatus"] | undefined,
+            sort: sort?.key,
+            order: sort?.direction,
             limit: LIMIT,
             offset,
           },
@@ -165,12 +179,24 @@ export default function DramasPage() {
               <Table minWidth={820}>
                 <thead>
                   <tr>
-                    <Th>Series</Th>
-                    <Th>Status</Th>
-                    <Th className="text-right">Episodes</Th>
-                    <Th className="text-right">Views</Th>
-                    <Th className="text-right">Likes</Th>
-                    <Th>Updated</Th>
+                    <Th sortKey="title" sort={sort} onSort={changeSort}>
+                      Series
+                    </Th>
+                    <Th sortKey="status" sort={sort} onSort={changeSort}>
+                      Status
+                    </Th>
+                    <Th sortKey="episode_count" sort={sort} onSort={changeSort} className="text-right">
+                      Episodes
+                    </Th>
+                    <Th sortKey="view_count" sort={sort} onSort={changeSort} className="text-right">
+                      Views
+                    </Th>
+                    <Th sortKey="like_count" sort={sort} onSort={changeSort} className="text-right">
+                      Likes
+                    </Th>
+                    <Th sortKey="updated_at" sort={sort} onSort={changeSort}>
+                      Updated
+                    </Th>
                     <Th className="text-right">Actions</Th>
                   </tr>
                 </thead>

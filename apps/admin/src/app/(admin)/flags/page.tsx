@@ -38,6 +38,9 @@ export default function FlagsPage() {
   const [deleting, setDeleting] = useState<Flag | null>(null);
   const [busy, setBusy] = useState(false);
   const [toggling, setToggling] = useState<string | null>(null);
+  // A flag is a production kill switch; the row switch used to flip it on the click, so a mis-click on
+  // `rewarded_ads` was live before the hand left the mouse.
+  const [pendingToggle, setPendingToggle] = useState<Flag | null>(null);
 
   const upsert = (saved: Flag) =>
     setData((prev) => {
@@ -46,6 +49,7 @@ export default function FlagsPage() {
     });
 
   async function toggle(f: Flag) {
+    setPendingToggle(null);
     const next = { ...f, enabled: !f.enabled };
     setToggling(f.key);
     setData((prev) => (prev ?? []).map((x) => (x.key === f.key ? next : x)));
@@ -111,7 +115,7 @@ export default function FlagsPage() {
                 <tr key={f.key} className={`hover:bg-surface-2/50 ${loading ? "opacity-70" : ""}`}>
                   <Td className="font-mono text-sm font-medium">{f.key}</Td>
                   <Td>
-                    <Toggle label={`${f.key} enabled`} hideLabel checked={f.enabled} disabled={toggling === f.key} onChange={() => toggle(f)} />
+                    <Toggle label={`${f.key} enabled`} hideLabel checked={f.enabled} disabled={toggling === f.key} onChange={() => setPendingToggle(f)} />
                   </Td>
                   <Td>
                     {f.rules && Object.keys(f.rules).length ? (
@@ -155,6 +159,22 @@ export default function FlagsPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingToggle != null}
+        title={pendingToggle?.enabled ? "Turn flag off" : "Turn flag on"}
+        message={
+          pendingToggle
+            ? `Turn “${pendingToggle.key}” ${pendingToggle.enabled ? "off" : "on"}? Apps pick this up on their next config refresh${
+                !pendingToggle.enabled && pendingToggle.rules && Object.keys(pendingToggle.rules).length ? ", within the flag's rules" : ""
+              }.`
+            : ""
+        }
+        confirmLabel={pendingToggle?.enabled ? "Turn off" : "Turn on"}
+        destructive={Boolean(pendingToggle?.enabled)}
+        onConfirm={() => pendingToggle && void toggle(pendingToggle)}
+        onCancel={() => setPendingToggle(null)}
+      />
 
       <ConfirmDialog
         open={deleting != null}

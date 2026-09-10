@@ -20,10 +20,14 @@ import {
   Td,
   Th,
   statusTone,
+  type SortState,
 } from "@/components/ui";
 
 type User = Schemas["AdminUserOut"];
 const LIMIT = 25;
+
+/** Columns the list endpoint can order by; the others (contact, locale) stay unsortable. */
+type SortKey = "display_name" | "status" | "coin_balance" | "created_at" | "last_seen_at";
 
 export default function UsersPage() {
   const [q, setQ] = useState("");
@@ -31,19 +35,30 @@ export default function UsersPage() {
   const [status, setStatus] = useState("");
   const [offset, setOffset] = useState(0);
   const [selected, setSelected] = useState<User | null>(null);
+  // Sorting is done by the API over the whole table, so it is query state like the search and the filter:
+  // part of the cache key, and a change sends the operator back to the first page of the new order.
+  const [sort, setSort] = useState<SortState<SortKey> | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(q.trim()), 300);
     return () => clearTimeout(t);
   }, [q]);
 
-  const { data, loading, error, refetch, setData } = useQuery(`users:${debounced}:${status}:${offset}`, async () => {
+  function changeSort(next: SortState<SortKey>) {
+    setSort(next);
+    setOffset(0);
+  }
+
+  const key = `users:${debounced}:${status}:${sort?.key ?? ""}:${sort?.direction ?? ""}:${offset}`;
+  const { data, loading, error, refetch, setData } = useQuery(key, async () => {
     const page = await call(
       api.GET("/v1/admin/users", {
         params: {
           query: {
             q: debounced || undefined,
             status: (status || undefined) as Schemas["UserStatus"] | undefined,
+            sort: sort?.key,
+            order: sort?.direction,
             limit: LIMIT + 1,
             offset,
           },
@@ -101,13 +116,23 @@ export default function UsersPage() {
               <Table minWidth={820}>
                 <thead>
                   <tr>
-                    <Th>User</Th>
+                    <Th sortKey="display_name" sort={sort} onSort={changeSort}>
+                      User
+                    </Th>
                     <Th>Contact</Th>
-                    <Th>Status</Th>
-                    <Th className="text-right">Coins</Th>
+                    <Th sortKey="status" sort={sort} onSort={changeSort}>
+                      Status
+                    </Th>
+                    <Th sortKey="coin_balance" sort={sort} onSort={changeSort} className="text-right">
+                      Coins
+                    </Th>
                     <Th>Locale</Th>
-                    <Th>Joined</Th>
-                    <Th>Last seen</Th>
+                    <Th sortKey="created_at" sort={sort} onSort={changeSort}>
+                      Joined
+                    </Th>
+                    <Th sortKey="last_seen_at" sort={sort} onSort={changeSort}>
+                      Last seen
+                    </Th>
                   </tr>
                 </thead>
                 <tbody>

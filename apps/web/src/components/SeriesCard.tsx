@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { localeHref } from "@/lib/languages";
 import type { SeriesCard as SeriesCardT } from "@/lib/types";
 import { IconLock, IconPlay } from "./ui/icons";
+import { ShowArtwork } from "./ShowArtwork";
 
 export function SeriesCard({
   series,
@@ -42,20 +42,15 @@ export function SeriesCard({
           </span>
         ) : null}
         <div className="absolute inset-0 overflow-hidden rounded-md">
-        {series.cover_url ? (
-          <Image
-            src={series.cover_url}
-            alt=""
-            fill
-            sizes="(min-width: 768px) 12rem, 9.5rem"
-            priority={priority}
-            className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
-          />
-        ) : (
-          <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-surface2 to-ground">
-            <span className="font-display px-3 text-center text-sm text-muted">{series.title}</span>
-          </div>
-        )}
+        <ShowArtwork
+          src={series.cover_url}
+          kind="poster"
+          alt=""
+          fill
+          sizes="(min-width: 768px) 12rem, 9.5rem"
+          priority={priority}
+          className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+        />
         {/* Ratings were added to the API so clients could warn before playback, and then rendered nowhere: a
             UA16 title looked identical to a U until playback was refused. India's IT Rules expect a prominent
             classification, and a parent has no other signal. */}
@@ -76,7 +71,9 @@ export function SeriesCard({
           </span>
         )}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 to-transparent" />
-        <div className="absolute inset-x-2 bottom-2 flex items-end justify-between gap-2 text-[11px] text-ink2">
+        {/* The ranked numeral hangs over the poster's bottom-left corner, which is where this caption starts:
+            without the extra inset, "3 eps" sat under the "2". */}
+        <div className={`absolute bottom-2 flex items-end justify-between gap-2 text-[11px] text-ink2 ${rank ? "start-9 end-2" : "inset-x-2"}`}>
           <span>
             {series.episode_count} {episodesLabel}
           </span>

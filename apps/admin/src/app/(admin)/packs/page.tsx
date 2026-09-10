@@ -37,6 +37,7 @@ export default function PacksPage() {
   const { data, loading, error, refetch, setData } = useQuery("packs", () => call(api.GET("/v1/admin/packs")));
   const [editing, setEditing] = useState<Pack | "new" | null>(null);
   const [deleting, setDeleting] = useState<Pack | null>(null);
+  const [pendingToggle, setPendingToggle] = useState<Pack | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function remove() {
@@ -55,7 +56,9 @@ export default function PacksPage() {
     }
   }
 
+  /** Optimistic once confirmed: the store changes for every viewer, so the click is not the confirmation. */
   async function toggleActive(p: Pack) {
+    setPendingToggle(null);
     const next = { ...p, is_active: !p.is_active };
     setData((prev) => (prev ?? []).map((x) => (x.id === p.id ? next : x)));
     try {
@@ -150,7 +153,7 @@ export default function PacksPage() {
                     {!p.google_product_id && !p.apple_product_id && "—"}
                   </Td>
                   <Td>
-                    <Toggle label={`${p.name} active`} hideLabel checked={p.is_active} onChange={() => toggleActive(p)} />
+                    <Toggle label={`${p.name} active`} hideLabel checked={p.is_active} onChange={() => setPendingToggle(p)} />
                   </Td>
                   <Td className="text-right">
                     <div className="flex justify-end gap-1">
@@ -182,6 +185,22 @@ export default function PacksPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={pendingToggle != null}
+        title={pendingToggle?.is_active ? "Deactivate pack" : "Activate pack"}
+        message={
+          pendingToggle
+            ? pendingToggle.is_active
+              ? `Take “${pendingToggle.name}” off the store? Viewers can no longer buy it; existing purchases keep their record.`
+              : `Put “${pendingToggle.name}” on the store? It is offered to viewers at its listed prices immediately.`
+            : ""
+        }
+        confirmLabel={pendingToggle?.is_active ? "Deactivate" : "Activate"}
+        destructive={Boolean(pendingToggle?.is_active)}
+        onConfirm={() => pendingToggle && void toggleActive(pendingToggle)}
+        onCancel={() => setPendingToggle(null)}
+      />
 
       <ConfirmDialog
         open={deleting != null}

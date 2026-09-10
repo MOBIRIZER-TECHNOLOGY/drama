@@ -22,7 +22,7 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/series/[sl
   const path = `/series/${s.slug}`;
   const images = s.cover_url ? [{ url: s.cover_url, width: 720, height: 1280, alt: s.title }] : [];
   return {
-    title,
+    title: s.seo_title ? { absolute: title } : title,
     description,
     alternates: {
       canonical: localeHref(lang, path),

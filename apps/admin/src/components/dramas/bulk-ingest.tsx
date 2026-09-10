@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
-import { api, call } from "@/lib/api";
+import { api, call, type Schemas } from "@/lib/api";
 import { useToast } from "@/components/toast";
 import { Button, Field, Modal, Select, Toggle } from "@/components/ui";
 import { isCancelled, MAX_VIDEO_BYTES, uploadVideo } from "@/lib/uploads";
@@ -14,14 +14,22 @@ import { isCancelled, MAX_VIDEO_BYTES, uploadVideo } from "@/lib/uploads";
  * upload, so nothing could run in the background.
  *
  * Here an operator selects the whole season at once. Episode numbers are read from the filenames (01.mp4,
- * ep_12.mp4, "Show - 07.mp4"), which is how the files arrive from an edit house, and anything unparsed falls
- * back to sequential numbering from the first free slot. Uploads run with a small amount of concurrency, each
- * row reports its own progress, and a failure is per-file rather than per-batch.
+ * ep_12.mp4, "Show - 07.mp4"), which is how the files arrive from an edit house, and only a file whose name
+ * yields no number falls back to sequential numbering from the first free slot. A file whose number is already
+ * on the series keeps that number: by default it is skipped, so dropping the same folder twice cannot duplicate
+ * anything, and with the replace toggle on its video replaces the existing episode's. (The API refuses two
+ * episodes with one number, so "allow duplicates" was never something this dialog could offer.) Uploads run
+ * with a small amount of concurrency, each row reports its own progress, and a failure is per-file rather than
+ * per-batch.
  */
+
+type Episode = Schemas["AdminEpisodeOut"];
 
 type Row = {
   file: File;
   number: number;
+  /** The episode already holding this number, when there is one. */
+  existing?: Episode;
   status: "queued" | "uploading" | "transcoding" | "done" | "error" | "skipped";
   progress: number;
   message?: string;
@@ -45,14 +53,14 @@ const CONCURRENCY = 3;
 export function BulkIngestDialog({
   open,
   seriesId,
-  existingNumbers,
+  existing,
   onClose,
   onDone,
 }: {
   open: boolean;
   seriesId: string;
-  /** Episode numbers already on the series, so an accidental re-upload does not create duplicates. */
-  existingNumbers: number[];
+  /** Episodes already on the series: a re-upload of one is skipped, or replaces its video when asked to. */
+  existing: Episode[];
   onClose: () => void;
   onDone: () => void;
 }) {
@@ -64,12 +72,12 @@ export function BulkIngestDialog({
   const [overwrite, setOverwrite] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  const taken = useMemo(() => new Set(existingNumbers), [existingNumbers]);
+  const byNumber = useMemo(() => new Map(existing.map((e) => [e.number, e])), [existing]);
   const nextFree = useMemo(() => {
     let n = 1;
-    while (taken.has(n)) n += 1;
+    while (byNumber.has(n)) n += 1;
     return n;
-  }, [taken]);
+  }, [byNumber]);
 
   const pick = useCallback(
     (files: FileList | null) => {
@@ -79,20 +87,27 @@ export function BulkIngestDialog({
       const parsed = list.map((file) => ({ file, parsed: numberFromFilename(file.name) }));
       parsed.sort((a, b) => (a.parsed ?? Number.MAX_SAFE_INTEGER) - (b.parsed ?? Number.MAX_SAFE_INTEGER) || a.file.name.localeCompare(b.file.name));
 
-      const used = new Set(taken);
+      // Numbers claimed by this batch. A parsed number is kept even when the series already has it — that is
+      // the case the skip/replace toggle exists for — so only unnamed files take a fallback slot.
+      const claimed = new Set<number>();
       let fallback = nextFree;
       const next: Row[] = parsed.map(({ file, parsed: n }) => {
         let number = n;
-        if (number == null || used.has(number)) {
-          while (used.has(fallback)) fallback += 1;
+        if (number == null) {
+          while (byNumber.has(fallback) || claimed.has(fallback)) fallback += 1;
           number = fallback;
         }
-        used.add(number);
-        return { file, number, status: "queued", progress: 0 };
+        if (claimed.has(number)) {
+          // Two files in one drop naming the same episode: whichever sorted first wins, the other is left out
+          // rather than racing it to the API.
+          return { file, number, status: "skipped", progress: 0, message: "Same number as another file" };
+        }
+        claimed.add(number);
+        return { file, number, existing: byNumber.get(number), status: "queued", progress: 0 };
       });
       setRows(next);
     },
-    [taken, nextFree],
+    [byNumber, nextFree],
   );
 
   const patch = useCallback((index: number, changes: Partial<Row>) => {
@@ -109,8 +124,8 @@ export function BulkIngestDialog({
     let failed = 0;
 
     const work = rows.map((row, index) => async () => {
-      if (controller.signal.aborted) return;
-      if (!overwrite && taken.has(row.number)) {
+      if (controller.signal.aborted || row.status === "skipped") return;
+      if (row.existing && !overwrite) {
         patch(index, { status: "skipped", message: `Episode ${row.number} already exists` });
         return;
       }
@@ -122,17 +137,39 @@ export function BulkIngestDialog({
         // Drip scheduling: `review` plus a scheduled time is what the publish cron acts on.
         const scheduledAt =
           dripDays > 0 ? new Date(started + index * dripDays * 86_400_000).toISOString() : undefined;
-        await call(
-          api.POST("/v1/admin/series/{series_id}/episodes", {
-            params: { path: { series_id: seriesId } },
-            body: {
-              number: row.number,
-              status: scheduledAt ? "review" : status,
-              video_asset_id: asset.id,
-              ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
-            },
-          }),
-        );
+        if (row.existing) {
+          // Replace: the episode keeps its title, thumbnail and pricing; only the video (and the publish
+          // choice made in this dialog) changes. An embed is dropped because the file now is the video.
+          const ep = row.existing;
+          await call(
+            api.PUT("/v1/admin/episodes/{episode_id}", {
+              params: { path: { episode_id: ep.id } },
+              body: {
+                number: ep.number,
+                title: ep.title ?? null,
+                thumbnail_url: ep.thumbnail_url ?? null,
+                video_asset_id: asset.id,
+                embed_html: null,
+                price_override: ep.price_override ?? null,
+                is_free_override: ep.is_free_override ?? null,
+                status: scheduledAt ? "review" : status,
+                scheduled_at: scheduledAt ?? null,
+              },
+            }),
+          );
+        } else {
+          await call(
+            api.POST("/v1/admin/series/{series_id}/episodes", {
+              params: { path: { series_id: seriesId } },
+              body: {
+                number: row.number,
+                status: scheduledAt ? "review" : status,
+                video_asset_id: asset.id,
+                ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
+              },
+            }),
+          );
+        }
         patch(index, { status: "done" });
         ok += 1;
       } catch (err) {
@@ -159,7 +196,7 @@ export function BulkIngestDialog({
     if (ok) toast.success(`${ok} episode${ok === 1 ? "" : "s"} ingested${failed ? `, ${failed} failed` : ""}`);
     else if (failed) toast.error(`All ${failed} uploads failed`);
     if (ok) onDone();
-  }, [rows, overwrite, taken, patch, dripDays, seriesId, status, toast, onDone]);
+  }, [rows, overwrite, patch, dripDays, seriesId, status, toast, onDone]);
 
   const cancel = useCallback(() => {
     abortRef.current?.abort();
@@ -173,6 +210,8 @@ export function BulkIngestDialog({
   }, [busy, onClose]);
 
   const done = rows.filter((r) => r.status === "done").length;
+  /** What pressing Ingest will actually send, given the current toggle. */
+  const pending = rows.filter((r) => r.status === "queued" && (overwrite || !r.existing)).length;
 
   return (
     <Modal
@@ -184,8 +223,8 @@ export function BulkIngestDialog({
       footer={
         <>
           <Button onClick={busy ? cancel : close}>{busy ? "Stop" : "Close"}</Button>
-          <Button variant="primary" onClick={() => void run()} loading={busy} disabled={!rows.length || busy}>
-            {busy ? `Uploading ${done}/${rows.length}` : `Ingest ${rows.length || ""} file${rows.length === 1 ? "" : "s"}`}
+          <Button variant="primary" onClick={() => void run()} loading={busy} disabled={!pending || busy}>
+            {busy ? `Uploading ${done}/${rows.length}` : `Ingest ${pending || ""} file${pending === 1 ? "" : "s"}`}
           </Button>
         </>
       }
@@ -229,8 +268,8 @@ export function BulkIngestDialog({
           checked={overwrite}
           onChange={setOverwrite}
           disabled={busy}
-          label="Allow numbers that already exist"
-          description="Off by default, so a repeated drop of the same folder skips rather than duplicates."
+          label="Replace episodes that already exist"
+          description="Off: a file whose number is already on the series is skipped, so dropping the same folder twice changes nothing. On: its video replaces that episode's, keeping the title, thumbnail and pricing."
         />
 
         {rows.length > 0 && (
@@ -241,12 +280,16 @@ export function BulkIngestDialog({
                 <span className="min-w-0 flex-1 truncate text-ink-2" title={row.file.name}>
                   {row.file.name}
                 </span>
-                <span className="w-28 shrink-0 text-right text-xs text-muted">
+                <span className="w-32 shrink-0 text-right text-xs text-muted">
                   {row.status === "uploading"
                     ? `${Math.round(row.progress * 100)}%`
                     : row.status === "error" || row.status === "skipped"
                       ? row.message
-                      : row.status}
+                      : row.status === "queued" && row.existing
+                        ? overwrite
+                          ? "will replace"
+                          : "exists · will skip"
+                        : row.status}
                 </span>
               </li>
             ))}

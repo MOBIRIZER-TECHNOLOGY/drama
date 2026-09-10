@@ -10,6 +10,7 @@ import { clientApi } from "@/lib/client-api";
 import { call, type ApiError } from "@/lib/errors";
 import { useLoader } from "@/lib/use-loader";
 import { formatCoins, formatDate, formatMoney } from "@/lib/format";
+import { safeNext } from "@/lib/safe-next";
 import { useToast } from "@/lib/toast";
 import { colors } from "@/lib/tokens";
 import type { CheckoutOut, OfferOut, PackOut, PurchaseOut, WalletOut } from "@/lib/types";
@@ -94,7 +95,8 @@ function WalletInner() {
   const nextPath = search.get("next");
   const needCoins = Number(search.get("need") ?? 0) || 0;
   // Only ever return to a path inside this site: `next` arrives in a URL and must not become an open redirect.
-  const returnHref = nextPath && nextPath.startsWith("/") && !nextPath.startsWith("//") ? href(nextPath) : null;
+  const safePath = safeNext(nextPath);
+  const returnHref = safePath ? href(safePath) : null;
   // Gateways the server has configured and enabled, in display order. Unknown names are ignored.
   const gateways = useMemo(
     () => (config?.payments?.gateways ?? []).filter((g): g is Gateway => g === "stripe" || g === "razorpay"),

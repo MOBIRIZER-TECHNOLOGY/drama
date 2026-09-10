@@ -187,7 +187,6 @@ input[type="range"].k-range {
   background: transparent;
   cursor: pointer;
   height: 20px;
-  width: 100%;
   margin: 0;
 }
 input[type="range"].k-range::-webkit-slider-thumb {

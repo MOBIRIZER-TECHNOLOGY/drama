@@ -112,6 +112,10 @@ export function UserDrawer({
     try {
       const updated = await call(api.POST("/v1/admin/users/{user_id}/coins", { params: { path: { user_id: user.id } }, body: req }));
       onUpdated(updated);
+      // The new balance re-keys both queries; an explicit refetch covers the ledger-only case where the parent
+      // has not re-rendered this drawer with the updated user yet.
+      ledger.refetch();
+      detail.refetch();
       setDelta("");
       setNote("");
       setPendingCoins(null);
@@ -139,6 +143,9 @@ export function UserDrawer({
     try {
       await call(api.POST("/v1/admin/users/{user_id}/vip", { params: { path: { user_id: user.id } }, body: req }));
       toast.success(`VIP granted for ${req.days} days`);
+      // A grant changes nothing the detail query is keyed on (the balance), so the "active until" line above
+      // the form stayed stale — and the next grant would stack onto a date the operator could not see.
+      detail.refetch();
       setVipNote("");
       setPendingVip(null);
     } catch (err) {
