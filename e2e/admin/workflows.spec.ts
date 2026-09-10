@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { digits } from "../support/checks";
 import { fixture } from "../support/fixture";
 
 /**
@@ -130,19 +131,77 @@ test.describe("operations", () => {
 
   test("the audit log records who did what", async ({ page }) => {
     // Every destructive admin action is supposed to leave a row; an empty log means the trail is not being
-    // written, which is only discovered when it is needed.
+    // written, which is only discovered when it is needed. The page either lists rows — each naming the admin
+    // and the action — or says in so many words that nothing has been recorded; a blank card is neither.
     await page.goto("/audit");
     await expect(page.getByRole("heading", { level: 1, name: "Audit log" })).toBeVisible();
-    await expect(page.locator("main")).not.toContainText(/couldn't load/i);
+    const main = page.locator("main");
+    await expect(main.locator("[role=progressbar]")).toHaveCount(0, { timeout: 20_000 });
+    await expect(main).not.toContainText(/couldn't load/i);
+
+    const table = main.getByRole("table");
+    const empty = main.getByText("Nothing recorded yet");
+    await expect(table.or(empty).first()).toBeVisible();
+
+    if (await table.isVisible()) {
+      // Header row plus at least one entry, and the entry names an admin by email and an action.
+      const first = table.getByRole("row").nth(1);
+      await expect(first).toBeVisible();
+      const cells = first.getByRole("cell");
+      await expect(cells.nth(1), "admin column").toContainText(/@|—/);
+      await expect(cells.nth(2), "action column").not.toBeEmpty();
+      await expect(main.getByRole("button", { name: "Export CSV" })).toBeEnabled();
+
+      // The action filter is a server query, not cosmetic: rows after filtering all carry the chosen action,
+      // or the page says the filter matched nothing.
+      // Wait for the filtered query itself: reading the table straight after the change can catch the
+      // unfiltered rows still on screen, or a header with the old rows already gone, and call either a result.
+      await Promise.all([
+        page.waitForResponse((r) => r.url().includes("/admin/audit") && r.url().includes("action=user.coins")),
+        page.getByLabel("Action filter").selectOption("user.coins"),
+      ]);
+      await expect(main.locator("[role=progressbar]")).toHaveCount(0, { timeout: 20_000 });
+      await expect(table.or(empty).first()).toBeVisible();
+      if (await table.isVisible()) {
+        const actions = await table.getByRole("row").locator("td:nth-child(3)").allInnerTexts();
+        expect(actions.length).toBeGreaterThan(0);
+        for (const a of actions) expect(a.trim()).toBe("Coin adjustment");
+      }
+    } else {
+      await expect(main.getByRole("button", { name: "Export CSV" })).toBeDisabled();
+    }
   });
 
   test("the moderation queue loads and can be filtered", async ({ page }) => {
     await page.goto("/moderation");
     await expect(page.getByRole("heading", { level: 1, name: "Moderation" })).toBeVisible();
-    // Same as the settings switches: the filter chips carry a count, so match their text.
-    const reports = page.locator("button").filter({ hasText: /^Reports\s*\d*$/ }).first();
-    await expect(reports).toBeVisible();
-    await reports.click();
-    await expect(page.locator("main")).not.toContainText(/couldn't load/i);
+    const main = page.locator("main");
+    await expect(main.locator("[role=progressbar]")).toHaveCount(0, { timeout: 20_000 });
+    await expect(main).not.toContainText(/couldn't load/i);
+
+    // Each queue tab carries its own count; the panel under it has to agree with that number, which is the
+    // one thing an operator uses to decide whether there is work here.
+    for (const [name, pattern] of [
+      ["Reports", /^Reports\s*\d+$/],
+      ["AI-flagged", /^AI-flagged\s*\d+$/],
+    ] as const) {
+      const tab = page.getByRole("tab").filter({ hasText: pattern }).first();
+      await expect(tab, `${name} tab shows a count`).toBeVisible();
+      const count = digits(await tab.innerText());
+      await tab.click();
+      await expect(tab).toHaveAttribute("aria-selected", "true");
+
+      const panel = page.getByRole("tabpanel");
+      await expect(panel.locator("[role=progressbar]")).toHaveCount(0, { timeout: 20_000 });
+      if (count === 0) {
+        await expect(panel.getByText("Queue is clear"), `${name}: empty state when the count is zero`).toBeVisible();
+      } else {
+        const rows = panel.getByRole("table").getByRole("row");
+        await expect(rows.first()).toBeVisible();
+        // Header row excluded; a queue longer than one page still shows at least one entry.
+        expect((await rows.count()) - 1, `${name}: rows for a non-zero count`).toBeGreaterThan(0);
+        await expect(panel.getByRole("checkbox", { name: "Select all in this queue" })).toBeVisible();
+      }
+    }
   });
 });

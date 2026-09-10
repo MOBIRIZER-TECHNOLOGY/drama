@@ -50,7 +50,8 @@ being charged and calls it a pass.
 
 **Signing in.** The console signs in through its own form, so that path is exercised for real, once, in
 `global.setup.ts`. The viewer app signs in through Firebase, so its session is injected instead — a real
-token minted by the API, put where `apps/web/src/lib/token-store.ts` looks for it. Driving Google's sign-in
+access token minted by the API, put where `apps/web/src/lib/token-store.ts` looks for it, and the refresh
+token set as the httpOnly cookie the web app's `/api/auth` route handlers own. Driving Google's sign-in
 from a test would add a network round trip and a per-developer account to every run, and would fail for
 reasons that have nothing to do with Katha.
 

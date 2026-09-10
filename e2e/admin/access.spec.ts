@@ -40,10 +40,21 @@ test.describe("admin routes", () => {
       await page.goto(path);
 
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+
+      // "Loaded" means the data arrived, not that the spinner was drawn: wait for the last progress indicator
+      // to leave, then hold the page to a real outcome — rows, a form, or an explicit empty state.
+      const main = page.locator("main");
+      await expect(main.locator("[role=progressbar]")).toHaveCount(0, { timeout: 20_000 });
       // An error banner is how a failed fetch surfaces here, and it does not fail the navigation. Scoped to
       // the page body on purpose: Next renders an always-present, empty `role="alert"` route announcer
       // outside it, which an unscoped assertion would match on every page.
-      await expect(page.locator("main [role=alert]")).toHaveCount(0);
+      await expect(main.locator("[role=alert]")).toHaveCount(0);
+      await expect(main).not.toContainText(/couldn't load|something went wrong/i);
+      // A screen counts as loaded when it shows its content in any of the shapes this console uses — a table,
+      // a form, tabs, a status region, or a list, which is how the inbox renders messages — or when it says
+      // plainly that there is nothing to show.
+      const rendered = main.locator("table, form, [role=tablist], [role=status], ul li").or(main.getByText(/^(No |Nothing |Queue is clear|Inbox is empty)/));
+      await expect(rendered.first(), `${path} should show data, a form or an empty state`).toBeVisible();
 
       await page.waitForLoadState("networkidle");
       watch.assertClean();

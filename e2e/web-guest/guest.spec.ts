@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { primarySeries, primaryWord } from "../support/fixture";
 import { watchForBrokenResources } from "../support/checks";
 
 /**
@@ -28,15 +29,23 @@ test.describe("guest browsing", () => {
   test("a guest can watch the free first episode", async ({ page }) => {
     // The whole funnel depends on this: a stranger has to be able to see the product before being asked for
     // anything. If free playback ever requires an account, nobody ever reaches the paywall.
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
-    await expect(page.getByRole("heading", { level: 1, name: "Ashes of Lucknow" })).toBeVisible();
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
+    await expect(page.getByRole("heading", { level: 1, name: primarySeries().title })).toBeVisible();
     await expect(page.locator("video")).toBeAttached({ timeout: 20_000 });
   });
 
   test("a locked episode invites a guest to sign in rather than failing", async ({ page }) => {
-    await page.goto("/en/series/ashes-of-lucknow?ep=2");
-    // Whatever the wording, a guest must be told what to do next — not shown an error or an empty player.
-    await expect(page.locator("main")).toContainText(/sign in|log in|unlock|locked/i);
+    await page.goto(`/en/series/${primarySeries().slug}?ep=2`);
+    // The player slot holds a sign-in prompt with a working control, not an error and not an empty box —
+    // and no video, because a guest was never granted one.
+    const main = page.locator("main");
+    await expect(main.getByText(/sign in to keep watching/i)).toBeVisible();
+    await expect(main.getByRole("button", { name: "Sign in" })).toBeVisible();
+    await expect(page.locator("video")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
+    // The control does what it says: the sign-in dialog opens.
+    await main.getByRole("button", { name: "Sign in" }).click();
+    await expect(page.getByRole("dialog")).toBeVisible();
   });
 
   test("the CMS pages the footer links to actually exist", async ({ page }) => {
@@ -67,7 +76,7 @@ test.describe("SEO and syndication", () => {
   });
 
   test("a series page carries structured data a crawler can read", async ({ page }) => {
-    await page.goto("/en/series/ashes-of-lucknow");
+    await page.goto(`/en/series/${primarySeries().slug}`);
     const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
     expect(blocks.length, "no JSON-LD on a series page").toBeGreaterThan(0);
 
@@ -86,7 +95,7 @@ test.describe("SEO and syndication", () => {
   });
 
   test("each page declares a canonical URL", async ({ page }) => {
-    for (const path of ["/en", "/en/series", "/en/series/ashes-of-lucknow"]) {
+    for (const path of ["/en", "/en/series", `/en/series/${primarySeries().slug}`]) {
       await page.goto(path);
       const canonical = page.locator('link[rel="canonical"]');
       await expect(canonical, `canonical on ${path}`).toHaveCount(1);

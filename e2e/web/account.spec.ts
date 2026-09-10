@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { watchForBrokenResources } from "../support/checks";
+import { primarySeries, primaryWord } from "../support/fixture";
+import { expectVideoAdvances, watchForBrokenResources } from "../support/checks";
 
 /**
  * Rewards, the list a viewer builds, and the account controls a store review will look for.
@@ -74,7 +75,7 @@ test.describe("my list", () => {
       return active;
     };
 
-    await page.goto("/en/series/ashes-of-lucknow");
+    await page.goto(`/en/series/${primarySeries().slug}`);
     // One click, and a second only if the first turned it off — so the test works from either start state.
     let favourited = await clickFavourite();
     if (!favourited) favourited = await clickFavourite();
@@ -83,17 +84,31 @@ test.describe("my list", () => {
     await page.goto("/en/my-list");
     await expect(page.getByRole("heading", { level: 1, name: "My List" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Favourites", exact: true })).toBeVisible();
-    await expect(page.locator("main")).toContainText("Ashes of Lucknow");
+    await expect(page.locator("main")).toContainText(primarySeries().title);
 
     // Put it back, and wait for that to land: a click abandoned by the closing context would leave the
     // account favourited and the next run starting somewhere else.
-    await page.goto("/en/series/ashes-of-lucknow");
+    await page.goto(`/en/series/${primarySeries().slug}`);
     expect(await clickFavourite(), "the series should be un-favourited again").toBe(false);
   });
 
   test("watching an episode puts it in continue watching", async ({ page }) => {
+    // Actually watch: the video has to advance, and the position has to reach the server, before the list
+    // page has anything to show. Pausing is what flushes progress on demand (the player also reports every
+    // 15 seconds and on unmount), so the pause is the user action this waits on.
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
+    await expectVideoAdvances(page);
+    const [saved] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/progress") && r.request().method() === "PUT"),
+      page.getByRole("button", { name: "Pause" }).first().click(),
+    ]);
+    expect(saved.ok(), "progress should be recorded").toBe(true);
+
     await page.goto("/en/my-list");
-    await expect(page.getByRole("heading", { name: "Continue watching" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "My List" })).toBeVisible();
+    const section = page.getByRole("region", { name: "Continue watching" });
+    await expect(section).toBeVisible();
+    await expect(section).toContainText(primarySeries().title);
   });
 });
 

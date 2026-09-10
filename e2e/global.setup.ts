@@ -1,5 +1,5 @@
 import { expect, request, test as setup } from "@playwright/test";
-import { ADMIN_STATE, ADMIN_URL, API_URL, seed, WEB_STATE, WEB_URL, webTokens } from "./support/fixture";
+import { ADMIN_STATE, ADMIN_URL, API_URL, seed, WEB_STATE, WEB_URL, webRefreshCookie, webTokens } from "./support/fixture";
 
 setup("the stack is up", async () => {
   // Checked first and separately: every other failure in this file is ambiguous if a server is simply down,
@@ -24,9 +24,12 @@ setup("the stack is up", async () => {
 setup("seed the fixture accounts", async ({ browser }) => {
   const fixture = seed();
 
-  // Web: the session is injected rather than performed, because signing in goes through Firebase. The token
-  // is a real one minted by the API, so everything after this point is the genuine authenticated app.
+  // Web: the session is injected rather than performed, because signing in goes through Firebase. The tokens
+  // are real ones minted by the API, placed where a real sign-in leaves them — the access token in
+  // localStorage, the refresh token in the BFF's httpOnly cookie — so everything after this point is the
+  // genuine authenticated app, refresh path included.
   const web = await browser.newContext({ baseURL: WEB_URL });
+  await web.addCookies([webRefreshCookie(fixture)]);
   await web.addInitScript(
     ([key, value]) => window.localStorage.setItem(key, value),
     ["katha.tokens", webTokens(fixture)] as const,

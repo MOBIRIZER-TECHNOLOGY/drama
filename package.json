@@ -24,7 +24,8 @@
     "e2e": "pnpm --filter @katha/e2e test",
     "e2e:web": "pnpm --filter @katha/e2e test:web",
     "e2e:admin": "pnpm --filter @katha/e2e test:admin",
-    "e2e:mobile": "pnpm --dir apps/mobile run e2e:android"
+    "e2e:mobile": "pnpm --dir apps/mobile run e2e:android",
+    "e2e:ios": "pnpm --dir apps/mobile run e2e:ios"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

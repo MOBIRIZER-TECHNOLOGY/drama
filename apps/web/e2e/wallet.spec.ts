@@ -5,7 +5,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     window.localStorage.setItem(
       "katha.tokens",
-      JSON.stringify({ access_token: "e2e-access", refresh_token: "e2e-refresh", expires_at: Date.now() + 3_600_000 }),
+      JSON.stringify({ access_token: "e2e-access", expires_at: Date.now() + 3_600_000 }),
     );
   });
 });

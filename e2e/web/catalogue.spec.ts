@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
-import { watchForBrokenResources } from "../support/checks";
+import { primarySeries, primaryWord } from "../support/fixture";
+import { expectVideoAdvances, watchForBrokenResources } from "../support/checks";
 
 /**
  * Browsing, against the real catalogue in the database rather than a fixture written to match the code.
@@ -83,9 +84,9 @@ test.describe("catalogue", () => {
   });
 
   test("search finds a seeded series, and says so when nothing matches", async ({ page }) => {
-    await page.goto("/en/search?q=Ashes");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Ashes");
-    await expect(page.getByText("Ashes of Lucknow").first()).toBeVisible();
+    await page.goto(`/en/search?q=${encodeURIComponent(primaryWord())}`);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(primaryWord());
+    await expect(page.getByText(primarySeries().title).first()).toBeVisible();
 
     await page.goto("/en/search?q=zzzzzznotathing");
     await expect(page.locator("main")).toContainText(/no|nothing|couldn|try/i);
@@ -93,9 +94,9 @@ test.describe("catalogue", () => {
 
   test("a series page shows its episodes with their lock states", async ({ page }) => {
     const watch = watchForBrokenResources(page);
-    await page.goto("/en/series/ashes-of-lucknow");
+    await page.goto(`/en/series/${primarySeries().slug}`);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Ashes of Lucknow" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: primarySeries().title })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Episodes" })).toBeVisible();
 
     // Episodes are buttons that swap the player rather than links, and the lock state lives in the
@@ -114,10 +115,12 @@ test.describe("catalogue", () => {
     await page.goto("/en/shorts");
 
     await expect(page.getByRole("link", { name: "Watch full" }).first()).toBeVisible();
+    // "Plays" means the centred short's video decodes and moves, not that a <video> exists: a blocked key
+    // or segment leaves the element in place and the picture black. This also waits out the manifest, key
+    // and first segments, which is when a CSP or CORS problem would have surfaced.
+    await expectVideoAdvances(page);
     // The error state a blocked segment produces, and exactly what the broken CSP surfaced as.
     await expect(page.getByRole("button", { name: "Try again" })).toHaveCount(0);
-
-    await page.waitForTimeout(3000);
     watch.assertClean();
   });
 });

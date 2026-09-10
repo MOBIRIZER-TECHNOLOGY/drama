@@ -14,9 +14,16 @@ export const WEB_URL = process.env.E2E_WEB_URL ?? "http://localhost:3000";
 export const ADMIN_URL = process.env.E2E_ADMIN_URL ?? "http://localhost:3001";
 export const API_URL = process.env.E2E_API_URL ?? "http://127.0.0.1:8001";
 
+export type StaffRole = "owner" | "editor" | "support" | "finance";
+
 /** What `scripts/seed_e2e.py --json` hands back. */
 export type Fixture = {
   admin: { email: string; password: string };
+  /**
+   * One account per admin role, owner included. Optional: a fixture written by a seeder from before the
+   * role accounts existed has only `admin`, and the role-boundary spec skips itself rather than failing setup.
+   */
+  admins?: Record<StaffRole, { email: string; password: string; role: StaffRole; token: string; expires_in: number }>;
   user: {
     email: string;
     public_id: string;
@@ -26,7 +33,30 @@ export type Fixture = {
     expires_in: number;
   };
   series: { slug: string; title: string }[];
+  /**
+   * The series the playback, unlock and guest suites drive: published, with a ready video asset, and with
+   * exactly one free episode so the second always starts locked. Optional for the same reason as `admins`.
+   */
+  primary?: { slug: string; title: string; free_episodes: number; encrypted?: boolean };
 };
+
+/** The series the viewer suites navigate to. Falls back to the first seeded series for an older fixture. */
+export function primarySeries(): { slug: string; title: string } {
+  const f = fixture();
+  const primary = f.primary ?? f.series[0];
+  if (!primary) throw new Error("the fixture has no series; seed the catalogue before running the suite");
+  return primary;
+}
+
+/** Whether the primary series streams through the encrypted manifest routes rather than static files. */
+export function primaryIsEncrypted(): boolean {
+  return fixture().primary?.encrypted === true;
+}
+
+/** A search term the primary series answers to: its title's first word. */
+export function primaryWord(): string {
+  return primarySeries().title.split(/\s+/)[0];
+}
 
 /**
  * Run the API's fixture seeder and cache what it prints.
@@ -65,11 +95,36 @@ export function fixture(): Fixture {
   return JSON.parse(readFileSync(FIXTURE_FILE, "utf8")) as Fixture;
 }
 
-/** The shape `apps/web/src/lib/token-store.ts` reads out of localStorage. */
+/**
+ * The shape `apps/web/src/lib/token-store.ts` reads out of localStorage: the access token and its expiry,
+ * nothing else. The refresh token is not stored by the app; it lives in the httpOnly cookie below.
+ *
+ * `expires_in` is the seeder's 12-hour TTL, not the production fifteen minutes, and that is load-bearing:
+ * every spec file starts a context from this one stored token, so the first context whose access token
+ * expired would rotate the refresh token and the next to present the old one would trip the reuse alarm,
+ * revoking the session mid-run. With an access token that outlives the run, the store never refreshes.
+ */
 export function webTokens(f: Fixture) {
   return JSON.stringify({
     access_token: f.user.access_token,
-    refresh_token: f.user.refresh_token,
     expires_at: Date.now() + f.user.expires_in * 1000,
   });
+}
+
+/**
+ * The refresh cookie the web app's auth BFF sets on sign-in (`apps/web/src/app/api/auth/_bff.ts`): same
+ * name, path and flags, so `/api/auth/refresh` and `/api/auth/logout` find it exactly as a real sign-in
+ * would have left it. httpOnly is honoured by Playwright's cookie jar and carried in the storage state.
+ */
+export function webRefreshCookie(f: Fixture) {
+  const site = new URL(WEB_URL);
+  return {
+    name: "katha_refresh",
+    value: f.user.refresh_token,
+    domain: site.hostname,
+    path: "/api/auth",
+    httpOnly: true,
+    secure: site.protocol === "https:",
+    sameSite: "Lax" as const,
+  };
 }

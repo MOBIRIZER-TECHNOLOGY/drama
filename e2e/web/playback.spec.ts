@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { API_URL, fixture, primaryIsEncrypted, primarySeries } from "../support/fixture";
 import { expectVideoAdvances, watchForBrokenResources } from "../support/checks";
 
 /**
@@ -13,9 +14,9 @@ import { expectVideoAdvances, watchForBrokenResources } from "../support/checks"
 test.describe("playback", () => {
   test("a free episode streams and the video actually advances", async ({ page }) => {
     const watch = watchForBrokenResources(page);
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
 
-    await expect(page.getByRole("heading", { level: 1, name: "Ashes of Lucknow" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: primarySeries().title })).toBeVisible();
     // Not `toBeVisible` on the <video>: an element that exists and never decodes is the failure being
     // guarded against, so this waits for currentTime to move.
     await expectVideoAdvances(page);
@@ -24,6 +25,7 @@ test.describe("playback", () => {
   });
 
   test("the player fetches a signed manifest, its variant and the decryption key", async ({ page }) => {
+    test.skip(!primaryIsEncrypted(), "the seeded media is not AES-128 packaged; the manifest routes are not in play");
     // The three-request shape of AES-128 HLS. If the key request stops being made the stream is in the
     // clear; if it starts failing the segments decrypt to noise, and neither shows up as a broken page.
     const seen: { url: string; status: number }[] = [];
@@ -31,7 +33,7 @@ test.describe("playback", () => {
       if (r.url().includes("/v1/stream/")) seen.push({ url: r.url(), status: r.status() });
     });
 
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
     await expectVideoAdvances(page);
 
     const kinds = {
@@ -46,12 +48,13 @@ test.describe("playback", () => {
   });
 
   test("the manifest is not reachable without its signature", async ({ page, request }) => {
+    test.skip(!primaryIsEncrypted(), "the seeded media is not AES-128 packaged; there is no signed manifest to refuse");
     // The signature is the paywall. Serving the manifest unsigned would make every earlier check decorative.
     const urls: string[] = [];
     page.on("response", (r) => {
       if (r.url().includes("master.m3u8")) urls.push(r.url());
     });
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
     await expectVideoAdvances(page);
     expect(urls.length).toBeGreaterThan(0);
 
@@ -60,24 +63,39 @@ test.describe("playback", () => {
     expect(res.status(), "an unsigned manifest URL must be refused").toBeGreaterThanOrEqual(400);
   });
 
-  test("watch progress is recorded so the episode can be resumed", async ({ page }) => {
-    const progress: number[] = [];
-    page.on("response", (r) => {
-      if (r.url().includes("/progress")) progress.push(r.status());
-    });
-
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
+  test("watch progress is recorded so the episode can be resumed", async ({ page, request }) => {
+    // Watch, then pause: pausing is the user action that flushes the position (the player also reports
+    // every 15 seconds and on unmount), so the PUT this waits on is caused by something a viewer did rather
+    // than by a mount-and-unmount the dev server happens to perform.
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
     await expectVideoAdvances(page);
-    await page.waitForTimeout(2000);
+    const [saved] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes("/progress") && r.request().method() === "PUT"),
+      page.getByRole("button", { name: "Pause" }).first().click(),
+    ]);
+    expect(saved.status(), "the position should be accepted").toBeLessThan(400);
 
-    expect(progress.length, "progress should be reported while watching").toBeGreaterThan(0);
-    expect(progress.every((s) => s < 400), `progress calls returned ${progress}`).toBe(true);
+    // What was recorded is the position actually watched, for this episode, and not a completion. Read back
+    // from the API rather than from the request: the player sends the report with `keepalive`, and Chromium
+    // hands those to the browser process, where Playwright cannot see the body.
+    const res = await request.get(`${API_URL}/v1/me/list`, {
+      headers: { Authorization: `Bearer ${fixture().user.access_token}` },
+    });
+    expect(res.ok(), "the viewer's list should load").toBe(true);
+    const list = (await res.json()) as {
+      history: { series: { slug: string }; episode_number: number; position_sec: number; completed: boolean }[];
+    };
+    const entry = list.history.find((h) => h.series.slug === primarySeries().slug && h.episode_number === 1);
+    expect(entry, "the episode should be in continue watching").toBeTruthy();
+    expect(entry!.position_sec).toBeGreaterThanOrEqual(0);
+    // `completed` is not asserted: it is sticky on the server, and the fixture keeps watch history between
+    // runs on purpose, so an earlier session that watched to the end leaves it true for a later pause.
   });
 
   test("the player controls are reachable by their accessible names", async ({ page }) => {
     // These are the only labels a screen reader or a keyboard user has; they are also the ones most easily
     // lost in a refactor, because the buttons are icons and look fine without them.
-    await page.goto("/en/series/ashes-of-lucknow?ep=1");
+    await page.goto(`/en/series/${primarySeries().slug}?ep=1`);
     await expectVideoAdvances(page);
 
     for (const name of ["Back 10 seconds", "Forward 10 seconds", "Mute", "Fullscreen"]) {
