@@ -19,11 +19,23 @@ import { getJson, setJson } from "./storage";
  *    sight, and a declined permission cannot be re-requested. `ensureRegistered` only runs when a caller has
  *    earned the ask — after a check-in claim, or from an explicit settings toggle.
  *  - The token is cached locally so a warm start does not re-hit the API. The server treats a repeat
- *    registration as idempotent anyway; this just avoids the request.
+ *    registration as idempotent anyway; this just avoids the request. The cache is keyed on the account it
+ *    was registered for: the token belongs to a device, but the registration belongs to a session, and the
+ *    same device signing into a second account must register again rather than trust the first one's cache.
  */
 
 const TOKEN_KEY = "pushToken";
 const ASKED_KEY = "pushAsked";
+
+/** What the cache holds: the token, and the user it was registered for. */
+type CachedRegistration = { token: string; owner: string | null };
+
+/** Reads the cache, treating the pre-owner string format as absent so it re-registers once. */
+async function cachedRegistration(): Promise<CachedRegistration | null> {
+  const cached = await getJson<CachedRegistration | string>(TOKEN_KEY);
+  if (!cached || typeof cached === "string") return null;
+  return cached;
+}
 
 /**
  * expo-notifications is loaded on demand, never with a static import.
@@ -128,9 +140,10 @@ export async function pushPermission(): Promise<"granted" | "denied" | "undeterm
 /**
  * Ask if needed, resolve a token, and register it. Returns whether the device can now receive push.
  *
- * Safe to call repeatedly. Never throws: a push failure must not break the flow that triggered it.
+ * `owner` is the signed-in user's id; the cached registration only counts when it was made for the same
+ * account. Safe to call repeatedly. Never throws: a push failure must not break the flow that triggered it.
  */
-export async function ensureRegistered({ prompt = true }: { prompt?: boolean } = {}): Promise<boolean> {
+export async function ensureRegistered({ prompt = true, owner = null }: { prompt?: boolean; owner?: string | null } = {}): Promise<boolean> {
   try {
     // A simulator has no push service, and asking there only produces a confusing failure.
     if (!Device.isDevice) return false;
@@ -161,19 +174,24 @@ export async function ensureRegistered({ prompt = true }: { prompt?: boolean } =
     const token = issued?.data;
     if (!token) return false;
 
-    const cached = await getJson<string>(TOKEN_KEY);
-    if (cached === token) return true;
+    const cached = await cachedRegistration();
+    if (cached?.token === token && cached.owner === owner) return true;
 
     const { error } = await api.PUT("/v1/auth/me/push-token", { body: { token } });
     if (error) return false;
-    await setJson(TOKEN_KEY, token);
+    await setJson(TOKEN_KEY, { token, owner } satisfies CachedRegistration);
     return true;
   } catch {
     return false;
   }
 }
 
-/** Stop delivery to this device. Used by the notifications toggle in settings and on sign-out. */
+/**
+ * Stop delivery to this device. Used by the notifications toggle in settings and on sign-out.
+ *
+ * Best effort, and always clears the local cache: on sign-out the next account on this device must register
+ * afresh even when the DELETE never reached the server.
+ */
 export async function unregister(): Promise<void> {
   try {
     await api.DELETE("/v1/auth/me/push-token");

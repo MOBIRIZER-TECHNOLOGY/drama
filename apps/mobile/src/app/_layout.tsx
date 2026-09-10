@@ -68,6 +68,8 @@ function RootNavigator() {
         <Stack.Screen name="player/[seriesId]" options={{ animation: "fade", gestureEnabled: false }} />
         <Stack.Screen name="wallet/index" />
         <Stack.Screen name="wallet/ledger" />
+        {/* Only ever useful with a session the wallet parked in memory; a deep link finds none and closes. */}
+        <Stack.Screen name="checkout/razorpay" />
         <Stack.Screen name="rewards" />
         <Stack.Screen name="language" />
         <Stack.Screen name="page/[slug]" />

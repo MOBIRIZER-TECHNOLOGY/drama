@@ -10,6 +10,7 @@ import { safePlayerCall, setTimeUpdateInterval } from "@/components/player/playe
 import { SeekBar } from "@/components/player/seek-bar";
 import { applyEmbeddedTrack, findCueIndex, useSubtitleCues, type Cue } from "@/components/player/subtitles";
 import { Button, Text } from "@/components/ui";
+import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
 import { getBool, setBool } from "@/lib/storage";
 import type { Grant } from "@/lib/play";
@@ -132,6 +133,7 @@ export const EpisodePage = memo(function EpisodePage({
 }: EpisodePageProps) {
   // `position` is whole seconds (drives the seek bar); precise time stays in a ref for cues.
   const [position, setPosition] = useState(0);
+  const t = useT();
   const [duration, setDuration] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [status, setStatus] = useState<VideoPlayerStatus>("idle");
@@ -402,14 +404,14 @@ export const EpisodePage = memo(function EpisodePage({
           setSupportMultipleWindows={false}
         />
       ) : player && grant?.hls_url ? (
-        <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} fullscreenOptions={{ enable: false }} allowsPictureInPicture={false} />
+        <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} fullscreenOptions={{ enable: false }} allowsPictureInPicture={false} />
       ) : null}
 
       {!isEmbed ? (
         <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
           {/* Left 60%: tap toggles play. Right 40%: tap toggles play, hold plays at 2x. */}
           <View style={styles.tapZones}>
-            <Pressable style={styles.tapLeft} onPress={togglePlay} accessibilityRole="button" accessibilityLabel={playing ? "Pause" : "Play"} />
+            <Pressable style={styles.tapLeft} onPress={togglePlay} accessibilityRole="button" accessibilityLabel={playing ? t("player.pause") : t("player.play")} />
             <Pressable
               style={styles.tapRight}
               onPress={togglePlay}
@@ -417,7 +419,7 @@ export const EpisodePage = memo(function EpisodePage({
               delayLongPress={250}
               onPressOut={endHold}
               accessibilityRole="button"
-              accessibilityLabel="Hold for 2x speed"
+              accessibilityLabel={t("player.hold_2x")}
             />
           </View>
 
@@ -446,7 +448,7 @@ export const EpisodePage = memo(function EpisodePage({
           {active && status === "loading" && !loadError ? (
             <View style={styles.centerMsg} pointerEvents="none">
               <Text variant="caption" color={colors.ink2}>
-                Buffering…
+                {t("player.buffering")}
               </Text>
             </View>
           ) : null}
@@ -457,24 +459,24 @@ export const EpisodePage = memo(function EpisodePage({
                 {loadError.message}
               </Text>
               {loadError.code === "unauthorized" && onSignIn ? (
-                <Button title="Sign in" small onPress={onSignIn} />
+                <Button title={t("common.sign_in")} small onPress={onSignIn} />
               ) : loadError.code !== "locked" && loadError.code !== "age_gate" ? (
-                <Button title="Try again" variant="secondary" small onPress={onRetry} />
+                <Button title={t("common.retry")} variant="secondary" small onPress={onRetry} />
               ) : null}
             </View>
           ) : status === "error" && active ? (
             <View style={styles.centerMsg}>
               <Text variant="body" color={colors.ink} style={{ textAlign: "center" }}>
-                Playback failed. The link may have expired.
+                {t("player.playback_failed")}
               </Text>
-              <Button title="Try again" variant="secondary" small onPress={onRetry} />
+              <Button title={t("common.retry")} variant="secondary" small onPress={onRetry} />
             </View>
           ) : showReplay && active && !playing ? (
             <View style={styles.centerMsg}>
               <Text variant="body" color={colors.ink} style={{ textAlign: "center" }}>
-                You have reached the end of this series.
+                {t("player.series_end")}
               </Text>
-              <Button title="Replay" small onPress={replay} left={<Icon name="play" size={12} color={colors.accentInk} />} />
+              <Button title={t("player.replay")} small onPress={replay} left={<Icon name="play" size={12} color={colors.accentInk} />} />
             </View>
           ) : null}
 
@@ -487,7 +489,7 @@ export const EpisodePage = memo(function EpisodePage({
                     <Pressable
                       onPress={onCycleSubtitles}
                       accessibilityRole="button"
-                      accessibilityLabel={subtitleTrack ? `Subtitles ${subtitleTrack.lang}` : "Subtitles off"}
+                      accessibilityLabel={`${t("player.subtitles")} ${subtitleTrack ? subtitleTrack.lang : t("player.subtitles_off")}`}
                       style={[styles.chip, subtitleTrack && styles.chipActive]}
                     >
                       <Text variant="caption" color={subtitleTrack ? colors.accentInk : colors.ink}>
@@ -495,12 +497,12 @@ export const EpisodePage = memo(function EpisodePage({
                       </Text>
                     </Pressable>
                   ) : null}
-                  <Pressable onPress={onCycleSpeed} accessibilityRole="button" accessibilityLabel={`Speed ${speed}x`} style={styles.chip}>
+                  <Pressable onPress={onCycleSpeed} accessibilityRole="button" accessibilityLabel={`${t("player.speed")} ${speed}x`} style={styles.chip}>
                     <Text variant="caption" color={colors.ink}>
                       {speed}x
                     </Text>
                   </Pressable>
-                  <Pressable onPress={onToggleImmersive} accessibilityRole="button" accessibilityLabel="Hide controls" style={styles.chip}>
+                  <Pressable onPress={onToggleImmersive} accessibilityRole="button" accessibilityLabel={t("player.hide_controls")} style={styles.chip}>
                     <Icon name="expand" size={16} />
                   </Pressable>
                 </View>
@@ -512,7 +514,7 @@ export const EpisodePage = memo(function EpisodePage({
               onPress={onToggleImmersive}
               style={[styles.collapse, { bottom: spacing.xl + bottomInset }]}
               accessibilityRole="button"
-              accessibilityLabel="Show controls"
+              accessibilityLabel={t("player.show_controls")}
               hitSlop={10}
             >
               <Icon name="collapse" size={16} />

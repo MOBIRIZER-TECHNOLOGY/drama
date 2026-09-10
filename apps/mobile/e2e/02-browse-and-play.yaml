@@ -4,33 +4,50 @@
 # arrives. Run the folder in order, or run 01 first.
 appId: com.mobirizer.katha
 name: Browse and play
+# The series the flow drives comes from the runner (`maestro test -e SERIES_TITLE=...`, which
+# scripts/e2e-ios.sh and e2e-android.sh pass from the API's e2e seeder); an unset one fails the flow loudly.
 ---
+# Stopped first: on iOS `launchApp` alone brings a backgrounded app forward on whatever screen it was left,
+# where Android restarts it. A cold start is what "a returning viewer opens the app" means on both.
+- stopApp
 - launchApp
 
 - assertVisible: "Katha"
 - assertVisible:
-    text: ".*(Ashes of Lucknow|Betrayal in Delhi|Family Ties).*"
+    text: ".*${SERIES_TITLE}.*"
 
-# The bottom tabs are the whole of the app's navigation.
-- assertVisible: "Home"
-- assertVisible: "Shorts"
-- assertVisible: "My List"
-- assertVisible: "Me"
+# The bottom tabs are the whole of the app's navigation. iOS labels a tab "Home, tab, 1 of 4"; Android
+# exposes the bare name; the optional group matches either.
+- assertVisible:
+    text: "Home(, tab.*)?"
+- assertVisible:
+    text: "Shorts(, tab.*)?"
+- assertVisible:
+    text: "My List(, tab.*)?"
+- assertVisible:
+    text: "Me(, tab.*)?"
 
-- tapOn: "Ashes of Lucknow"
+- tapOn:
+    text: "${SERIES_TITLE}"
 
 # The series screen states the deal before anyone spends anything: how many episodes, how many are free,
 # and what the rest cost.
-- assertVisible: "Ashes of Lucknow"
-# Wrapped in `.*` because Maestro matches the whole text of a node, and this line is one node:
-# "2 episodes · 1 free · 77 views".
 - assertVisible:
-    text: ".*2 episodes.*"
+    text: "${SERIES_TITLE}"
+# Wrapped in `.*` because Maestro matches the whole text of a node, and this line is one node:
+# "10 episodes · 1 free · 77 views".
+- assertVisible:
+    text: ".*[0-9]+ episodes.*"
 - assertVisible: "Play"
 - assertVisible: "Episodes"
-- assertVisible: "Free"
+# The free count is part of the header line, and the first tile carries no "locked" suffix in its label
+# ("Episode 1" against "Episode 2, locked"); the "Free" badge is not a node of its own on iOS.
 - assertVisible:
-    text: ".*(80 coins each|Unlock all).*"
+    text: ".*[0-9]+ free.*"
+- assertVisible:
+    text: "Episode 1(, free)?"
+- assertVisible:
+    text: ".*([0-9]+ coins each|Unlock all).*"
 
 - tapOn: "Play"
 - tapOn:

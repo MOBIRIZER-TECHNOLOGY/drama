@@ -1,0 +1,46 @@
+# The player's controls, on the free episode: pause and resume, sound, the episode sheet, and the way back.
+appId: com.mobirizer.katha
+name: Player controls
+---
+- stopApp
+- launchApp
+- tapOn:
+    text: "${SERIES_TITLE}"
+- assertVisible: "Play"
+- tapOn: "Play"
+# The seeded episode is only seconds long, so pause the moment the control exists and inspect the player
+# paused. Optional taps wait for their element before giving up, which is time this flow does not have;
+# the coach mark was dismissed by 02, and the pause control is the tap area over the picture.
+- extendedWaitUntil:
+    visible: "Pause"
+    timeout: 20000
+- tapOn: "Pause"
+- assertVisible: "Play"
+
+# What the paused player states: where in the series this is, the clock, the scrubber, the actions, and the
+# price of what comes next, which is the paywall's first appearance.
+- assertVisible:
+    text: "Ep 1 / [0-9]+"
+- assertVisible:
+    text: ".*[0-9]:[0-9][0-9].*"
+- assertVisible: "Seek"
+- assertVisible: "Save"
+- assertVisible: "Share"
+- assertVisible:
+    text: "Next episode · [0-9]+ coins"
+
+# The episode sheet lists the rest of the series with its lock state.
+- tapOn: "Episodes"
+- extendedWaitUntil:
+    visible:
+      text: "Episode 2.*"
+    timeout: 10000
+- tapOn:
+    text: "Close"
+    optional: true
+
+# Back returns to the series screen, not to the tabs.
+- tapOn: "Back"
+- assertVisible: "Episodes"
+- assertVisible:
+    text: "${SERIES_TITLE}"

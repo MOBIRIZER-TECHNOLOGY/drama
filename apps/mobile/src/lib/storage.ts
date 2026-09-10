@@ -8,6 +8,7 @@ const KEYS = {
   subtitles: "katha.subtitles",
   configCache: "katha.config_cache",
   pushToken: "katha.push_token",
+  lastUser: "katha.last_user",
   pushAsked: "katha.push_asked",
   pendingRoute: "katha.pending_route",
   recentSearches: "katha.recent_searches",

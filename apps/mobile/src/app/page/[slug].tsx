@@ -33,7 +33,7 @@ export default function CmsPageScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
           <Icon name="back" size={30} />
         </Pressable>
         <Text variant="title" numberOfLines={1} style={{ flex: 1 }}>

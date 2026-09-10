@@ -26,7 +26,7 @@ APP_ID="com.mobirizer.katha"
 has_java() { [ -n "${1:-}" ] && { [ -x "$1/bin/java" ] || [ -x "$1/bin/java.exe" ]; }; }
 if ! has_java "${JAVA_HOME:-}"; then
   JAVA_HOME=""
-  for candidate in "$HOME/.jdks/temurin-17" "$HOME/.jdks"/jdk-17*; do
+  for candidate in "$HOME/.jdks/temurin-17" "$HOME/.jdks"/jdk-17* "/Applications/Android Studio.app/Contents/jbr/Contents/Home"; do
     if has_java "$candidate"; then JAVA_HOME="$candidate"; break; fi
   done
 fi
@@ -71,6 +71,13 @@ fi
 # Maestro phones home about CLI usage unless told not to; a test run should not depend on that.
 export MAESTRO_CLI_ANALYSIS_NOTIFICATION_DISABLED=true
 
+# The flows name the series they drive through SERIES_TITLE; pass the seeded one (see e2e-ios.sh) or let the
+# flow's default stand.
 TARGET="${1:-e2e/}"
-echo "==> maestro test $TARGET"
-"$MAESTRO" test "$TARGET"
+echo "==> maestro test $TARGET (SERIES_TITLE=${SERIES_TITLE:-<flow default>})"
+if [ -n "${SERIES_TITLE:-}" ]; then
+  # The title, the word a viewer would search for it by, and the slug a share link carries (see e2e-ios.sh).
+  "$MAESTRO" test -e SERIES_TITLE="$SERIES_TITLE" -e SERIES_QUERY="${SERIES_TITLE%% *}" -e SERIES_SLUG="${SERIES_SLUG:-}" "$TARGET"
+else
+  "$MAESTRO" test "$TARGET"
+fi

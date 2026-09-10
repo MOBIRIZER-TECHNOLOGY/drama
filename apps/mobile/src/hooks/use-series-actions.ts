@@ -1,14 +1,21 @@
 import * as Haptics from "expo-haptics";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Share } from "react-native";
+import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
 import { api } from "@/lib/api";
 import { unwrap } from "@/lib/errors";
 import { seriesShareUrl } from "@/lib/format";
 import { useAuth } from "@/providers/auth";
 
-/** Favourite / like toggles with optimistic state and a guest sign-in prompt, plus native share. */
+/**
+ * Favourite / like toggles with optimistic state and a guest sign-in prompt, plus native share.
+ *
+ * The returned object is memoised: the player hands it to a memoised page component, and a fresh object on
+ * every render would re-render that page on every tick of the progress timer.
+ */
 export function useSeriesActions(seriesId: string, initial: { favorite: boolean; liked: boolean; likeCount: number }) {
+  const t = useT();
   const { requireAuth, user } = useAuth();
   const referralCode = user?.referral_code ?? null;
   const [favorite, setFavorite] = useState(initial.favorite);
@@ -26,9 +33,9 @@ export function useSeriesActions(seriesId: string, initial: { favorite: boolean;
       setFavorite(out.active);
     } catch (e) {
       setFavorite(!next);
-      setError(e instanceof Error ? e.message : "Could not update favourites");
+      setError(e instanceof Error ? e.message : t("series.favorite_failed"));
     }
-  }, [favorite, requireAuth, seriesId]);
+  }, [favorite, requireAuth, seriesId, t]);
 
   const toggleLike = useCallback(async () => {
     if (!requireAuth()) return;
@@ -43,9 +50,9 @@ export function useSeriesActions(seriesId: string, initial: { favorite: boolean;
     } catch (e) {
       setLiked(!next);
       setLikeCount((c) => Math.max(0, c + (next ? -1 : 1)));
-      setError(e instanceof Error ? e.message : "Could not update like");
+      setError(e instanceof Error ? e.message : t("series.like_failed"));
     }
-  }, [liked, requireAuth, seriesId]);
+  }, [liked, requireAuth, seriesId, t]);
 
   const share = useCallback(
     async (title: string, slug: string, episode?: number) => {
@@ -61,5 +68,10 @@ export function useSeriesActions(seriesId: string, initial: { favorite: boolean;
     [seriesId, referralCode],
   );
 
-  return { favorite, liked, likeCount, error, clearError: () => setError(null), toggleFavorite, toggleLike, share };
+  const clearError = useCallback(() => setError(null), []);
+
+  return useMemo(
+    () => ({ favorite, liked, likeCount, error, clearError, toggleFavorite, toggleLike, share }),
+    [favorite, liked, likeCount, error, clearError, toggleFavorite, toggleLike, share],
+  );
 }

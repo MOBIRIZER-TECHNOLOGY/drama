@@ -82,12 +82,12 @@ export default function AuthScreen() {
           succeed();
         }
       } catch (e) {
-        setError(firebaseErrorMessage(e));
+        setError(firebaseErrorMessage(e, t));
       } finally {
         setBusy(null);
       }
     },
-    [succeed],
+    [succeed, t],
   );
 
   // Deliberately permissive: the only addresses worth rejecting here are ones that cannot be an address at
@@ -133,7 +133,7 @@ export default function AuthScreen() {
         await sendPasswordReset(email);
         setNotice(t("auth.reset_sent"));
       } catch (e) {
-        setError(firebaseErrorMessage(e));
+        setError(firebaseErrorMessage(e, t));
       } finally {
         setBusy(null);
       }
@@ -185,7 +185,7 @@ export default function AuthScreen() {
             </Pressable>
           </View>
           <Text variant="display">{mode === "sign_in" ? t("auth.sign_in") : t("auth.sign_up")}</Text>
-          <Text variant="body">Your coins, list and progress follow you across devices.</Text>
+          <Text variant="body">{t("auth.pitch")}</Text>
 
           {!firebaseConfigured() ? (
             <Text variant="caption" color={colors.warning}>
@@ -269,7 +269,7 @@ export default function AuthScreen() {
                 style={styles.switch}
               >
                 <Text variant="caption">
-                  {mode === "sign_in" ? "New here? " : "Already have an account? "}
+                  {mode === "sign_in" ? t("auth.no_account") : t("auth.have_account")}{" "}
                   <Text variant="caption" color={colors.accent}>
                     {mode === "sign_in" ? t("auth.sign_up") : t("auth.sign_in")}
                   </Text>
@@ -304,7 +304,7 @@ export default function AuthScreen() {
           {(googleEnabled || appleEnabled || phoneEnabled) && emailEnabled ? (
             <View style={styles.orRow}>
               <Divider style={{ flex: 1 }} />
-              <Text variant="caption">or</Text>
+              <Text variant="caption">{t("common.or")}</Text>
               <Divider style={{ flex: 1 }} />
             </View>
           ) : null}
@@ -329,7 +329,7 @@ export default function AuthScreen() {
             <View>
               <Button title={t("auth.phone_cta")} variant="ghost" disabled />
               <Text variant="caption" style={styles.todo}>
-                Phone sign-in arrives with the native build (phase 2).
+                {t("auth.phone_soon")}
               </Text>
             </View>
           ) : null}

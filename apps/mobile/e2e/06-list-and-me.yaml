@@ -1,0 +1,48 @@
+# What a signed-out viewer finds on the My List and Me tabs, including the screens a store review looks for.
+appId: com.mobirizer.katha
+name: My List and Me
+---
+- stopApp
+- launchApp
+
+# My List, signed out: the two sections exist and the prompt says what signing in is for.
+- tapOn:
+    text: "My List(, tab.*)?"
+- assertVisible: "Favourites"
+- assertVisible: "History"
+- assertVisible: "Sign in to sync your list, coins and rewards"
+- assertVisible: "Sign in"
+
+# Me, signed out.
+- tapOn:
+    text: "Me(, tab.*)?"
+- assertVisible: "Guest"
+- assertVisible: "Sign in"
+- assertVisible:
+    text: ".*Rewards.*"
+- assertVisible:
+    text: "Language.*"
+
+# Rewards, reached from the pill on Home, asks for an account rather than showing an empty ladder.
+- tapOn:
+    text: "Home(, tab.*)?"
+- tapOn: "Rewards"
+- assertVisible: "Sign in to earn coins"
+- tapOn: "Back"
+- tapOn:
+    text: "Me(, tab.*)?"
+
+# The legal pages both stores require, reached from Me.
+- tapOn:
+    text: "Privacy policy.*"
+- assertVisible: "Privacy Policy"
+- tapOn: "Back"
+- tapOn:
+    text: "Terms of service.*"
+- assertVisible: "Terms of Service"
+- tapOn: "Back"
+
+# Housekeeping that must not need an account.
+- tapOn:
+    text: "Clear cache.*"
+- assertVisible: "Cache cleared"

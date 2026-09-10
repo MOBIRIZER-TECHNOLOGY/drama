@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { Linking, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
 import { Button, Screen, Text } from "@/components/ui";
+import { useT } from "@/hooks/use-translations";
 import { getAppVersion, getStoreUrl, getVersionCode } from "@/lib/device";
 import type { RemoteConfig } from "@/lib/types";
 
@@ -21,6 +22,7 @@ export function needsForceUpdate(config: RemoteConfig): boolean {
 
 /** Blocking screen rendered instead of the navigator; the only action is opening the store. */
 export function ForceUpdateScreen({ config }: { config: RemoteConfig }) {
+  const t = useT();
   const url = config.mobile.update_url ?? getStoreUrl();
 
   const open = useCallback(() => {
@@ -37,15 +39,14 @@ export function ForceUpdateScreen({ config }: { config: RemoteConfig }) {
           <Icon name="download" size={30} color={colors.accent} />
         </View>
         <Text variant="display" style={styles.center}>
-          Update Katha
+          {t("update.title")}
         </Text>
         <Text variant="body" style={styles.center}>
-          This version is no longer supported. Install the latest release to keep watching, and your coins, list and
-          progress carry over.
+          {t("update.body")}
         </Text>
-        <Button title="Update now" onPress={open} style={styles.button} />
+        <Button title={t("update.cta")} onPress={open} style={styles.button} />
         <Text variant="caption" style={styles.center}>
-          Installed: {getAppVersion()}
+          {t("update.installed", { version: getAppVersion() })}
         </Text>
       </View>
     </Screen>

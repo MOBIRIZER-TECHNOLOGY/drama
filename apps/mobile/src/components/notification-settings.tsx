@@ -21,12 +21,8 @@ import { useAuth } from "@/providers/auth";
  * backgrounded, so it is re-read on foreground rather than trusted from the last time we asked.
  */
 
-const CHANNELS = [
-  { key: "new_episode", label: "New episodes", hint: "When a series you watch gets a new episode" },
-  { key: "streak", label: "Streak reminders", hint: "Before your daily streak runs out" },
-  { key: "resume", label: "Unfinished episodes", hint: "A nudge about something you started" },
-  { key: "offer", label: "Offers", hint: "Discounts and limited-time coin bonuses" },
-] as const;
+/** Per-channel rows; the catalogue holds `notifications.<key>` and `notifications.<key>_hint` for each. */
+const CHANNELS = ["new_episode", "streak", "resume", "offer"] as const;
 
 export function NotificationSettings() {
   const t = useT();
@@ -51,7 +47,7 @@ export function NotificationSettings() {
       setBusy(true);
       try {
         if (next) {
-          const ok = await ensureRegistered();
+          const ok = await ensureRegistered({ owner: user?.id ?? null });
           track("notification_permission", { granted: ok, source: "settings" });
           if (!ok) {
             // Denied once, the OS will not ask again: the only route left is system settings.
@@ -67,21 +63,23 @@ export function NotificationSettings() {
         setBusy(false);
       }
     },
-    [refresh],
+    [refresh, user?.id],
   );
 
   const toggleChannel = useCallback(
     async (key: string, on: boolean) => {
+      // Rendered only for a signed-in viewer, so a missing profile means the session went stale mid-tap.
+      if (!user) return;
       // The schema types this as an open record; the API only ever stores booleans here.
-      const current = (user?.notification_prefs ?? {}) as Record<string, boolean>;
+      const current = (user.notification_prefs ?? {}) as Record<string, boolean>;
       const prefs: Record<string, boolean> = { ...current, [key]: on };
       // Optimistic: a preference toggle that waits on a round trip feels broken.
-      applyUser({ ...user!, notification_prefs: prefs });
+      applyUser({ ...user, notification_prefs: prefs });
       try {
         const updated = unwrap(await api.PATCH("/v1/auth/me", { body: { notification_prefs: prefs } }));
         applyUser(updated);
       } catch {
-        applyUser({ ...user!, notification_prefs: current });
+        applyUser({ ...user, notification_prefs: current });
       }
     },
     [user, applyUser],
@@ -105,16 +103,16 @@ export function NotificationSettings() {
         }
       />
       {granted &&
-        CHANNELS.map((c) => (
-          <View key={c.key}>
+        CHANNELS.map((key) => (
+          <View key={key}>
             <Divider />
             <ListRow
-              title={c.label}
-              subtitle={c.hint}
+              title={t(`notifications.${key}`)}
+              subtitle={t(`notifications.${key}_hint`)}
               right={
                 <Switch
-                  value={prefs[c.key] !== false}
-                  onValueChange={(v) => void toggleChannel(c.key, v)}
+                  value={prefs[key] !== false}
+                  onValueChange={(v) => void toggleChannel(key, v)}
                   trackColor={{ true: colors.accent, false: colors.line }}
                   thumbColor={colors.ink}
                 />

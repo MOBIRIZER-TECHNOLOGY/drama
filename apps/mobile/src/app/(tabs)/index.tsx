@@ -158,7 +158,7 @@ export default function HomeScreen() {
                   {categories.map((c) => (
                     <Pressable
                       key={c.id}
-                      onPress={() => router.push({ pathname: "/search", params: { q: c.name } })}
+                      onPress={() => router.push({ pathname: "/search", params: { category: c.slug } })}
                       accessibilityRole="button"
                       style={styles.genre}
                     >

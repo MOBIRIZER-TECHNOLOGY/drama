@@ -29,6 +29,8 @@ export default function MeScreen() {
   const [notice, setNotice] = useState<{ tone: "error" | "info"; text: string } | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const signedIn = status === "signed_in";
+  // Tokens exist but the profile could not be fetched: the account controls still apply, the name is unknown.
+  const hasSession = signedIn || status === "stale";
   const episodePrice = config.economy.episode_price;
   const isVip = Boolean(user?.is_vip);
   // Read on this screen so the streak can be shown where the viewer already is, rather than two taps away.
@@ -42,8 +44,8 @@ export default function MeScreen() {
         firstFocus.current = false;
         return;
       }
-      if (signedIn) refreshUser().catch(() => {});
-    }, [signedIn, refreshUser]),
+      if (hasSession) refreshUser().catch(() => {});
+    }, [hasSession, refreshUser]),
   );
 
   const onSignOut = useCallback(async () => {
@@ -142,14 +144,15 @@ export default function MeScreen() {
             ) : null}
           </Pressable>
           <View style={{ flex: 1, gap: 2 }}>
-            {status === "loading" ? (
+            {status === "loading" || status === "stale" ? (
               // Resolving the session used to flash "Guest" and then the real name — a signed-in viewer being
-              // told for half a second that they are not.
+              // told for half a second that they are not. A stale session is the same viewer with a worse
+              // connection: still not a guest, so still the skeleton until /me answers.
               <>
                 <Skeleton height={22} width="60%" />
                 <Skeleton height={14} width="40%" />
               </>
-            ) : signedIn && user ? (
+            ) : user ? (
               <>
                 <Text variant="title" numberOfLines={1}>
                   {user.display_name ?? user.email ?? t("me.default_name")}
@@ -157,7 +160,7 @@ export default function MeScreen() {
                 <Text variant="caption">{t("me.id", { n: user.public_id })}</Text>
                 {user.is_vip ? (
                   <Pill
-                    label={user.vip_ends_at ? t("wallet.vip_until", { date: formatDate(user.vip_ends_at) }) : "VIP"}
+                    label={user.vip_ends_at ? t("wallet.vip_until", { date: formatDate(user.vip_ends_at) }) : t("me.vip")}
                     tone="gold"
                     style={{ marginTop: 4 }}
                   />
@@ -178,7 +181,7 @@ export default function MeScreen() {
           </Text>
         ) : null}
 
-        {!signedIn ? <Button title={t("common.sign_in")} onPress={() => requireAuth()} disabled={status === "loading"} /> : null}
+        {!hasSession ? <Button title={t("common.sign_in")} onPress={() => requireAuth()} disabled={status === "loading"} /> : null}
 
         <Card style={styles.walletCard}>
           <View style={{ flex: 1 }}>
@@ -278,7 +281,7 @@ export default function MeScreen() {
           ) : null}
         </Card>
 
-        {signedIn ? (
+        {hasSession ? (
           <Card style={{ padding: 0 }}>
             <ListRow
               title={busy === "delete" ? t("me.deleting") : t("me.delete_account")}

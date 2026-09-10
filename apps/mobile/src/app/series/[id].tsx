@@ -1,7 +1,7 @@
 import { colors, radii, spacing } from "@katha/tokens";
 import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { EpisodeGrid, type EpisodeLockState } from "@/components/episode-grid";
 import { Icon } from "@/components/icons";
@@ -19,7 +19,9 @@ import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
 
 export default function SeriesScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const t = useT();
+  // `episode` rides in on share links (`/s/{slug}?ep=`) and notification taps; it names the episode to open.
+  const { id, episode } = useLocalSearchParams<{ id: string; episode?: string }>();
   const { lang } = useConfig();
   const { status } = useAuth();
   const series = useQuery(
@@ -32,11 +34,12 @@ export default function SeriesScreen() {
     return (
       <Screen>
         <BackBar />
-        <ErrorState message={series.error ?? "Series not found"} onRetry={() => series.refetch({ silent: false })} />
+        <ErrorState message={series.error ?? t("series.not_found")} onRetry={() => series.refetch({ silent: false })} />
       </Screen>
     );
   }
-  return <SeriesBody series={series.data} />;
+  const requested = Number.parseInt(episode ?? "", 10);
+  return <SeriesBody series={series.data} openEpisode={Number.isFinite(requested) && requested > 0 ? requested : null} />;
 }
 
 /**
@@ -76,10 +79,11 @@ function SeriesSkeleton() {
 }
 
 function BackBar({ right }: { right?: React.ReactNode }) {
+  const t = useT();
   const router = useRouter();
   return (
     <View style={styles.backBar}>
-      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+      <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
         <Icon name="back" size={30} />
       </Pressable>
       {right}
@@ -87,7 +91,7 @@ function BackBar({ right }: { right?: React.ReactNode }) {
   );
 }
 
-function SeriesBody({ series }: { series: SeriesDetail }) {
+function SeriesBody({ series, openEpisode }: { series: SeriesDetail; openEpisode: number | null }) {
   const t = useT();
   const router = useRouter();
   const { status, requireAuth } = useAuth();
@@ -122,6 +126,15 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
     [requireAuth, router, series.id, series.episodes],
   );
 
+  // A link or notification that names an episode opens the player on it, once. Pushed rather than replaced,
+  // so backing out of the player lands here, where the rest of the series is.
+  const opened = useRef(false);
+  useEffect(() => {
+    if (openEpisode === null || opened.current) return;
+    opened.current = true;
+    if (series.episodes.some((e) => e.number === openEpisode)) play(openEpisode);
+  }, [openEpisode, play, series.episodes]);
+
   const onEpisode = useCallback(
     (ep: Episode, state: EpisodeLockState) => {
       if (state === "locked_sequential") {
@@ -140,7 +153,7 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <BackBar
           right={
-            <Pressable onPress={() => actions.share(series.title, series.slug)} accessibilityRole="button" accessibilityLabel="Share" hitSlop={10}>
+            <Pressable onPress={() => actions.share(series.title, series.slug)} accessibilityRole="button" accessibilityLabel={t("shorts.share")} hitSlop={10}>
               <Icon name="share" size={24} />
             </Pressable>
           }
@@ -150,13 +163,13 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
           <View style={styles.heroText}>
             <Text variant="title">{series.title}</Text>
             <View style={styles.meta}>
-              {series.is_premium ? <Pill label="VIP" tone="gold" /> : null}
+              {series.is_premium ? <Pill label={t("me.vip")} tone="gold" /> : null}
               {series.categories.slice(0, 2).map((c) => (
                 <Pill key={c.id} label={c.name} />
               ))}
             </View>
             <Text variant="caption">
-              {series.episode_count} episodes · {series.free_episodes} free · {formatCount(series.view_count)} views
+              {t("series.stats", { episodes: series.episode_count, free: series.free_episodes, views: formatCount(series.view_count) })}
             </Text>
             <View style={styles.actions}>
               <Pressable onPress={actions.toggleLike} accessibilityRole="button" style={styles.action}>
@@ -165,7 +178,7 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
               </Pressable>
               <Pressable onPress={actions.toggleFavorite} accessibilityRole="button" style={styles.action}>
                 <Icon name={actions.favorite ? "bookmark-filled" : "bookmark"} size={22} color={actions.favorite ? colors.gold : colors.ink} />
-                <Text variant="caption">{actions.favorite ? "Saved" : "Save"}</Text>
+                <Text variant="caption">{actions.favorite ? t("shorts.saved") : t("shorts.save")}</Text>
               </Pressable>
             </View>
           </View>
@@ -224,7 +237,7 @@ function SeriesBody({ series }: { series: SeriesDetail }) {
         ) : null}
         {series.episodes.length === 0 ? (
           <Text variant="caption" style={styles.notice}>
-            No episodes published yet.
+            {t("series.no_episodes")}
           </Text>
         ) : (
           <EpisodeGrid episodes={series.episodes} currentNumber={series.continue_episode_number} onPress={onEpisode} />

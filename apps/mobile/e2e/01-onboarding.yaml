@@ -8,15 +8,27 @@ name: Onboarding
 - launchApp:
     clearState: true
 
+- tapOn:
+    text: "Open"
+    optional: true
+
 # Every script the catalogue ships in has to render here rather than as tofu boxes. The fonts are bundled
 # per script, and a missing one is invisible on an English device.
+# Wrapped in `.*`: iOS exposes each card as one label, "हिन्दी, Hindi", where Android exposes the two lines
+# as separate nodes, and Maestro matches a node's whole text.
 - assertVisible: "Pick your language"
-- assertVisible: "हिन्दी"
-- assertVisible: "தமிழ்"
-- assertVisible: "తెలుగు"
-- assertVisible: "বাংলা"
-- assertVisible: "मराठी"
-- assertVisible: "العربية"
+- assertVisible:
+    text: ".*हिन्दी.*"
+- assertVisible:
+    text: ".*தமிழ்.*"
+- assertVisible:
+    text: ".*తెలుగు.*"
+- assertVisible:
+    text: ".*বাংলা.*"
+- assertVisible:
+    text: ".*मराठी.*"
+- assertVisible:
+    text: ".*العربية.*"
 
 - tapOn: "Continue in English"
 - tapOn:
@@ -29,5 +41,6 @@ name: Onboarding
 - tapOn: "Browse everything"
 
 - assertVisible: "Katha"
+# "Home, tab, 1 of 4" on iOS, "Home" on Android.
 - assertVisible:
-    text: "Home"
+    text: "Home(, tab.*)?"

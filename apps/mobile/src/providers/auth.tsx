@@ -16,13 +16,21 @@ import { api, platform, tokens } from "@/lib/api";
 import { getAppVersion, getDeviceId, getDeviceName } from "@/lib/device";
 import { RequestError, unwrap } from "@/lib/errors";
 import { getFirebaseAuth } from "@/lib/firebase";
+import { unregister as unregisterPush } from "@/lib/push";
+import { getJson, setJson } from "@/lib/storage";
 import type { UserOut } from "@/lib/types";
 import { useConfig } from "@/providers/config";
 
-export type AuthStatus = "loading" | "guest" | "signed_in";
+/**
+ * `stale` is a session with tokens but no profile: `/me` failed on restore and nothing was cached from an
+ * earlier run. It is neither a guest (the tokens are still good as far as we know) nor signed in (there is no
+ * user to show), and it resolves to one or the other on the next successful refresh.
+ */
+export type AuthStatus = "loading" | "guest" | "signed_in" | "stale";
 
 type AuthContextValue = {
   status: AuthStatus;
+  /** Non-null whenever `status` is `signed_in`. */
   user: UserOut | null;
   balance: number;
   setBalance: (n: number) => void;
@@ -57,11 +65,19 @@ export function AuthProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     langRef.current = lang;
   }, [lang]);
+  // Read by `refreshUser` after an await, where the closure's `user` would be the one from when it started.
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   const applyUser = useCallback((u: UserOut | null) => {
     setUser(u);
     setBalanceState(u?.coin_balance ?? 0);
     setStatus(u ? "signed_in" : "guest");
+    // The last known profile, so a restore that cannot reach /me still has a user to show rather than a
+    // signed-in screen with nobody on it. Not a secret: it is what the Me tab displays.
+    void setJson("lastUser", u);
   }, []);
 
   /**
@@ -82,7 +98,28 @@ export function AuthProvider({ children }: PropsWithChildren) {
     } catch {
       // fall through to the conservative status below
     }
-    setStatus(tokens.hasSession() ? "signed_in" : "guest");
+    if (!tokens.hasSession()) {
+      applyUser(null);
+      return;
+    }
+    // Keep whatever profile is already on screen; failing that, the one from the last run; failing that, the
+    // session is stale until a refresh succeeds. `signed_in` never carries a null user.
+    if (userRef.current) {
+      setStatus("signed_in");
+      return;
+    }
+    const cached = await getJson<UserOut>("lastUser");
+    if (!tokens.hasSession()) {
+      applyUser(null);
+      return;
+    }
+    if (cached && !userRef.current) {
+      setUser(cached);
+      setBalanceState(cached.coin_balance);
+      setStatus("signed_in");
+      return;
+    }
+    setStatus(userRef.current ? "signed_in" : "stale");
   }, [applyUser]);
 
   useEffect(() => {
@@ -93,7 +130,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
       if (cancelled) return;
       await refreshUser();
     })();
-    const off = tokens.onSignedOut(() => applyUser(null));
+    const off = tokens.onSignedOut(() => {
+      // The tokens are already gone, so the DELETE will not land; the local cache is what matters here, or
+      // the next account on this device would think its push token was registered.
+      void unregisterPush();
+      applyUser(null);
+    });
     return () => {
       cancelled = true;
       off();
@@ -191,6 +233,8 @@ export function AuthProvider({ children }: PropsWithChildren) {
   );
 
   const signOut = useCallback(async () => {
+    // Before the session is revoked, while the DELETE can still be authorised. Best effort either way.
+    if (tokens.hasSession()) await unregisterPush();
     try {
       if (tokens.hasSession()) await api.POST("/v1/auth/logout");
     } catch {
@@ -203,11 +247,13 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const requireAuth = useCallback(
     (returnTo?: Href) => {
       if (status === "signed_in") return true;
+      // A stale session may well still be good: try it again, and the modal closes itself if that succeeds.
+      if (status === "stale") void refreshUser();
       const target = typeof returnTo === "string" ? returnTo : undefined;
       router.push({ pathname: "/auth", params: target ? { returnTo: target } : {} });
       return false;
     },
-    [router, status],
+    [router, status, refreshUser],
   );
 
   const setBalance = useCallback((n: number) => {
@@ -243,27 +289,27 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-/** Map Firebase auth error codes to short human messages. */
-export function firebaseErrorMessage(error: unknown): string {
+/** Map Firebase auth error codes to short human messages, in the viewer's language. */
+export function firebaseErrorMessage(error: unknown, t: (key: string) => string): string {
   const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
   switch (code) {
     case "auth/invalid-email":
-      return "That email address looks wrong";
+      return t("auth.err_invalid_email");
     case "auth/user-not-found":
     case "auth/wrong-password":
     case "auth/invalid-credential":
-      return "Email or password is incorrect";
+      return t("auth.err_bad_credentials");
     case "auth/email-already-in-use":
-      return "An account with this email already exists";
+      return t("auth.err_email_in_use");
     case "auth/weak-password":
-      return "Use at least 6 characters for your password";
+      return t("auth.err_weak_password");
     case "auth/too-many-requests":
-      return "Too many attempts. Try again in a bit";
+      return t("auth.err_too_many");
     case "auth/network-request-failed":
-      return "Network error. Check your connection";
+      return t("auth.err_network");
     default:
       if (error instanceof RequestError) return error.message;
       if (error instanceof Error && error.message) return error.message;
-      return "Could not sign in";
+      return t("auth.err_generic");
   }
 }

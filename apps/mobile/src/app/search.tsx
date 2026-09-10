@@ -21,9 +21,17 @@ export default function SearchScreen() {
   const t = useT();
   const router = useRouter();
   const { lang } = useConfig();
-  // Opened from a genre chip on home, the screen arrives with its query already set rather than empty.
-  const { q: initialQuery } = useLocalSearchParams<{ q?: string }>();
+  // Opened from a genre chip on home, the screen arrives with its genre already chosen rather than empty.
+  const { q: initialQuery, category: initialCategory } = useLocalSearchParams<{ q?: string; category?: string }>();
   const [q, setQ] = useState(initialQuery ?? "");
+  /**
+   * A genre is a filter, not a search term. The chips used to put the genre's name into the search box, and
+   * the catalogue search matches titles and synopses, so "Romance" found nothing on a catalogue full of
+   * romance. The slug goes to the API as the same `category` filter the web app sends.
+   */
+  const [category, setCategory] = useState<{ slug: string; name: string } | null>(
+    initialCategory ? { slug: initialCategory, name: initialCategory } : null,
+  );
   const [result, setResult] = useState<{ query: string; items: SeriesCardModel[] } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +54,9 @@ export default function SearchScreen() {
   // Derived rather than a fixed 104px, which overflowed its gutters at 320dp and left dead space at 430dp.
   const cellWidth = Math.floor((viewport - spacing.md * 2 - spacing.sm * 6) / 3);
   const query = q.trim();
-  const active = query.length >= 2;
+  const active = query.length >= 2 || category !== null;
+  // What a result set answers to: the term, the genre, or both.
+  const resultKey = `${query}|${category?.slug ?? ""}`;
 
   useEffect(() => {
     void getJson<string[]>("recentSearches").then((v) => setRecent(Array.isArray(v) ? v.slice(0, RECENT_MAX) : []));
@@ -74,14 +84,22 @@ export default function SearchScreen() {
       try {
         const data = unwrap(
           await api.GET("/v1/series", {
-            params: { query: { lang, q: query, limit: 40, status: status ?? undefined, length: length ?? undefined } },
+            params: {
+              query: {
+                lang,
+                q: query || undefined,
+                category: category?.slug,
+                limit: 40,
+                status: status ?? undefined,
+                length: length ?? undefined,
+              },
+            },
           }),
         );
         if (!cancelled) {
-          setResult({ query, items: data });
+          setResult({ query: resultKey, items: data });
           setError(null);
-          track("search", { query, results: data.length, lang });
-          remember(query);
+          track("search", { query, category: category?.slug ?? null, results: data.length, lang });
         }
       } catch (e) {
         if (!cancelled) setError(errorMessage(e));
@@ -93,14 +111,30 @@ export default function SearchScreen() {
       cancelled = true;
       clearTimeout(timer);
     };
-    // `remember` is stable and deliberately not a dependency: including it would re-run the search when the
-    // recent list changes, which is exactly what running the search causes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, query, lang, attempt, status, length]);
+  }, [active, query, resultKey, category, lang, attempt, status, length]);
 
-  // Only show results that belong to the current query; anything else is stale.
-  const results = active && result?.query === query ? result.items : null;
+  // Remembered only on an act of intent — the search key, a chip, a result — never on the debounced fetch,
+  // which otherwise filled the list with every prefix typed on the way to the term the viewer meant.
+  const submit = useCallback(() => {
+    if (!active) return;
+    remember(query);
+    setAttempt((a) => a + 1);
+  }, [active, query, remember]);
+
+  const pickTerm = useCallback(
+    (term: string) => {
+      setQ(term);
+      remember(term);
+    },
+    [remember],
+  );
+
+  // Only show results that belong to the current query and genre; anything else is stale.
+  const results = active && result?.query === resultKey ? result.items : null;
   const narrowed = status !== null || length !== null;
+  // Once a genre is chosen its name is the chip that clears it; the catalogue's name replaces the slug the
+  // route arrived with as soon as the categories load.
+  const activeCategory = category && (categories.find((c) => c.slug === category.slug) ?? category);
 
   return (
     <Screen edges={["top", "bottom", "left", "right"]}>
@@ -113,13 +147,21 @@ export default function SearchScreen() {
           returnKeyType="search"
           autoCorrect={false}
           // Pressing the keyboard's search key did nothing, and the keyboard stayed up over the results.
-          onSubmitEditing={() => active && setAttempt((a) => a + 1)}
+          onSubmitEditing={submit}
           style={{ flex: 1 }}
           accessibilityLabel={t("home.search")}
         />
         {q.length > 0 ? (
           // Clearing the query and dismissing the whole screen were the same 26px glyph, side by side.
-          <Pressable onPress={() => setQ("")} accessibilityRole="button" accessibilityLabel={t("search.clear")} hitSlop={8}>
+          <Pressable
+            onPress={() => {
+              setQ("");
+              setCategory(null);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={t("search.clear")}
+            hitSlop={8}
+          >
             <Icon name="close" size={18} color={colors.muted} />
           </Pressable>
         ) : null}
@@ -131,6 +173,19 @@ export default function SearchScreen() {
       </View>
       {active ? (
         <View style={styles.facets}>
+          {activeCategory ? (
+            <Pressable
+              onPress={() => setCategory(null)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: true }}
+              accessibilityLabel={`${activeCategory.name}, ${t("common.clear")}`}
+              style={[styles.facet, styles.facetOn]}
+            >
+              <Text variant="caption" color={colors.accentInk}>
+                {activeCategory.name} ×
+              </Text>
+            </Pressable>
+          ) : null}
           {([
             ["completed", () => setStatus((v) => (v === "completed" ? null : "completed")), status === "completed"],
             ["ongoing", () => setStatus((v) => (v === "ongoing" ? null : "ongoing")), status === "ongoing"],
@@ -170,7 +225,7 @@ export default function SearchScreen() {
               </View>
               <View style={styles.chips}>
                 {recent.map((term) => (
-                  <Pressable key={term} onPress={() => setQ(term)} accessibilityRole="button" style={styles.chip}>
+                  <Pressable key={term} onPress={() => pickTerm(term)} accessibilityRole="button" style={styles.chip}>
                     <Text variant="caption" color={colors.ink2}>
                       {term}
                     </Text>
@@ -186,7 +241,7 @@ export default function SearchScreen() {
           </Text>
           <View style={styles.chips}>
             {categories.slice(0, 12).map((c) => (
-              <Pressable key={c.id} onPress={() => setQ(c.name)} accessibilityRole="button" style={styles.chip}>
+              <Pressable key={c.id} onPress={() => setCategory({ slug: c.slug, name: c.name })} accessibilityRole="button" style={styles.chip}>
                 <Text variant="caption" color={colors.ink2}>
                   {c.name}
                 </Text>
@@ -199,7 +254,7 @@ export default function SearchScreen() {
           title={t("search.no_matches")}
           // Two different dead ends. Telling someone to try a different term when the problem is a filter they
           // set themselves sends them the wrong way.
-          body={narrowed ? t("search.no_results_filtered") : t("search.no_matches_body", { q: query })}
+          body={narrowed ? t("search.no_results_filtered") : t("search.no_matches_body", { q: query || activeCategory?.name || "" })}
           action={
             narrowed ? (
               <Button
@@ -221,14 +276,21 @@ export default function SearchScreen() {
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => (
             <View style={styles.cell}>
-              <SeriesCard series={item} width={cellWidth} />
+              <SeriesCard
+                series={item}
+                width={cellWidth}
+                onPress={() => {
+                  remember(query);
+                  router.push({ pathname: "/series/[id]", params: { id: item.id } });
+                }}
+              />
             </View>
           )}
           contentContainerStyle={styles.grid}
           keyboardShouldPersistTaps="handled"
           ListHeaderComponent={
             <Text variant="caption" style={styles.count}>
-              {results.length} result{results.length === 1 ? "" : "s"}
+              {results.length === 1 ? t("search.results_one") : t("search.results_n", { n: results.length })}
             </Text>
           }
         />

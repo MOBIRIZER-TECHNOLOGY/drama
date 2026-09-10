@@ -1,0 +1,46 @@
+# Search, from the home header: typing narrows, the result opens, and clearing brings the genre chips back.
+#
+# No `clearState`: onboarding is done by 01. SERIES_TITLE comes from the runner (see 02-browse-and-play.yaml);
+# the query is its first word, which is what a viewer who half-remembers a title types.
+appId: com.mobirizer.katha
+name: Search
+---
+- stopApp
+- launchApp
+- tapOn: "Search series"
+- assertVisible: "Or browse by genre"
+- assertVisible: "Romance"
+
+# Type the first word of the title. `inputText` lands in the focused field, which opening search focused.
+- inputText: "${SERIES_QUERY}"
+- extendedWaitUntil:
+    visible:
+      text: "[0-9]+ results?"
+    timeout: 10000
+# The keyboard covers the list; put it away before looking for the result. A card truncates a long title
+# with an ellipsis, so the match is on the word that was searched for.
+- hideKeyboard
+# Waited for rather than asserted: the tree is briefly empty while the keyboard slides away.
+- extendedWaitUntil:
+    visible:
+      text: ".*${SERIES_QUERY}.*"
+    timeout: 10000
+
+# Clearing the box returns to the genre browse, not to an empty results list.
+- tapOn: "Clear search"
+- assertVisible: "Or browse by genre"
+
+# A genre chip is a query too.
+- tapOn: "Romance"
+- extendedWaitUntil:
+    visible:
+      text: ".*${SERIES_QUERY}.*"
+    timeout: 10000
+
+# The result opens the series screen, where the full title fits.
+- tapOn:
+    text: ".*${SERIES_QUERY}.*"
+- assertVisible:
+    text: "${SERIES_TITLE}"
+- assertVisible: "Episodes"
+- assertVisible: "Play"

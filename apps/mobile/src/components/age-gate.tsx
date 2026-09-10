@@ -46,17 +46,15 @@ export function AgeGateSheet({
       <View style={styles.handle} />
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text variant="title">Mature content</Text>
-          <Text variant="caption">This title is intended for adult viewers.</Text>
+          <Text variant="title">{t("age_gate.title")}</Text>
+          <Text variant="caption">{t("age_gate.subtitle")}</Text>
         </View>
         <Pressable onPress={onCancel} accessibilityRole="button" accessibilityLabel={t("common.cancel")} hitSlop={10}>
           <Icon name="close" size={24} />
         </Pressable>
       </View>
 
-      <Text variant="body">
-        Confirm your age to continue. We store only that you confirmed, and you will not be asked again on this account.
-      </Text>
+      <Text variant="body">{t("age_gate.body")}</Text>
 
       {error ? (
         <Text variant="caption" color={colors.danger}>
@@ -64,7 +62,7 @@ export function AgeGateSheet({
         </Text>
       ) : null}
 
-      <Button title="I am 18 or older" onPress={confirm} loading={busy} />
+      <Button title={t("age_gate.confirm")} onPress={confirm} loading={busy} />
       <Button title={t("common.cancel")} variant="ghost" onPress={onCancel} disabled={busy} />
     </View>
   );

@@ -22,7 +22,7 @@ export default function RewardsScreen() {
   const t = useT();
   const router = useRouter();
   const { config } = useConfig();
-  const { status, requireAuth, setBalance } = useAuth();
+  const { status, user, requireAuth, setBalance } = useAuth();
   const signedIn = status === "signed_in";
   const [message, setMessage] = useState<{ tone: "success" | "error"; text: string } | null>(null);
   const [checkingIn, setCheckingIn] = useState(false);
@@ -31,7 +31,9 @@ export default function RewardsScreen() {
   const tasks = useQuery(async () => unwrap(await api.GET("/v1/rewards/tasks")), [], { enabled: signedIn });
 
 
-  const doCheckin = useCallback(async () => {
+  // Plain functions: the compiler memoises these itself, and a hand-written deps list it cannot honour is
+  // worse than none (it refuses to compile the component at all).
+  const doCheckin = async () => {
     setCheckingIn(true);
     setMessage(null);
     try {
@@ -45,7 +47,7 @@ export default function RewardsScreen() {
       // The one moment a viewer will accept a notification prompt: they have just started a streak and have a
       // reason to be reminded about it. Asking at launch instead gets declined on sight, permanently.
       if (!(await hasAskedForPush())) {
-        const granted = await ensureRegistered();
+        const granted = await ensureRegistered({ owner: user?.id ?? null });
         track("notification_permission", { granted, source: "checkin" });
       }
     } catch (e) {
@@ -54,10 +56,9 @@ export default function RewardsScreen() {
     } finally {
       setCheckingIn(false);
     }
-  }, [checkin, setBalance, t]);
+  };
 
-  const claim = useCallback(
-    async (task: RewardTask) => {
+  const claim = async (task: RewardTask) => {
       setMessage(null);
       try {
         const out = unwrap(await api.POST("/v1/rewards/tasks/{task_id}/claim", { params: { path: { task_id: task.id } }, body: {} }));
@@ -69,9 +70,7 @@ export default function RewardsScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
         setMessage({ tone: "error", text: errorMessage(e) });
       }
-    },
-    [setBalance, tasks],
-  );
+  };
 
   const onRefresh = useCallback(() => {
     void checkin.refetch({ silent: true });

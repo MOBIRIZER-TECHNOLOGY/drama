@@ -154,6 +154,9 @@ export function Button({
       {...rest}
       disabled={isDisabled}
       accessibilityRole="button"
+      // Named explicitly: iOS otherwise composes the label from every child, and a leading icon glyph
+      // arrives as an empty element, so a screen reader hears ", Watch now" rather than "Watch now".
+      accessibilityLabel={rest.accessibilityLabel ?? (subtitle ? `${title}, ${subtitle}` : title)}
       style={({ pressed }) => [
         styles.button,
         small && styles.buttonSmall,

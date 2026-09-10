@@ -1,0 +1,28 @@
+# Switching the app language from Me, and back. The picker is the same list onboarding showed.
+appId: com.mobirizer.katha
+name: Language
+---
+- stopApp
+- launchApp
+- tapOn:
+    text: "Me(, tab.*)?"
+- tapOn:
+    text: "Language.*"
+- assertVisible: "Language"
+# iOS reads each row as "हिन्दी, Hindi"; Android as two nodes. The regex takes either.
+- tapOn:
+    text: ".*हिन्दी.*"
+# The row now names the new language. The UI strings themselves come from the server's translation table,
+# which a fresh local database has not filled, so the copy is not asserted here.
+- tapOn:
+    text: "Me(, tab.*)?"
+- assertVisible:
+    text: "Language.*(हिन्दी|Hindi).*"
+- tapOn:
+    text: "Language.*"
+- tapOn:
+    text: "English.*"
+- tapOn:
+    text: "Me(, tab.*)?"
+- assertVisible:
+    text: "Language.*English.*"

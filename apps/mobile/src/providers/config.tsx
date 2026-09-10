@@ -2,6 +2,7 @@ import { getLocales } from "expo-localization";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { api, country as deviceCountry } from "@/lib/api";
 import { setRemoteFirebaseConfig } from "@/lib/firebase";
+import { applyLayoutDirection } from "@/lib/layout-direction";
 import { getBool, getItem, getJson, setBool, setItem, setJson } from "@/lib/storage";
 import { defaultConfig, normalizeConfig, type RemoteConfig } from "@/lib/types";
 
@@ -134,6 +135,14 @@ export function ConfigProvider({ children }: PropsWithChildren) {
       cancelled = true;
     };
   }, [lang]);
+
+  // Keeps the native direction flag in step with the language, for the case the picker never saw: a device
+  // whose locale picked an RTL language on first launch. It takes effect on the next start, like any change.
+  useEffect(() => {
+    if (!ready) return;
+    const chosen = config.languages.find((l) => l.code === lang);
+    if (chosen) applyLayoutDirection(Boolean(chosen.rtl));
+  }, [ready, config.languages, lang]);
 
   const setLang = useCallback(async (code: string) => {
     setLangState(code);

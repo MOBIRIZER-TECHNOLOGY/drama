@@ -1,9 +1,9 @@
 import { colors, radii, spacing } from "@katha/tokens";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { memo } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Pill, Text } from "@/components/ui";
+import { ShowArtwork } from "@/components/show-artwork";
 import { formatCount } from "@/lib/format";
 import type { SeriesCard as SeriesCardModel } from "@/lib/types";
 
@@ -34,7 +34,14 @@ export const SeriesCard = memo(function SeriesCard({
       style={({ pressed }) => [{ width, opacity: pressed ? 0.85 : 1 }]}
     >
       <View style={[styles.poster, { width, height }]}>
-        <Image source={series.cover_url} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} recyclingKey={series.id} />
+        <ShowArtwork
+          source={series.cover_url}
+          kind="poster"
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={150}
+          recyclingKey={series.id}
+        />
         {series.is_premium ? <Pill label="VIP" tone="gold" style={styles.badge} /> : null}
         {/* Classification, shown before playback rather than discovered when playback is refused. The API has
             carried this since the ratings work; no client rendered it, so a UA16 title looked like a U. */}

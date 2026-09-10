@@ -70,7 +70,7 @@ export default function LedgerScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/wallet"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/wallet"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
           <Icon name="back" size={30} />
         </Pressable>
         <Text variant="title">{t("wallet.ledger")}</Text>
@@ -78,7 +78,8 @@ export default function LedgerScreen() {
       </View>
       {status === "loading" ? (
         <SkeletonRows count={8} />
-      ) : status === "guest" ? (
+      ) : status !== "signed_in" ? (
+        // A stale session cannot fetch the ledger either; the prompt re-tries the session before the modal.
         <EmptyState title={t("wallet.signin_history")} action={<Button title={t("common.sign_in")} onPress={() => requireAuth()} />} />
       ) : ledger.loading ? (
         <SkeletonRows count={8} />

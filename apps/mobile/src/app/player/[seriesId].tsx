@@ -26,6 +26,7 @@ import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
 
 export default function PlayerRoute() {
+  const t = useT();
   const { seriesId, episode } = useLocalSearchParams<{ seriesId: string; episode?: string }>();
   const { lang } = useConfig();
   const { status } = useAuth();
@@ -39,7 +40,7 @@ export default function PlayerRoute() {
   if (series.error || !series.data) {
     return (
       <Screen>
-        <ErrorState message={series.error ?? "Series not found"} onRetry={() => series.refetch({ silent: false })} />
+        <ErrorState message={series.error ?? t("series.not_found")} onRetry={() => series.refetch({ silent: false })} />
       </Screen>
     );
   }
@@ -345,7 +346,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
     () => (
       <>
       <View style={[styles.top, { paddingTop: insets.top + spacing.sm }]} pointerEvents="box-none">
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))} accessibilityRole="button" accessibilityLabel="Back" style={styles.roundBtn}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)"))} accessibilityRole="button" accessibilityLabel={t("common.back")} style={styles.roundBtn}>
           <Icon name="back" size={28} />
         </Pressable>
         <View style={styles.topCenter}>
@@ -354,7 +355,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
           </Text>
           <View style={styles.badge}>
             <Text variant="caption" color={colors.ink}>
-              Ep {current?.number ?? "-"} / {total}
+              {t("player.position_short", { n: current?.number ?? "-", total })}
             </Text>
           </View>
         </View>
@@ -401,7 +402,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
   if (total === 0) {
     return (
       <Screen>
-        <ErrorState message="This series has no published episodes yet." onRetry={() => router.back()} retryLabel="Back" />
+        <ErrorState message={t("series.no_episodes")} onRetry={() => router.back()} retryLabel={t("common.back")} />
       </Screen>
     );
   }
@@ -453,8 +454,8 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
                   {isCurrent && !immersive ? overlay : null}
                   <View style={styles.lockedBody}>
                     <Icon name="lock" size={36} />
-                    <Text variant="heading">Episode {ep.number}</Text>
-                    <Text variant="caption">{lockState(ep, episodes) === "locked_sequential" ? t("series.locked_prev") : `${ep.price} coins`}</Text>
+                    <Text variant="heading">{t("series.episode_n", { n: ep.number })}</Text>
+                    <Text variant="caption">{lockState(ep, episodes) === "locked_sequential" ? t("series.locked_prev") : t("player.price_coins", { n: ep.price })}</Text>
                   </View>
                 </View>
               )}
@@ -494,7 +495,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
 
       {sheet ? (
         <View style={[styles.sheetWrap, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
-          <Pressable style={styles.scrim} onPress={sheet.reason === "ended" ? () => setUnlockTarget(null) : undefined} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <Pressable style={styles.scrim} onPress={sheet.reason === "ended" ? () => setUnlockTarget(null) : undefined} accessibilityRole="button" accessibilityLabel={t("common.dismiss")} />
           <UnlockSheet
             episode={sheet.episode}
             seriesId={series.id}
@@ -515,7 +516,7 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
 
       {ageGateFor ? (
         <View style={[styles.sheetWrap, { paddingBottom: insets.bottom }]} pointerEvents="box-none">
-          <Pressable style={styles.scrim} onPress={() => setAgeGateFor(null)} accessibilityRole="button" accessibilityLabel="Dismiss" />
+          <Pressable style={styles.scrim} onPress={() => setAgeGateFor(null)} accessibilityRole="button" accessibilityLabel={t("common.dismiss")} />
           <AgeGateSheet
             onCancel={() => setAgeGateFor(null)}
             onConfirmed={(u) => {
@@ -535,11 +536,11 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
       ) : null}
 
       <Modal visible={showEpisodes} animationType="slide" transparent onRequestClose={() => setShowEpisodes(false)}>
-        <Pressable style={styles.scrim} onPress={() => setShowEpisodes(false)} accessibilityRole="button" accessibilityLabel="Close" />
+        <Pressable style={styles.scrim} onPress={() => setShowEpisodes(false)} accessibilityRole="button" accessibilityLabel={t("common.close")} />
         <View style={[styles.episodesSheet, { paddingBottom: insets.bottom + spacing.lg }]}>
           <View style={styles.sheetHeader}>
             <Text variant="title">{t("series.episodes")}</Text>
-            <Pressable onPress={() => setShowEpisodes(false)} accessibilityRole="button" accessibilityLabel="Close" hitSlop={10}>
+            <Pressable onPress={() => setShowEpisodes(false)} accessibilityRole="button" accessibilityLabel={t("common.close")} hitSlop={10}>
               <Icon name="close" size={24} />
             </Pressable>
           </View>

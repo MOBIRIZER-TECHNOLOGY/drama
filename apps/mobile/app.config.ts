@@ -2,6 +2,8 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const withCleartextHosts = require("./plugins/with-cleartext-hosts");
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const withSceneLifecycle = require("./plugins/with-scene-lifecycle");
 
 /**
  * Static settings live in app.json; this file layers the per-profile values on top.
@@ -36,11 +38,15 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     name: config.name ?? "Katha",
     slug: config.slug ?? "katha",
     plugins: [...(config.plugins ?? []), ["@react-native-google-signin/google-signin", { iosUrlScheme: googleIosUrlScheme }]],
+    // A device build has to be signed. The team id is read from the environment so a checkout without one
+    // still prebuilds for the simulator, and the id itself never sits in the repo.
+    ios: { ...config.ios, ...(process.env.EXPO_APPLE_TEAM_ID ? { appleTeamId: process.env.EXPO_APPLE_TEAM_ID } : {}) },
     extra: {
       ...config.extra,
       appEnv: env,
       apiUrl,
     },
   };
-  return withCleartextHosts(base, { urls: [apiUrl, mediaUrl] });
+  // Required by the iOS 27 SDK; without it every build from Xcode 27 is killed at launch.
+  return withSceneLifecycle(withCleartextHosts(base, { urls: [apiUrl, mediaUrl] }));
 };

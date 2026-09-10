@@ -105,12 +105,29 @@ if [ "$VARIANT" = "release" ]; then
     echo "No signing key at $KEYSTORE — see credentials/README.md." >&2
     exit 1
   fi
+  # A release must be signed with credentials the caller actually holds. Falling back to the passwords from
+  # credentials/README.md produced APKs signed with a key anyone with the repo can reproduce, which is a build
+  # that looks shippable and is not. Refuse rather than guess.
+  for required in KATHA_KEYSTORE_PASSWORD KATHA_KEY_ALIAS KATHA_KEY_PASSWORD; do
+    if [ -z "${!required:-}" ]; then
+      cat >&2 <<MSG
+$required is not set. A release build needs the real signing credentials in the environment:
+
+  KATHA_KEYSTORE_PASSWORD  password of $KEYSTORE
+  KATHA_KEY_ALIAS          alias of the release key inside it
+  KATHA_KEY_PASSWORD       password of that key
+
+For a local test build that does not need to be signed for distribution, use --variant debug.
+MSG
+      exit 1
+    fi
+  done
   # Passed on the command line rather than written into the generated build.gradle, which prebuild rewrites.
   GRADLE_ARGS+=(
     "-Pandroid.injected.signing.store.file=$(cd "$(dirname "$KEYSTORE")" && pwd -W 2>/dev/null || dirname "$KEYSTORE")/release.keystore"
-    "-Pandroid.injected.signing.store.password=${KATHA_KEYSTORE_PASSWORD:-katha-release}"
-    "-Pandroid.injected.signing.key.alias=${KATHA_KEY_ALIAS:-katha}"
-    "-Pandroid.injected.signing.key.password=${KATHA_KEY_PASSWORD:-katha-release}"
+    "-Pandroid.injected.signing.store.password=$KATHA_KEYSTORE_PASSWORD"
+    "-Pandroid.injected.signing.key.alias=$KATHA_KEY_ALIAS"
+    "-Pandroid.injected.signing.key.password=$KATHA_KEY_PASSWORD"
   )
   TASK="assembleRelease"
 else

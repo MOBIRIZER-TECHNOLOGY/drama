@@ -1,9 +1,9 @@
 import { colors, radii, spacing } from "@katha/tokens";
-import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
 import { FlatList, Pressable, StyleSheet, useWindowDimensions, View, type NativeScrollEvent, type NativeSyntheticEvent } from "react-native";
 import { Pill, Text } from "@/components/ui";
+import { ShowArtwork } from "@/components/show-artwork";
 import type { SeriesCard } from "@/lib/types";
 
 /** 16:9 hero slider for the `featured` rail. Uses banner_url and falls back to cover_url. */
@@ -45,7 +45,13 @@ export function FeaturedSlider({ items }: { items: SeriesCard[] }) {
             onPress={() => router.push({ pathname: "/series/[id]", params: { id: item.id } })}
             style={({ pressed }) => [styles.slide, { width: slideWidth, height: slideHeight, opacity: pressed ? 0.9 : 1 }]}
           >
-            <Image source={item.banner_url ?? item.cover_url} style={StyleSheet.absoluteFill} contentFit="cover" transition={200} />
+            <ShowArtwork
+              source={item.banner_url ?? item.cover_url}
+              kind="banner"
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+              transition={200}
+            />
             <View style={styles.scrim} />
             <View style={styles.caption}>
               {item.is_premium ? <Pill label="VIP" tone="gold" /> : null}

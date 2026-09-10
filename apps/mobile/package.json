@@ -37,7 +37,7 @@
     "expo-video": "~57.0.3",
     "expo-web-browser": "~57.0.2",
     "firebase": "11.10.0",
-    "react": "19.2.3",
+    "react": "19.2.8",
     "react-native": "0.86.3",
     "react-native-gesture-handler": "~2.32.0",
     "react-native-pager-view": "8.0.2",
@@ -62,7 +62,8 @@
     "typecheck": "tsc --noEmit",
     "i18n:extract": "node scripts/extract-i18n.mjs",
     "build:android": "bash scripts/build-android.sh",
-    "e2e:android": "bash scripts/e2e-android.sh"
+    "e2e:android": "bash scripts/e2e-android.sh",
+    "e2e:ios": "bash scripts/e2e-ios.sh"
   },
   "private": true
 }

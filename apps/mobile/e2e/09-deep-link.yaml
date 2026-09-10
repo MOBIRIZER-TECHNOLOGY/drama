@@ -1,0 +1,15 @@
+# A shared link opens the series it names. This is the path every WhatsApp share takes.
+appId: com.mobirizer.katha
+name: Deep link
+---
+- stopApp
+- openLink: "katha://s/${SERIES_SLUG}"
+# iOS sometimes asks before handing a custom-scheme link to the app; answer it when it does.
+- tapOn:
+    text: "Open"
+    optional: true
+- extendedWaitUntil:
+    visible:
+      text: "${SERIES_TITLE}"
+    timeout: 15000
+- assertVisible: "Episodes"

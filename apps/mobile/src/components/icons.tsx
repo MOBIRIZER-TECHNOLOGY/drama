@@ -65,8 +65,10 @@ export function Icon({ name, size = 20, color = colors.ink, style }: { name: Ico
       <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: colors.gold, borderWidth: 1.5, borderColor: "#B98F2E" }, style]} />
     );
   }
+  // Decorative: an icon next to text says nothing the text does not, and on its own it is labelled by the
+  // control that holds it. Hidden from assistive tech so it never becomes a stray element in a label.
   return (
-    <View style={[styles.box, { width: size + 4, height: size + 4 }, style]}>
+    <View style={[styles.box, { width: size + 4, height: size + 4 }, style]} accessible={false} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       <Ionicons name={glyphs[name]} size={size} color={color} />
     </View>
   );

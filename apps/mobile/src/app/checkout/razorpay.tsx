@@ -1,11 +1,13 @@
 import { colors, spacing } from "@katha/tokens";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 import { Icon } from "@/components/icons";
-import { Loading, Screen, Text } from "@/components/ui";
+import { Button, EmptyState, Loading, Screen, Text } from "@/components/ui";
 import { useT } from "@/hooks/use-translations";
+import { takeRazorpayCheckout, type CheckoutOutcome } from "@/lib/checkout-session";
 
 /**
  * Razorpay checkout, hosted in a WebView.
@@ -14,46 +16,63 @@ import { useT } from "@/hooks/use-translations";
  * checkout script to open against it. The reference does the same thing — an in-app WebView dialog — and this
  * is the only way to reach it without adding the native SDK, which Expo Go cannot load.
  *
+ * What the page needs (key, order, amount) arrives through the in-memory store the wallet fills right before
+ * pushing this route, never through route params: every route here is deep-linkable, and a link must not be
+ * able to put its own merchant key and amount in front of a viewer under our name.
+ *
  * Nothing here decides whether the purchase succeeded. The script's callbacks only close this screen; the
  * wallet then polls `GET /v1/purchases/{id}` and the coins are granted by the verified webhook, exactly as
  * with Stripe. A page inside a WebView is not evidence of payment.
  */
+
+/** Hosts the checkout may navigate to inside the WebView. Anything else is handled by `shouldStartLoad`. */
+const ORIGIN_WHITELIST = ["https://checkout.razorpay.com", "https://api.razorpay.com", "https://*.razorpay.com"];
+
+const RAZORPAY_HOST = /^https:\/\/([a-z0-9-]+\.)*razorpay\.com(\/|\?|#|$)/i;
+/** Bank and UPI apps: handed to the OS, which knows how to open them; the WebView does not. */
+const APP_SCHEME = /^(upi|intent|tez|phonepe|paytm|gpay|bhim):/i;
+
 export default function RazorpayCheckoutScreen() {
   const t = useT();
   const router = useRouter();
-  const { order_id, key_id, amount_minor, currency, name, email } = useLocalSearchParams<{
-    order_id: string;
-    key_id: string;
-    amount_minor: string;
-    currency: string;
-    name?: string;
-    email?: string;
-  }>();
+  // Claimed once, on mount. A second mount (or a deep link) finds nothing and shows the fallback below.
+  const [session] = useState(() => takeRazorpayCheckout());
   const [ready, setReady] = useState(false);
   // A dismissal must close this screen exactly once: the script can fire both `modal.ondismiss` and an error.
   const closed = useRef(false);
 
   const close = useCallback(
-    (outcome: "done" | "cancelled") => {
+    (outcome: CheckoutOutcome) => {
       if (closed.current) return;
       closed.current = true;
-      router.back();
-      // The wallet reads this on focus; it polls either way, so a wrong guess here costs nothing.
-      if (outcome === "cancelled") return;
+      session?.report(outcome);
+      if (router.canGoBack()) router.back();
+      else router.replace("/wallet");
     },
-    [router],
+    [router, session],
+  );
+
+  // Leaving any other way (hardware back, swipe) is a cancellation as far as the wallet is concerned.
+  useEffect(
+    () => () => {
+      if (!closed.current) session?.report("cancelled");
+    },
+    [session],
   );
 
   const html = useMemo(() => {
+    if (!session) return "";
+    const { checkout } = session;
     const options = JSON.stringify({
-      key: key_id,
-      order_id,
-      amount: Number(amount_minor) || 0,
-      currency,
-      name: name || "Katha",
-      prefill: email ? { email } : undefined,
+      key: checkout.keyId,
+      order_id: checkout.orderId,
+      amount: checkout.amountMinor,
+      currency: checkout.currency,
+      name: checkout.name,
+      prefill: checkout.email ? { email: checkout.email } : undefined,
       theme: { color: colors.accent },
-    });
+      // `<` never appears literally inside the script block, so no value can close it and start markup.
+    }).replace(/</g, "\\u003c");
     // Built as a document rather than a redirect because there is no URL to redirect to. `baseUrl` gives the
     // page an https origin, which Razorpay's script requires and `about:blank` would not satisfy.
     return `<!doctype html>
@@ -78,7 +97,7 @@ export default function RazorpayCheckoutScreen() {
     </script>
   </body>
 </html>`;
-  }, [key_id, order_id, amount_minor, currency, name, email]);
+  }, [session]);
 
   const onMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -92,6 +111,35 @@ export default function RazorpayCheckoutScreen() {
     [close],
   );
 
+  /**
+   * Razorpay's own hosts load in place. A bank's 3-D Secure page is https and also loads in place. UPI and
+   * app intents leave for the OS, which is the only thing that can open them. Everything else is refused.
+   */
+  const shouldStartLoad = useCallback((request: ShouldStartLoadRequest) => {
+    const url = request.url;
+    if (url === "about:blank" || RAZORPAY_HOST.test(url)) return true;
+    if (APP_SCHEME.test(url)) {
+      Linking.openURL(url).catch(() => {});
+      return false;
+    }
+    return url.startsWith("https://");
+  }, []);
+
+  if (!session) {
+    return (
+      <Screen edges={["top", "left", "right", "bottom"]}>
+        <View style={styles.header}>
+          <Pressable onPress={() => close("cancelled")} accessibilityRole="button" accessibilityLabel={t("common.close")} hitSlop={10}>
+            <Icon name="close" size={26} />
+          </Pressable>
+          <Text variant="title">{t("wallet.secure_checkout")}</Text>
+          <View style={{ width: 26 }} />
+        </View>
+        <EmptyState title={t("wallet.checkout_missing")} action={<Button title={t("common.back")} onPress={() => close("cancelled")} />} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen edges={["top", "left", "right", "bottom"]}>
       <View style={styles.header}>
@@ -103,7 +151,8 @@ export default function RazorpayCheckoutScreen() {
       </View>
       <View style={styles.body}>
         <WebView
-          originWhitelist={["*"]}
+          originWhitelist={ORIGIN_WHITELIST}
+          onShouldStartLoadWithRequest={shouldStartLoad}
           source={{ html, baseUrl: "https://checkout.razorpay.com" }}
           onMessage={onMessage}
           onLoadEnd={() => setReady(true)}

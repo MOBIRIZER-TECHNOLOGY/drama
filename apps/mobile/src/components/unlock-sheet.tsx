@@ -219,12 +219,14 @@ export function UnlockSheet({
       pathname: "/wallet",
       params: {
         need: String(Math.max(0, episode.price - balance)),
-        episode: episode.id,
+        // The player addresses episodes by number, not id: `?episode=<uuid>` parsed to NaN and opened
+        // whatever the viewer had last watched instead of the one they were paying for.
+        episode: String(episode.number),
         series: seriesId,
         ...(topUpPack ? { pack: topUpPack.id } : {}),
       },
     });
-  }, [router, episode.price, episode.id, balance, seriesId, topUpPack]);
+  }, [router, episode.price, episode.number, balance, seriesId, topUpPack]);
 
   if (ageGateFor) {
     return (

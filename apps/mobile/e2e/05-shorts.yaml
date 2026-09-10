@@ -1,0 +1,43 @@
+# The Shorts tab: a vertical feed that plays on arrival, with its own controls, and a way out to the series.
+appId: com.mobirizer.katha
+name: Shorts
+---
+- stopApp
+- launchApp
+- tapOn:
+    text: "Shorts(, tab.*)?"
+
+# Plays without a tap: the feed is the hook, and a feed that waits for a tap is a poster.
+#
+# Which short comes first is the catalogue's business — the feed draws on everything published, and it is
+# ordered by what is featured and recent, not by the fixture. So this asserts that a short is playing and
+# that the feed's own furniture is there, and leaves the title to the series screen at the end.
+- extendedWaitUntil:
+    visible:
+      text: "Episode [0-9]+ of [0-9]+"
+    timeout: 20000
+- assertVisible: "Swipe up for the next episode"
+- assertNotVisible:
+    text: ".*(Playback stopped|Couldn.t load|Try again|Something went wrong).*"
+
+# The rail of actions every short carries.
+- assertVisible: "Save"
+- assertVisible: "Share"
+- assertVisible: "Watch full"
+
+# Sound toggles both ways and says which state it is in.
+- tapOn: "Mute"
+- assertVisible: "Unmute"
+- tapOn: "Unmute"
+- assertVisible: "Mute"
+
+# "Watch full" is the way out of the feed: it opens the full player on that short's own series, at the
+# episode the short was showing, rather than dropping the viewer on a series page to start again.
+- tapOn: "Watch full"
+- extendedWaitUntil:
+    visible:
+      text: "Ep [0-9]+ / [0-9]+"
+    timeout: 20000
+- assertVisible: "Episodes"
+- assertNotVisible:
+    text: ".*(Playback stopped|Couldn.t load|Try again|Something went wrong).*"

@@ -135,24 +135,30 @@ export async function buyWithStripe(opts: CheckoutOptions): Promise<PurchaseResu
   return completeStripeCheckout(await startStripeCheckout(opts), opts.signal);
 }
 
-/** Coupon and offer failures from `POST /v1/purchases/checkout`, in the words a viewer can act on. */
-export function checkoutErrorMessage(code: string, fallback: string): string {
+/**
+ * Coupon and offer failures from `POST /v1/purchases/checkout`, in the words a viewer can act on.
+ *
+ * Takes the caller's `t` so the copy lives in the catalogue with everything else; the keys are the ones the
+ * web wallet already uses, so a translator writes each of them once.
+ */
+export function checkoutErrorMessage(code: string, fallback: string, t: (key: string) => string): string {
   switch (code) {
     case "coupon_invalid":
-      return "That coupon code does not exist. Check the spelling and try again.";
+      return t("wallet.coupon_invalid");
     case "coupon_exhausted":
-      return "This coupon has been fully redeemed.";
+      return t("wallet.coupon_exhausted");
     case "coupon_inactive":
+      return t("wallet.coupon_inactive");
     case "coupon_expired":
-      return "This coupon has expired.";
+      return t("wallet.coupon_expired");
     case "coupon_region":
-      return "This coupon is not valid in your region.";
+      return t("wallet.coupon_region");
     case "coupon_first_purchase":
-      return "This coupon is for first purchases only.";
+      return t("wallet.coupon_first_purchase");
     case "offer_unavailable":
-      return "This offer is no longer available.";
+      return t("wallet.offer_unavailable");
     case "offer_pack_mismatch":
-      return "This offer applies to a different pack.";
+      return t("wallet.offer_pack_mismatch");
     default:
       return fallback;
   }

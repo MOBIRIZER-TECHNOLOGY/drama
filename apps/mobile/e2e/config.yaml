@@ -1,0 +1,19 @@
+# Maestro workspace config for this folder.
+#
+# The flows share state on purpose: 01 completes onboarding, and the other two start from a device that has
+# been through it. Maestro does not promise to run a folder in filename order, and on a fresh install it ran
+# the paywall flow first, straight into the language picker. This pins the order the flows were written in.
+flows:
+  - "*"
+executionOrder:
+  continueOnFailure: true
+  flowsOrder:
+    - Onboarding
+    - Browse and play
+    - Paywall and account
+    - Search
+    - Shorts
+    - My List and Me
+    - Language
+    - Player controls
+    - Deep link

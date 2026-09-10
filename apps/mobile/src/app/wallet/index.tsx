@@ -9,6 +9,7 @@ import { useQuery } from "@/hooks/use-query";
 import { useT } from "@/hooks/use-translations";
 import { track } from "@/lib/analytics";
 import { api } from "@/lib/api";
+import { openRazorpayCheckout, type CheckoutOutcome } from "@/lib/checkout-session";
 import { errorCode, errorMessage, unwrap } from "@/lib/errors";
 import { formatDate, formatMoney } from "@/lib/format";
 import {
@@ -25,9 +26,13 @@ import type { Offer, Pack } from "@/lib/types";
 import { useAuth } from "@/providers/auth";
 import { useConfig } from "@/providers/config";
 
+type Translate = ReturnType<typeof useT>;
 
 /** Shown on the chooser and in the footnote. Keys are the gateways the checkout endpoint accepts. */
-const GATEWAY_LABEL: Record<CheckoutGateway, string> = { stripe: "Card", razorpay: "Razorpay" };
+function gatewayLabel(gateway: CheckoutGateway, t: Translate): string {
+  // Razorpay is a brand name and stays as written; "Card" is copy.
+  return gateway === "stripe" ? t("wallet.gateway_card") : "Razorpay";
+}
 
 export default function WalletScreen() {
   const t = useT();
@@ -44,7 +49,7 @@ export default function WalletScreen() {
   const needCoins = Number(needParam ?? 0) || 0;
   const returnTo = seriesParam ? { pathname: "/player/[seriesId]" as const, params: { seriesId: seriesParam, ...(episodeParam ? { episode: episodeParam } : {}) } } : null;
   const { config, country } = useConfig();
-  const { status, requireAuth, setBalance, refreshUser } = useAuth();
+  const { status, user, requireAuth, setBalance, refreshUser } = useAuth();
   const currency = config.economy.currency ?? "INR";
   /**
    * Which gateways the server is offering, in its order.
@@ -105,7 +110,7 @@ export default function WalletScreen() {
         setMessage({ tone: "info", text: t("wallet.payment_pending") });
       } else if (result.status === "failed") {
         track("checkout_return", { status: "failed" });
-        setMessage({ tone: "error", text: "Payment did not go through. You have not been charged." });
+        setMessage({ tone: "error", text: t("wallet.payment_failed") });
       } else {
         track("checkout_return", { status: "cancelled" });
         setMessage(null);
@@ -163,7 +168,7 @@ export default function WalletScreen() {
         setBuying(null);
       } catch (e) {
         const code = errorCode(e);
-        setMessage({ tone: "error", text: checkoutErrorMessage(code, errorMessage(e)) });
+        setMessage({ tone: "error", text: checkoutErrorMessage(code, errorMessage(e), t) });
         if (isCouponError(code)) {
           setAppliedCoupon(null);
           setSelectedOffer(null);
@@ -182,7 +187,8 @@ export default function WalletScreen() {
    * and expects its own script, so that one opens the in-app checkout screen. Either way the outcome is
    * decided by polling the purchase, never by what the page said.
    */
-  const confirm = useCallback(async () => {
+  // A plain function: the compiler memoises it, and the deps list it needs is not one worth maintaining by hand.
+  const confirm = async () => {
     if (!pending) return;
     const { session } = pending;
     setBuying(pending.pack.id);
@@ -192,18 +198,38 @@ export default function WalletScreen() {
       abortRef.current = new AbortController();
       if (session.gateway === "razorpay" && session.order) {
         setPending(null);
-        router.push({
-          pathname: "/checkout/razorpay",
-          params: {
-            order_id: session.order.orderId,
-            key_id: session.order.keyId,
-            amount_minor: String(session.order.amountMinor),
-            currency: session.currency,
-            name: config.site.name ?? "Katha",
-          },
+        const controller = abortRef.current;
+        // Parked in memory, never in route params: the screen is deep-linkable and must not take a merchant
+        // key or an amount from a link. The promise settles when the screen reports how it closed.
+        const outcome = openRazorpayCheckout({
+          orderId: session.order.orderId,
+          keyId: session.order.keyId,
+          amountMinor: session.order.amountMinor,
+          currency: session.currency,
+          name: config.site.name ?? "Katha",
+          email: user?.email ?? null,
         });
-        // The checkout screen only closes itself; settlement is the webhook's, so poll from here.
-        await finish(await pollPurchase(session.purchaseId, abortRef.current.signal));
+        router.push("/checkout/razorpay");
+        // Settlement is the webhook's, so poll from here while the sheet is up. A cancellation stops the
+        // poll at once: sixty seconds of a locked wallet after backing out of a sheet is a bug, not caution.
+        const sheet = { outcome: null as CheckoutOutcome | null };
+        void outcome.then((o) => {
+          sheet.outcome = o;
+          if (o === "cancelled") controller.abort();
+        });
+        let result: PurchaseResult;
+        try {
+          result = await pollPurchase(session.purchaseId, controller.signal);
+        } catch (e) {
+          if (!controller.signal.aborted) throw e;
+          result = { status: "pending", purchaseId: session.purchaseId };
+        }
+        if (sheet.outcome === "cancelled") {
+          // The viewer may have paid and closed the sheet by hand; one quick check, as the Stripe path does.
+          const purchase = unwrap(await api.GET("/v1/purchases/{purchase_id}", { params: { path: { purchase_id: session.purchaseId } } }));
+          result = purchase.status === "paid" ? { status: "paid", purchase } : { status: "cancelled" };
+        }
+        await finish(result);
         return;
       }
       await finish(await completeStripeCheckout(session, abortRef.current.signal));
@@ -212,7 +238,7 @@ export default function WalletScreen() {
       setPending(null);
       setMessage({ tone: "error", text: errorMessage(e) });
     }
-  }, [pending, finish, router, config.site.name, t]);
+  };
 
   useEffect(() => {
     if (wallet.data) setBalance(wallet.data.coin_balance);
@@ -231,7 +257,7 @@ export default function WalletScreen() {
           await refetchWallet({ silent: true });
           await refreshUser();
         } else if (result.status === "pending") {
-          setMessage({ tone: "info", text: "Payment is still being confirmed. Pull to refresh in a moment." });
+          setMessage({ tone: "info", text: t("wallet.payment_pending") });
         }
       })
       .catch(() => {});
@@ -242,15 +268,15 @@ export default function WalletScreen() {
     return (
       <Screen>
         <View style={styles.header}>
-          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+          <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
             <Icon name="back" size={30} />
           </Pressable>
           <Text variant="title">{t("wallet.title")}</Text>
           <View style={{ width: 30 }} />
         </View>
         <EmptyState
-          title="Sign in to see your wallet"
-          body="Coins and purchases are tied to your account."
+          title={t("wallet.signin_title")}
+          body={t("wallet.signin_body")}
           action={<Button title={t("common.sign_in")} onPress={() => requireAuth()} disabled={status === "loading"} />}
         />
       </Screen>
@@ -260,13 +286,13 @@ export default function WalletScreen() {
   return (
     <Screen>
       <View style={styles.header}>
-        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel="Back" hitSlop={10}>
+        <Pressable onPress={() => (router.canGoBack() ? router.back() : router.replace("/(tabs)/me"))} accessibilityRole="button" accessibilityLabel={t("common.back")} hitSlop={10}>
           <Icon name="back" size={30} />
         </Pressable>
         <Text variant="title">{t("wallet.title")}</Text>
         <Pressable onPress={() => router.push("/wallet/ledger")} accessibilityRole="button" hitSlop={8}>
           <Text variant="caption" color={colors.accent}>
-            History
+            {t("wallet.history")}
           </Text>
         </Pressable>
       </View>
@@ -289,7 +315,7 @@ export default function WalletScreen() {
           </View>
           {wallet.data?.is_vip ? (
             <Pill
-              label={wallet.data.vip_ends_at ? t("wallet.vip_until", { date: formatDate(wallet.data.vip_ends_at) }) : "VIP"}
+              label={wallet.data.vip_ends_at ? t("wallet.vip_until", { date: formatDate(wallet.data.vip_ends_at) }) : t("me.vip")}
               tone="gold"
             />
           ) : null}
@@ -344,7 +370,7 @@ export default function WalletScreen() {
           <Text variant="label">{t("wallet.coupon")}</Text>
           <View style={styles.couponRow}>
             <TextInput
-              placeholder="Enter code"
+              placeholder={t("wallet.coupon_enter")}
               value={coupon}
               onChangeText={(v) => setCoupon(v.toUpperCase())}
               autoCapitalize="characters"
@@ -355,7 +381,7 @@ export default function WalletScreen() {
             />
             {coupon || appliedCoupon ? (
               <Button
-                title="Clear"
+                title={t("common.clear")}
                 variant="ghost"
                 small
                 onPress={() => {
@@ -367,7 +393,7 @@ export default function WalletScreen() {
             ) : null}
           </View>
           <Text variant="caption">
-            {appliedCoupon ? `${appliedCoupon} will be applied at checkout.` : "Codes are checked when you pick a pack; the discounted price is shown before you pay."}
+            {appliedCoupon ? t("wallet.coupon_will_apply", { code: appliedCoupon }) : t("wallet.coupon_checked")}
           </Text>
         </Card>
 
@@ -403,7 +429,7 @@ export default function WalletScreen() {
                       style={[styles.gateway, active && styles.gatewayActive]}
                     >
                       <Text variant="label" color={active ? colors.accentInk : colors.ink}>
-                        {GATEWAY_LABEL[g]}
+                        {gatewayLabel(g, t)}
                       </Text>
                     </Pressable>
                   );
@@ -429,7 +455,7 @@ export default function WalletScreen() {
           </View>
         )}
         <Text variant="caption" style={styles.footnote}>
-          {activeGateway ? t("wallet.processed_by", { gateway: GATEWAY_LABEL[activeGateway] }) : t("wallet.no_gateway")}{" "}
+          {activeGateway ? t("wallet.processed_by", { gateway: gatewayLabel(activeGateway, t) }) : t("wallet.no_gateway")}{" "}
           {t("wallet.credited_on_confirm")}
         </Text>
       </ScrollView>
@@ -439,7 +465,7 @@ export default function WalletScreen() {
           <Pressable
             style={styles.scrim}
             accessibilityRole="button"
-            accessibilityLabel="Dismiss"
+            accessibilityLabel={t("common.dismiss")}
             onPress={() => {
               setPending(null);
               setBuying(null);
@@ -449,7 +475,7 @@ export default function WalletScreen() {
             <View style={styles.handle} />
             <Text variant="title">{pending.pack.name}</Text>
             <View style={styles.confirmRow}>
-              <Text variant="body">Total</Text>
+              <Text variant="body">{t("wallet.total")}</Text>
               <View style={styles.confirmPrice}>
                 {pending.session.discountPct && pending.pack.price ? (
                   <Text variant="caption" style={styles.strike}>
@@ -465,7 +491,7 @@ export default function WalletScreen() {
                 </Text>
               </View>
             </View>
-            {pending.session.discountPct ? <Pill label={`${pending.session.discountPct}% off applied`} tone="success" /> : null}
+            {pending.session.discountPct ? <Pill label={t("wallet.discount_applied", { pct: pending.session.discountPct })} tone="success" /> : null}
             <Button title={t("wallet.continue_to_payment")} onPress={confirm} loading={buying === pending.pack.id} />
             <Button
               title={t("common.cancel")}
@@ -485,6 +511,7 @@ export default function WalletScreen() {
 
 /** Countdown to `ends_at`; null once it has passed (the card then reads as a plain offer). */
 function useCountdown(endsAt: string | null): string | null {
+  const t = useT();
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!endsAt) return;
@@ -501,12 +528,13 @@ function useCountdown(endsAt: string | null): string | null {
     const h = Math.floor((left % 86400) / 3600);
     const m = Math.floor((left % 3600) / 60);
     const s = left % 60;
-    if (days > 0) return `${days}d ${h}h left`;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} left`;
-  }, [endsAt, now]);
+    if (days > 0) return t("wallet.offer_days_left", { d: days, h });
+    return t("wallet.offer_time_left", { time: `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` });
+  }, [endsAt, now, t]);
 }
 
 function OfferCard({ offer, selected, onPress }: { offer: Offer; selected: boolean; onPress: () => void }) {
+  const t = useT();
   const countdown = useCountdown(offer.ends_at);
   return (
     <Pressable onPress={onPress} accessibilityRole="button" accessibilityState={{ selected }}>
@@ -514,11 +542,11 @@ function OfferCard({ offer, selected, onPress }: { offer: Offer; selected: boole
         <View style={{ flex: 1, gap: 2 }}>
           <Text variant="label">{offer.title}</Text>
           <Text variant="caption">
-            {offer.pack_id ? "Applies to one pack" : "Applies to any pack"}
+            {offer.pack_id ? t("wallet.offer_one_pack") : t("wallet.offer_any_pack")}
             {countdown ? ` · ${countdown}` : ""}
           </Text>
         </View>
-        {offer.discount_pct ? <Pill label={`${offer.discount_pct}% off`} tone={selected ? "success" : "accent"} /> : null}
+        {offer.discount_pct ? <Pill label={t("wallet.offer_discount", { pct: offer.discount_pct })} tone={selected ? "success" : "accent"} /> : null}
       </Card>
     </Pressable>
   );
@@ -556,7 +584,7 @@ function PackCard({
         {pack.kind === "vip" ? (
           <>
             <Text variant="title" color={colors.gold}>
-              VIP
+              {t("me.vip")}
             </Text>
             <Text variant="caption">{pack.duration_days ? t("wallet.vip_days", { n: pack.duration_days }) : pack.name}</Text>
           </>

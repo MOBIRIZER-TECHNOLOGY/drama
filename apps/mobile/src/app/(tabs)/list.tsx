@@ -97,7 +97,7 @@ export default function MyListScreen() {
         <Header tab={tab} onTab={setTab} />
         <EmptyState
           title={t("me.guest_title")}
-          body="Favourites and watch history are stored with your account."
+          body={t("list.guest_body")}
           action={<Button title={t("common.sign_in")} onPress={() => requireAuth()} disabled={status === "loading"} />}
         />
       </Screen>
@@ -138,7 +138,7 @@ export default function MyListScreen() {
             renderItem={({ item }) => (
               <View style={styles.cell}>
                 <SeriesCard series={item} width={cardWidth} />
-                <Pressable onPress={() => removeFavorite(item)} accessibilityRole="button" accessibilityLabel={`Remove ${item.title}`} style={styles.remove} hitSlop={6}>
+                <Pressable onPress={() => removeFavorite(item)} accessibilityRole="button" accessibilityLabel={t("list.remove_title", { title: item.title })} style={styles.remove} hitSlop={6}>
                   <Icon name="close" size={14} />
                 </Pressable>
               </View>
@@ -187,6 +187,7 @@ function Header({ tab, onTab, right }: { tab: Tab; onTab: (t: Tab) => void; righ
 }
 
 function HistoryRow({ item, onPress, onRemove }: { item: HistoryItem; onPress: () => void; onRemove: () => void }) {
+  const t = useT();
   const progress = item.duration_sec ? Math.min(1, item.position_sec / item.duration_sec) : item.completed ? 1 : 0;
   return (
     <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [styles.historyRow, pressed && { opacity: 0.8 }]}>
@@ -196,14 +197,14 @@ function HistoryRow({ item, onPress, onRemove }: { item: HistoryItem; onPress: (
           {item.series.title}
         </Text>
         <Text variant="caption">
-          Episode {item.episode_number} · {item.completed ? "Completed" : `${formatTime(item.position_sec)} watched`}
+          {t("series.episode_n", { n: item.episode_number })} · {item.completed ? t("list.completed") : t("list.watched", { time: formatTime(item.position_sec) })}
         </Text>
         <Text variant="caption">{formatDate(item.updated_at)}</Text>
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${Math.round(progress * 100)}%` }]} />
         </View>
       </View>
-      <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel="Remove from history" hitSlop={8} style={styles.removeInline}>
+      <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={t("list.remove_history")} hitSlop={8} style={styles.removeInline}>
         <Icon name="close" size={18} color={colors.muted} />
       </Pressable>
     </Pressable>
