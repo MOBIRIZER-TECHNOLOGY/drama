@@ -1301,9 +1301,9 @@ async def test_a_flag_carries_the_admin_who_last_set_it(env: Env):
     created = await env.client.put(f"/v1/admin/flags/{key}", json={"enabled": True, "rules": rules})
     assert created.status_code == 200, created.text
     assert created.json()["enabled"] is True and created.json()["rules"] == rules
-    # BUG (asserted as it is): the save response never carries `updated_by`, so the row the console just wrote
-    # shows an empty "last changed by" until the list is fetched again.
-    assert created.json()["updated_by"] is None
+    # The save answers with the admin who made it. It used to return null here, so the row the console had just
+    # written showed a blank "last changed by" until the list was fetched again.
+    assert created.json()["updated_by"] == env.owner.email
 
     listed = {f["key"]: f for f in (await env.client.get("/v1/admin/flags")).json()}
     assert listed[key]["updated_by"] == env.owner.email
@@ -1313,6 +1313,7 @@ async def test_a_flag_carries_the_admin_who_last_set_it(env: Env):
     second = await env.act_as(AdminRole.editor)
     off = await env.client.put(f"/v1/admin/flags/{key}", json={"enabled": False, "rules": None})
     assert off.status_code == 200 and off.json()["enabled"] is False and off.json()["rules"] is None
+    assert off.json()["updated_by"] == second.email, "the save names whoever made it, not whoever made the last one"
     listed = {f["key"]: f for f in (await env.client.get("/v1/admin/flags")).json()}
     assert listed[key]["updated_by"] == second.email
 

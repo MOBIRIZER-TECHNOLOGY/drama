@@ -12,14 +12,15 @@ from app.core.config import get_settings
 from app.core.db import SessionLocal
 from app.models.catalog import Embedding, Episode, Series, SeriesTranslation, Subtitle
 from app.models.ops import Language, UiTranslation
+from arq import Retry
 from katha_ai.embeddings import embed_documents, model_name, series_document
 from katha_ai.graphs.subtitles import to_vtt, transcribe, translate_cues
 from katha_ai.graphs.translation import run_translation_batch
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from worker.jobs.media import _run, _s3
-from worker.settings import get_worker_settings
+from worker.jobs.media import TRANSIENT_ERRORS, _run, _s3
+from worker.settings import MAX_TRIES, get_worker_settings
 
 log = structlog.get_logger()
 
@@ -198,6 +199,17 @@ async def transcribe_episode(ctx: dict, episode_id: str, target_langs: list[str]
         )
         status = "incomplete" if incomplete else "ok"
         return {"status": status, "cues": len(cues), "files": written, "incomplete": incomplete}
+    except TRANSIENT_ERRORS as exc:
+        # Classify, the way transcode_asset beside it does. A momentary S3 or database error is the
+        # environment's fault and says nothing about this episode, but with only try/finally here it failed
+        # the job permanently — and there is no status column on a subtitle run recording why, so the episode
+        # simply never got subtitles and nothing said so.
+        tries = int(ctx.get("job_try") or 1)
+        if tries < MAX_TRIES:
+            log.warning("subtitles.retry", episode_id=episode_id, error=str(exc), tries=tries)
+            raise Retry(defer=60 * tries) from exc
+        log.error("subtitles.failed", episode_id=episode_id, error=str(exc), tries=tries)
+        raise
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

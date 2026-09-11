@@ -370,7 +370,7 @@ async def test_updating_a_series_replaces_its_translations_and_can_move_its_slug
     The stored rows are right and the response is not: `update_series` deletes the dropped row, commits, and
     re-queries — but the session is `expire_on_commit=False`, so the re-query hands back the same identity-
     mapped `Series` whose `translations` collection still holds the row that was just deleted. Both are
-    asserted below, the stale half marked as the bug it is.
+    asserted below.
     """
     created = await seed_series(env)
     both = await env.client.put(
@@ -400,11 +400,12 @@ async def test_updating_a_series_replaces_its_translations_and_can_move_its_slug
         langs = await s.scalars(select(SeriesTranslation.lang).where(SeriesTranslation.series_id == created["id"]))
         assert list(langs.all()) == ["hi"], "the dropped translation row is deleted, not left behind"
 
-    # BUG, pinned as-is: the save's own response still lists the language it just deleted, so the console shows
-    # a translation that no longer exists until something reloads the page.
-    assert sorted(t["lang"] for t in out["translations"]) == ["en", "hi"]
+    # The save's own response describes what was saved. It used to list the language it had just deleted,
+    # because the post-commit re-query got the identity-mapped Series back with its collection untouched, so
+    # the console showed a translation that no longer existed until something reloaded the page.
+    assert [t["lang"] for t in out["translations"]] == ["hi"]
 
-    # A fresh read — a new session, nothing cached — agrees with the table.
+    # A fresh read — a new session, nothing cached — agrees with it.
     fresh = await env.client.get(f"/v1/admin/series/{created['id']}")
     assert [t["lang"] for t in fresh.json()["translations"]] == ["hi"]
 
@@ -443,9 +444,7 @@ async def test_publishing_stamps_the_release_date_queues_ingestion_and_is_audite
     assert calls[1][1] == ([f"series/{created['slug']}"],)
     assert await audit_actions(env, created["id"]) == ["series.publish"]
 
-    # Re-saving a published series must not re-announce it. `released_at` is part of the body, so the console
-    # keeps a date by sending back the one it read; a save that omits it is a save that cleared the field, and
-    # a published series with no date gets stamped again.
+    # Re-saving a published series must not re-announce it, and must not move its release date either.
     calls.clear()
     kept = await env.client.put(
         f"/v1/admin/series/{created['id']}",
@@ -456,8 +455,18 @@ async def test_publishing_stamps_the_release_date_queues_ingestion_and_is_audite
     assert calls == [], "ingestion only runs on the transition into published"
     assert await audit_actions(env, created["id"]) == ["series.publish"]
 
-    restamped = await env.client.put(f"/v1/admin/series/{created['id']}", json=series_body(status="published"))
-    assert restamped.json()["released_at"] > live.json()["released_at"]
+    # A save that omits the field leaves the stored date alone. It used to clear it and stamp it to now, so
+    # every ordinary edit of a published series quietly moved its release date forward — and "new this week"
+    # with it — which is how a months-old title reappears at the top of the catalogue.
+    omitted = await env.client.put(f"/v1/admin/series/{created['id']}", json=series_body(status="published"))
+    assert omitted.json()["released_at"] == live.json()["released_at"]
+
+    # An explicit date is still honoured; this is an editable field, not a read-only one.
+    moved = "2031-04-05T06:07:08Z"
+    edited = await env.client.put(
+        f"/v1/admin/series/{created['id']}", json=series_body(status="published", released_at=moved)
+    )
+    assert edited.json()["released_at"].startswith("2031-04-05T06:07:08")
 
     # Taking it down is the other accountable edit, and it is named for what happened.
     down = await env.client.put(f"/v1/admin/series/{created['id']}", json=series_body(status="draft"))
@@ -609,12 +618,12 @@ async def test_an_episode_takes_its_duration_from_the_asset_and_surfaces_the_tra
     detached = await env.client.put(f"/v1/admin/episodes/{episode['id']}", json={"number": 1})
     assert detached.status_code == 200
     assert detached.json()["video_asset_id"] is None
-    # BUG, pinned as-is: the same response still reports the old asset's status, because the post-commit
-    # re-query returns the identity-mapped episode whose `video_asset` relationship was never expired. The
-    # console therefore shows "ready" against an episode that now has no video at all.
-    assert detached.json()["asset_status"] == "ready"
+    # And reports no status with it. This used to answer "ready" beside a null asset id, because the re-query
+    # returned the identity-mapped episode whose relationship was never refreshed — the console showing
+    # "video ready" against an episode that now had no video at all.
+    assert detached.json()["asset_status"] is None
 
-    # A fresh read has no such cache and reports the truth.
+    # A fresh read agrees.
     fresh = await env.client.get(f"/v1/admin/series/{created['id']}")
     assert fresh.json()["episodes"][0]["asset_status"] is None
 

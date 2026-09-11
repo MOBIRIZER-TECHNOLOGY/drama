@@ -352,7 +352,10 @@ async def put_flag(key: str, body: FlagIn, db: DB, admin: CurrentAdmin) -> FlagO
         after={"enabled": f.enabled, "rules": f.rules},
     )
     await db.commit()
-    return FlagOut(key=f.key, enabled=f.enabled, rules=f.rules, updated_at=f.updated_at)
+    # The admin who just saved is the one who last touched it. Leaving `updated_by` to its default returned
+    # null on the row the console had that moment written, so "last changed by" was blank until a refetch —
+    # on the one screen where that column is the whole point of being there.
+    return FlagOut(key=f.key, enabled=f.enabled, rules=f.rules, updated_at=f.updated_at, updated_by=admin.email)
 
 
 @router.delete("/flags/{key}", response_model=Ok)

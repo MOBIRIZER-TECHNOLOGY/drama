@@ -164,11 +164,14 @@ class PackIn(BaseModel):
     coins: int = Field(default=0, ge=0)
     bonus_coins: int = Field(default=0, ge=0)
     duration_days: int | None = None
-    google_product_id: str | None = None
-    apple_product_id: str | None = None
+    # Bounded to match the columns. An over-long value otherwise passes validation and fails at the insert,
+    # which the error boundary reports as a 500 — an operator typing too much into a field is told the server
+    # broke rather than which field to shorten. `description` is Text, so it stays unbounded here too.
+    google_product_id: str | None = Field(default=None, max_length=120)
+    apple_product_id: str | None = Field(default=None, max_length=120)
     is_active: bool = True
     sort_order: int = 0
-    badge: str | None = None
+    badge: str | None = Field(default=None, max_length=32)
     prices: list[PackPriceIn] = []
 
 

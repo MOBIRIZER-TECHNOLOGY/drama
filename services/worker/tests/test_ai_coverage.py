@@ -436,6 +436,35 @@ async def test_a_failed_audio_extract_raises_with_ffmpeg_s_words(monkeypatch):
         await ai.transcribe_episode({}, str(eid), ["en"])
 
 
+async def test_a_momentary_storage_error_retries_rather_than_failing_the_episode(monkeypatch):
+    """A transient error is the environment's fault and says nothing about this episode.
+
+    `transcode_asset` beside this job has always classified its errors; this one had only try/finally, so a
+    blip fetching the source from S3 failed the run permanently — and a subtitle run has no status column
+    recording why, so the episode simply never got subtitles and nothing said so. Below the try limit it
+    raises arq's Retry; at the limit it gives up and lets the error through.
+    """
+    from arq import Retry
+    from botocore.exceptions import ClientError
+
+    eid = uuid.uuid4()
+    blip = ClientError({"Error": {"Code": "SlowDown", "Message": "slow down"}}, "GetObject")
+
+    def download_file(bucket, key, dest):
+        raise blip
+
+    env = _subtitle_env(monkeypatch, FakeDb(scalar=[_episode(eid)]))
+    env.s3.download_file = download_file
+    with pytest.raises(Retry):
+        await ai.transcribe_episode({"job_try": 1}, str(eid), ["en"])
+
+    # Out of tries, the error itself surfaces so arq records a failure rather than looping for ever.
+    env = _subtitle_env(monkeypatch, FakeDb(scalar=[_episode(eid)]))
+    env.s3.download_file = download_file
+    with pytest.raises(ClientError):
+        await ai.transcribe_episode({"job_try": 99}, str(eid), ["en"])
+
+
 async def test_an_episode_without_video_is_not_transcribed(monkeypatch):
     eid = uuid.uuid4()
     env = _subtitle_env(monkeypatch, FakeDb(scalar=[None]))

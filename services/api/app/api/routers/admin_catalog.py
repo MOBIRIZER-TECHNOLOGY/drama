@@ -171,11 +171,16 @@ async def _apply_series(db, s: Series, body: SeriesIn) -> None:
         "is_featured",
         "is_premium",
         "status",
-        "released_at",
         "content_rating",
         "sort_weight",
     ):
         setattr(s, field, getattr(body, field))
+    # `released_at` is deliberately outside that loop. The console does not always send it, and copying a
+    # missing value cleared the stored date — which the stamp below then set to now, so every save of an
+    # already-published series quietly moved its release date forward and the "new this week" ordering with
+    # it. An explicit value still sets it; an omitted one leaves what is already there alone.
+    if body.released_at is not None:
+        s.released_at = body.released_at
     if body.status == PublishStatus.published and s.released_at is None:
         s.released_at = datetime.now(UTC)
     existing = {t.lang: t for t in s.translations}
@@ -294,10 +299,14 @@ async def update_series(series_id: uuid.UUID, body: SeriesIn, db: DB, admin: Cur
     await db.commit()
     if s.status == PublishStatus.published and not was_published:
         await _on_publish(s)
+    # populate_existing, because the session still holds this Series and the identity map hands the same
+    # object back with its collections as they were. A language removed by this very save stayed in the
+    # response, so the console listed a translation that no longer existed until the page was reloaded.
     s = await db.scalar(
         _series_query()
         .where(Series.id == series_id)
         .options(selectinload(Series.episodes).selectinload(Episode.video_asset))
+        .execution_options(populate_existing=True)
     )
     eps = [_episode_out(e) for e in s.episodes]
     return _series_out(s, len(eps), eps)
@@ -386,7 +395,15 @@ async def update_episode(episode_id: uuid.UUID, body: EpisodeIn, db: DB, admin: 
     await _sync_asset(db, e)
     _audit_status_change(db, admin, target_type="episode", target_id=e.id, before=previous_status, after=e.status)
     await db.commit()
-    e = await db.scalar(select(Episode).where(Episode.id == episode_id).options(selectinload(Episode.video_asset)))
+    # Same reason as the series save above: without populate_existing the identity map returns the episode
+    # still carrying the asset it had, so detaching a video answered with video_asset_id null beside
+    # asset_status "ready" — the console showing "video ready" for an episode with no video.
+    e = await db.scalar(
+        select(Episode)
+        .where(Episode.id == episode_id)
+        .options(selectinload(Episode.video_asset))
+        .execution_options(populate_existing=True)
+    )
     return _episode_out(e)
 
 
