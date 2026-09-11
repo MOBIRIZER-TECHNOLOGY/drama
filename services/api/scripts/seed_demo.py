@@ -307,6 +307,12 @@ SERIES_TAGS = {
 # visibly does something, and a coverage figure on the Languages screen that is real rather than zero.
 # Anything not listed falls back to English, which is what the clients already do for a missing key.
 HINDI = {
+    # Page metadata first, because it is the part with no fallback worth having: an untranslated key falls
+    # back to English, which is fine for a button and wrong for a <title>. Every language variant otherwise
+    # shows search engines the same English title and description while hreflang tells them the pages are
+    # alternates of one another, which is the one thing that setup must not say.
+    "meta.title": "कथा — शॉर्ट ड्रामा",
+    "meta.description": "अपनी भाषा में छोटे-छोटे ड्रामा देखें।",
     "nav.home": "होम",
     "nav.shorts": "शॉर्ट्स",
     "nav.browse": "ब्राउज़ करें",

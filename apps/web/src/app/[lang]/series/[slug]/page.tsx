@@ -20,7 +20,10 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/series/[sl
   const title = s.seo_title || s.title;
   const description = s.meta_description || s.synopsis || `Watch ${s.title} on Katha.`;
   const path = `/series/${s.slug}`;
-  const images = s.cover_url ? [{ url: s.cover_url, width: 720, height: 1280, alt: s.title }] : [];
+  // No `images` here, deliberately. Next fills og:image and twitter:image from the sibling
+  // `opengraph-image.tsx`, which composes a 1200x630 card at the ratio the platforms actually render.
+  // Naming the cover explicitly overrode that file and handed every share the raw 9:16 poster instead,
+  // which centre-crops to an unreadable band under the `summary_large_image` this same object asks for.
   return {
     title: s.seo_title ? { absolute: title } : title,
     description,
@@ -28,8 +31,8 @@ export async function generateMetadata({ params }: PageProps<"/[lang]/series/[sl
       canonical: localeHref(lang, path),
       languages: Object.fromEntries(languages.map((l) => [l.code, localeHref(l.code, path)])),
     },
-    openGraph: { title, description, type: "video.tv_show", images, siteName: "Katha", locale: lang },
-    twitter: { card: "summary_large_image", title, description, images: images.map((i) => i.url) },
+    openGraph: { title, description, type: "video.tv_show", siteName: "Katha", locale: lang },
+    twitter: { card: "summary_large_image", title, description },
   };
 }
 
