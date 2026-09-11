@@ -9,8 +9,15 @@
  * remove the protection from production too. This instead writes a network security config naming only the
  * hosts handed to it, and only the ones actually reached over http. Point a build at https and the plugin
  * adds nothing at all: no manifest attribute, no config file.
+ *
+ * iOS needs the same thing and for the same reason. App Transport Security refuses cleartext by default, and
+ * the template's `NSAllowsLocalNetworking` is not a substitute: it covers `.local`, unqualified names and
+ * link-local addresses, so a build pointed at a development machine by its LAN address (192.168.x.x) is not
+ * obviously covered by it. Rather than depend on reading that rule correctly, each cleartext host gets an
+ * explicit `NSExceptionDomains` entry, which is unambiguous — and, exactly as on Android, an https build
+ * gets nothing added. `NSAllowsArbitraryLoads` is never set: it would disable ATS for the store build too.
  */
-const { AndroidConfig, withAndroidManifest, withDangerousMod } = require("expo/config-plugins");
+const { AndroidConfig, withAndroidManifest, withDangerousMod, withInfoPlist } = require("expo/config-plugins");
 const fs = require("fs");
 const path = require("path");
 
@@ -57,9 +64,18 @@ module.exports = function withCleartextHosts(config, { urls = [] } = {}) {
     },
   ]);
 
-  return withAndroidManifest(config, (cfg) => {
+  config = withAndroidManifest(config, (cfg) => {
     const app = AndroidConfig.Manifest.getMainApplicationOrThrow(cfg.modResults);
     app.$["android:networkSecurityConfig"] = `@xml/${RESOURCE}`;
+    return cfg;
+  });
+
+  return withInfoPlist(config, (cfg) => {
+    const ats = (cfg.modResults.NSAppTransportSecurity ??= {});
+    const domains = (ats.NSExceptionDomains ??= {});
+    for (const host of hosts) {
+      domains[host] = { ...domains[host], NSExceptionAllowsInsecureHTTPLoads: true, NSIncludesSubdomains: false };
+    }
     return cfg;
   });
 };
