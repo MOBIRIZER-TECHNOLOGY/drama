@@ -22,7 +22,12 @@
 # Usage:
 #   scripts/e2e-ios.sh                          # every flow, in order, on the booted simulator
 #   scripts/e2e-ios.sh e2e/02-browse-and-play.yaml
-#   E2E_IOS_DEVICE=<identifier> scripts/e2e-ios.sh   # on a connected iPhone (xcrun devicectl list devices)
+#
+# A physical iPhone cannot be driven from here: Maestro's iOS support is Xcode simulators only, and it
+# answers a real device's UDID with "not connected" however the phone is attached. Hardware is verified
+# by hand instead — build and install with `expo run:ios --device <udid>`, launch it, and check it stays
+# up (`xcrun devicectl device info processes`). That covers the launch path, which is the part of iOS 27
+# that actually differs; the flows below then run on a simulator of the same OS version.
 #
 # The flows name the series they drive through SERIES_TITLE. Left unset, it is read from the API's e2e
 # seeder (the series with playable media), which is also what the web suite drives.
@@ -65,28 +70,26 @@ MSG
   exit 1
 fi
 
-# A physical iPhone is named by its identifier (`xcrun devicectl list devices`); otherwise the booted simulator.
-DEVICE="${E2E_IOS_DEVICE:-}"
-if [ -n "$DEVICE" ]; then
-  if ! xcrun devicectl list devices 2>/dev/null | grep "$DEVICE" | grep -qE "\s(connected|available)"; then
-    echo "iPhone $DEVICE is not connected. Plug it in, unlock it, and trust this Mac." >&2
-    exit 1
-  fi
-  if ! xcrun devicectl device info apps --device "$DEVICE" 2>/dev/null | grep -q "$APP_ID"; then
-    echo "$APP_ID is not installed on $DEVICE. Build for it first: EXPO_APPLE_TEAM_ID=<team> npx expo run:ios --device $DEVICE --configuration Release" >&2
-    exit 1
-  fi
-else
-  if ! xcrun simctl list devices booted | grep -q "(Booted)"; then
-    echo "No iOS simulator is booted. Start one: xcrun simctl boot \"iPhone 17\"" >&2
-    exit 1
-  fi
-  if ! xcrun simctl get_app_container booted "$APP_ID" >/dev/null 2>&1; then
-    echo "$APP_ID is not installed on the booted simulator. Build and install it first — see the header of this script." >&2
-    exit 1
-  fi
-  DEVICE="$(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" | head -1)"
+# The flows run on the booted simulator. A physical iPhone is refused with a reason rather than a UDID that
+# Maestro will report as "not connected" whatever the phone is doing.
+if [ -n "${E2E_IOS_DEVICE:-}" ]; then
+  cat >&2 <<'MSG'
+E2E_IOS_DEVICE is set, but Maestro cannot drive a physical iPhone: its iOS support is Xcode simulators only.
+Verify hardware by hand (see the header of this script), and run the flows on a simulator of the same iOS
+version by leaving E2E_IOS_DEVICE unset.
+MSG
+  exit 2
 fi
+
+if ! xcrun simctl list devices booted | grep -q "(Booted)"; then
+  echo "No iOS simulator is booted. Start one: xcrun simctl boot \"iPhone 17\"" >&2
+  exit 1
+fi
+if ! xcrun simctl get_app_container booted "$APP_ID" >/dev/null 2>&1; then
+  echo "$APP_ID is not installed on the booted simulator. Build and install it first — see the header of this script." >&2
+  exit 1
+fi
+DEVICE="$(xcrun simctl list devices booted | grep -oE "[0-9A-F-]{36}" | head -1)"
 
 if [ -z "${SERIES_TITLE:-}" ]; then
   API_DIR="$(cd ../../services/api && pwd)"
