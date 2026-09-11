@@ -75,6 +75,13 @@ ignore = ["UP042", "UP046"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.coverage.run]
+# SQLAlchemy's async layer runs every statement inside a greenlet, and coverage stops tracing across a
+# greenlet switch unless it is told to expect them. Without this, any handler that touches the database looks
+# uncovered however many requests the tests put through it: `app/api/routers/catalog.py` reported 47% for a
+# suite that in fact executes 99% of it.
+concurrency = ["greenlet", "thread"]
+
 [tool.mypy]
 python_version = "3.12"
 plugins = ["pydantic.mypy"]

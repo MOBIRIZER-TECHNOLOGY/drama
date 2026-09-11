@@ -43,15 +43,19 @@ jobs:
       - name: api migration is in sync with models
         working-directory: services/api
         run: uv run alembic check
+      # --cov-fail-under is the point of these three steps. Coverage that is measured but not enforced drifts
+      # down one merge at a time and nobody sees it happen; a threshold makes the drop the thing that fails.
+      # The floors sit just under where each package stands, so a real regression trips them and ordinary
+      # churn does not.
       - name: api tests
         working-directory: services/api
-        run: uv run pytest -q
+        run: uv run --with pytest-cov pytest -q --cov=app --cov-report=term --cov-fail-under=95
       - name: ai deps and tests
         working-directory: services/ai
-        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
+        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run --with pytest-cov pytest -q --cov=katha_ai --cov-report=term --cov-fail-under=99
       - name: worker deps and tests
         working-directory: services/worker
-        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run pytest -q
+        run: uv sync --extra dev && uv run ruff check . && uv run ruff format --check . && uv run --with pytest-cov pytest -q --cov=worker --cov-report=term --cov-fail-under=99
       - name: openapi export matches committed client schema
         working-directory: services/api
         run: |
