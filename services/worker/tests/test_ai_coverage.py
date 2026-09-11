@@ -529,6 +529,7 @@ async def test_ingestion_queues_subtitles_only_for_episodes_that_have_none(monke
         "embeddings": {"status": "ok", "model": "m"},
         "translations": {"languages": 2},
         "subtitles_queued": 1,
+        "subtitles_refused": 0,
     }
     assert redis.jobs == [("transcribe_episode", (str(without_subs), None), {"_job_id": f"subtitles:{without_subs}"})]
 
@@ -546,10 +547,14 @@ async def test_ingestion_still_embeds_and_translates_without_a_queue(monkeypatch
     assert out["embeddings"] == {"status": "ok", "model": "m"} and out["translations"] == {"languages": 2}
 
 
-async def test_ingestion_counts_a_subtitle_job_arq_refused_as_queued(monkeypatch):
-    """Current behaviour, and wrong: arq returns None when a job id is still live or its result is cached, so
-    a re-ingestion inside the result TTL reports subtitles queued that will never run. See the bug note in
-    app/services/jobs.py, where the same refusal is handled by raising a 409 instead."""
+async def test_ingestion_does_not_count_a_subtitle_job_arq_refused(monkeypatch):
+    """A job the queue turned away is reported as refused, not as queued.
+
+    arq answers None when it will not take the job — the id is live, or the previous run's result is still
+    cached, which `keep_result = 3600` guarantees for an hour. Re-ingesting inside that hour is the ordinary
+    case for an episode whose transcription returned no_speech: no Subtitle row exists, so it is not skipped,
+    and the count used to include work that would never run.
+    """
     sid = uuid.uuid4()
     eid = uuid.uuid4()
     monkeypatch.setattr(ai, "SessionLocal", FakeDb(scalars=[[SimpleNamespace(id=eid)], []]))
@@ -558,8 +563,23 @@ async def test_ingestion_counts_a_subtitle_job_arq_refused_as_queued(monkeypatch
 
     out = await ai.run_ingestion({"redis": redis}, str(sid))
 
+    assert out["subtitles_queued"] == 0, "nothing was accepted, so nothing may be reported as queued"
+    assert out["subtitles_refused"] == 1, "the caller is told the work was turned away rather than silently lost"
+    assert len(redis.jobs) == 1, "the attempt was still made"
+
+
+async def test_ingestion_counts_a_subtitle_job_the_queue_accepted(monkeypatch):
+    """The other side of the same count: an accepted job is reported, and nothing is marked refused."""
+    sid = uuid.uuid4()
+    eid = uuid.uuid4()
+    monkeypatch.setattr(ai, "SessionLocal", FakeDb(scalars=[[SimpleNamespace(id=eid)], []]))
+    _ingestion_stubs(monkeypatch)
+    redis = FakeRedis()
+
+    out = await ai.run_ingestion({"redis": redis}, str(sid))
+
     assert out["subtitles_queued"] == 1
-    assert len(redis.jobs) == 1
+    assert out["subtitles_refused"] == 0
 
 
 async def test_reembed_all_walks_every_published_series_and_counts_the_ones_that_took(monkeypatch):
@@ -610,6 +630,7 @@ async def test_the_ingestion_result_carries_both_inline_steps_for_the_admin_cons
         "embeddings": {"status": "missing"},
         "translations": {"status": "no_source"},
         "subtitles_queued": 0,
+        "subtitles_refused": 0,
     }
 
 

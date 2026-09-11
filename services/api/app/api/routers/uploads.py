@@ -8,12 +8,16 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 from pydantic import BaseModel, Field
 
-from app.api.deps import DB, CurrentAdmin
+from app.api.deps import DB, CurrentAdmin, require_role
 from app.core.errors import AppError
 from app.models.catalog import AssetStatus, VideoAsset
+from app.models.identity import AdminRole
 from app.services import jobs, storage
 
-router = APIRouter(prefix="/admin/uploads", tags=["admin"])
+# Editor, the same gate the catalogue router carries. These routes mint presigned writes into the bucket
+# and register, retry and delete video assets, which is the catalogue by another door — without this,
+# support and finance could replace or destroy the video behind any episode.
+router = APIRouter(prefix="/admin/uploads", tags=["admin"], dependencies=[require_role(AdminRole.editor)])
 
 
 class PresignIn(BaseModel):

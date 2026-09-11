@@ -1180,15 +1180,17 @@ async def test_results_report_zero_for_an_arm_nothing_happened_in(env: Env):
     assert (empty["unlocks"], empty["purchasers"], empty["purchases"], empty["coins_spent"]) == (0, 0, 0, 0)
     assert empty["unlock_rate"] == 0.0 and empty["conversion"] == 0.0 and empty["revenue"] == {}
 
-    # BUG (asserted as it is, not as it should be): the control is documented as "the first declared variant",
-    # but `variants` is a JSONB column and Postgres returns its keys shortest-first, so "b" becomes the
-    # baseline that "control" is measured against.
-    assert [r["variant"] for r in res.json()] == ["b", "control"]
-    assert empty["is_control"] is True and control["is_control"] is False
-    # Below the minimum sample there is no verdict, only the reason there isn't one.
-    assert control["lift_pct"] is None and control["p_value"] is None and control["significant"] is False
-    assert control["note"] == "Needs at least 100 users per variant before this means anything."
-    assert empty["note"] is None
+    # The regression this pins: the baseline used to be "whatever key Postgres returned first", and JSONB
+    # returns them shortest-first, so "b" was the baseline and "control" was measured against it — every lift
+    # and p-value inverted on the screen that exists to decide which arm won. The arm named "control" is the
+    # baseline now, whatever order the column comes back in.
+    assert [r["variant"] for r in res.json()] == ["b", "control"], "JSONB key order is still not declaration order"
+    assert control["is_control"] is True and empty["is_control"] is False
+    # Below the minimum sample there is no verdict, only the reason there isn't one. It is the non-control arm
+    # that carries the verdict fields, because the control is what everything else is compared against.
+    assert empty["lift_pct"] is None and empty["p_value"] is None and empty["significant"] is False
+    assert empty["note"] == "Needs at least 100 users per variant before this means anything."
+    assert control["note"] is None
 
 
 async def test_results_call_a_winner_once_both_arms_are_large_enough(env: Env):

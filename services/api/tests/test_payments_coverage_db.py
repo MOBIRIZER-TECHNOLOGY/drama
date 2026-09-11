@@ -980,17 +980,14 @@ async def test_the_stripe_webhook_refuses_a_signature_it_cannot_verify(client, c
         assert (await s.get(Purchase, purchase.id)).status is PurchaseStatus.pending
 
 
-async def test_a_correctly_signed_stripe_event_currently_fails_in_the_handler(client, committed, maker, gateways):
-    """BUG, pinned as it stands: a verified Stripe event never reaches the inbox.
+async def test_a_correctly_signed_stripe_event_is_applied_and_pays_out(client, committed, maker, gateways):
+    """A verified Stripe event settles the purchase and pays out, through the route rather than around it.
 
-    `verify_stripe` returns a `stripe.Event`, and the route then does `dict(event)`. Since stripe-python 12
-    that raises `TypeError: Event is not iterable or a mapping` (the SDK wants `.to_dict()`), which is outside
-    the try/except that turns verification failures into a 400 — so every genuine Stripe webhook becomes a
-    500, no inbox row is written, and the purchase stays pending for ever. Razorpay and Play are unaffected,
-    which is why the rest of the suite stays green.
-
-    The assertion is deliberately the *current* behaviour. When the handler is fixed this test should fail,
-    and what it should then assert is `{"result": "paid"}` and a balance of 110.
+    This is the regression test for the one that mattered: the route used to do `dict(event)` on the
+    `stripe.Event` it had just verified, which stripe-python 12 refuses, and the TypeError landed outside the
+    except that turns a bad signature into a 400. Every genuine Stripe webhook became a 500 — no inbox row,
+    no coins, and a purchase left pending for good — while `apply_stripe_event` underneath was correct all
+    along. So the assertion that matters is that the money arrives *via the endpoint Stripe actually calls*.
     """
     async with committed() as s:
         buyer_row = await seed_user(s)
@@ -1009,16 +1006,23 @@ async def test_a_correctly_signed_stripe_event_currently_fails_in_the_handler(cl
     )
     body = json.dumps(event).encode()
     r = await client.post("/v1/webhooks/stripe", content=body, headers={"stripe-signature": stripe_signature(body)})
-    assert r.status_code == 500, "the signature verified; the handler then fell over on dict(event)"
-    assert r.json()["detail"]["code"] == "internal_error"
+    assert r.status_code == 200, r.text
+    assert r.json()["result"] == "paid"
     async with maker() as s:
-        assert (await s.get(Purchase, purchase.id)).status is PurchaseStatus.pending
-        assert await s.scalar(select(WebhookEvent.id).where(WebhookEvent.event_id == event["id"])) is None
-    assert await balance(maker, buyer_row.id) == 0
+        assert (await s.get(Purchase, purchase.id)).status is PurchaseStatus.paid
+        # The inbox row is what makes a replay a no-op, so its absence was not a cosmetic part of the failure.
+        assert await s.scalar(select(WebhookEvent.id).where(WebhookEvent.event_id == event["id"])) is not None
+    assert await balance(maker, buyer_row.id) == 110
+
+    # The same event again is recognised rather than paid twice.
+    again = await client.post("/v1/webhooks/stripe", content=body, headers={"stripe-signature": stripe_signature(body)})
+    assert again.status_code == 200
+    assert again.json()["result"] == "duplicate"
+    assert await balance(maker, buyer_row.id) == 110
 
 
 async def test_the_stripe_event_handler_marks_a_completed_checkout_paid(session):
-    """`apply_stripe_event` against the database, since the route cannot currently reach it (see the bug above)."""
+    """`apply_stripe_event` against the database directly: the cases the route test does not carry."""
     user = await seed_user(session)
     pack = await seed_pack(session, coins=100, bonus=10)
     purchase = await seed_purchase(session, user=user, pack=pack, amount="499.00")
@@ -1500,26 +1504,18 @@ async def test_a_non_consumable_is_acknowledged_and_an_already_consumed_token_is
     await store_billing.finalize("coins_100", "tok", consumable=True)
 
 
-async def test_two_redemptions_of_one_token_racing_grant_once_but_the_loser_errors(
-    session, maker, play_api, monkeypatch
-):
-    """BUG, pinned as it stands: the loser of a redemption race 500s instead of returning the winner's row.
+async def test_two_redemptions_of_one_token_grant_once_and_both_get_the_same_row(session, maker, play_api, monkeypatch):
+    """Two devices redeeming one token: the coins are granted once and both callers get the winner's row.
 
-    `redeem` calls `session.add(purchase)` *before* opening the savepoint it flushes inside, so when the unique
-    index on (gateway, external_id) rejects the insert, rolling the savepoint back restores the object to the
-    session as pending. The next statement — the very `select` meant to find the winner's row — autoflushes it,
-    the same IntegrityError fires outside any savepoint, and the session is left needing a rollback. The
-    `except IntegrityError` branch therefore never returns; the caller gets PendingRollbackError. Moving the
-    `add` inside the `begin_nested()` block is what the sibling handlers in admin_monetization do.
-
-    What the index does guarantee is the part that matters most: one purchase row, so the coins are granted
-    once. The client retries and the second attempt takes the "already exists" path cleanly.
+    The regression this pins is the recovery path, not the grant. `session.add` used to sit *outside* the
+    savepoint it flushed inside, so when the unique index rejected the insert, the rollback left the object in
+    the session as pending; the very `select` meant to find the winner then autoflushed it, the same violation
+    fired with no savepoint to catch it, and the loser got a 500. The index always protected the money — one
+    row, one grant — so this looked like a flake rather than a fault.
 
     The competing insert is committed from another session *while* verification is in flight, which is exactly
     the shape of two devices redeeming the same token at once.
     """
-    from sqlalchemy.exc import PendingRollbackError
-
     token = f"play-token-{uuid.uuid4().hex}"
     product = f"coins_{uuid.uuid4().hex[:6]}"
     user = await seed_user(session)
@@ -1536,8 +1532,8 @@ async def test_two_redemptions_of_one_token_racing_grant_once_but_the_loser_erro
         return store_billing.parse_product(play_product_payload())
 
     monkeypatch.setattr(store_billing, "verify_product", verify_and_race)
-    with pytest.raises(PendingRollbackError):
-        await store_billing.redeem(session, user=user, product_id=product, purchase_token=token)
+    lost = await store_billing.redeem(session, user=user, product_id=product, purchase_token=token)
+    assert lost.id == winner_id["id"], "the loser of the race gets the winner's row, not an error"
 
     async with maker() as s:
         rows = (await s.scalars(select(Purchase).where(Purchase.external_id == token))).all()

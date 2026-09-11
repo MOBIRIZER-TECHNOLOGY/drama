@@ -250,6 +250,12 @@ async def create_series(body: SeriesIn, db: DB, admin: CurrentAdmin) -> AdminSer
             await db.flush()
     except IntegrityError:
         raise Conflict("Slug already exists", code="slug_taken") from None
+    # The flush makes `s` persistent, so every collection `_apply_series` touches becomes a lazy load — and a
+    # lazy load on an async session runs outside its greenlet and kills the request with MissingGreenlet.
+    # Assigning `s.categories` is enough on its own, because assignment loads the old value first. Every POST
+    # to this route 500'd for that reason, and nothing caught it because nothing in the suite created a series
+    # through the API. Loading the (empty) collections up front is what `create_category` already does.
+    await db.refresh(s, ["translations", "categories", "tags"])
     await _apply_series(db, s, body)
     _audit_status_change(db, admin, target_type="series", target_id=s.id, before=PublishStatus.draft, after=s.status)
     await db.commit()

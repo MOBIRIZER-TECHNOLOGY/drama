@@ -207,9 +207,13 @@ async def redeem(
         variant_map=variant_map,
         raw={"play": verified.raw},
     )
-    session.add(purchase)
     try:
+        # `add` belongs inside the savepoint, not before it. Outside, the rollback leaves the object pending in
+        # the session, the SELECT below autoflushes it, and the same unique violation fires a second time with
+        # no savepoint to catch it — so the loser of the race got a 500 instead of the winner's row. Coins were
+        # still granted exactly once, which is why this read as a flake rather than a fault.
         async with session.begin_nested():
+            session.add(purchase)
             await session.flush()
     except IntegrityError:
         # Two concurrent redemptions of the same token; the other one won.

@@ -241,12 +241,21 @@ async def run_ingestion(ctx: dict, series_id: str) -> dict:
             for row in (await db.scalars(select(Subtitle).where(Subtitle.episode_id.in_([e.id for e in eps])))).all()
         }
     redis: ArqRedis | None = ctx.get("redis")
+    refused = 0
     for ep in eps:
         if ep.id in existing or redis is None:
             continue
-        await redis.enqueue_job("transcribe_episode", str(ep.id), None, _job_id=f"subtitles:{ep.id}")
+        # arq answers None when it will not take the job — the id is live, or the previous run's result is
+        # still cached, which `keep_result = 3600` guarantees for an hour. Counting the call rather than the
+        # answer reported work as queued that would never run: re-ingesting an episode whose transcription had
+        # returned no_speech leaves no Subtitle row, so it is not skipped above, and the caller was told a
+        # number that meant nothing. Report what was actually accepted, and say how many were turned away.
+        job = await redis.enqueue_job("transcribe_episode", str(ep.id), None, _job_id=f"subtitles:{ep.id}")
+        if job is None:
+            refused += 1
+            continue
         queued += 1
-    return {"embeddings": a, "translations": b, "subtitles_queued": queued}
+    return {"embeddings": a, "translations": b, "subtitles_queued": queued, "subtitles_refused": refused}
 
 
 async def reembed_all(ctx: dict) -> dict:

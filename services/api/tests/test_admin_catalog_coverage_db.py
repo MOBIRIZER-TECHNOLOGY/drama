@@ -180,23 +180,24 @@ async def make_asset(env: Env, *, status: AssetStatus = AssetStatus.ready, **ove
 # ---- series: create ------------------------------------------------------------------------------------
 
 
-async def test_creating_a_series_through_the_api_dies_before_it_saves(env):
-    """BUG, pinned as-is: `POST /admin/series` 500s for every body, so no series can be created in the console.
+async def test_a_series_can_be_created_through_the_api(env):
+    """The regression test for a route that 500'd on every body, so no series could be created at all.
 
-    `create_series` inserts the bare `Series` row and flushes it, which makes the object persistent, and then
-    `_apply_series` reads `s.translations`. On a persistent object that is a lazy load, and a lazy load on an
-    async session outside its greenlet raises `MissingGreenlet` — the same fault that `create_category` works
-    around with an explicit refresh. Nothing else in the test suite posts this route, so it stayed green.
-
-    Asserted rather than fixed, per the brief. What the test also pins is that the failure is clean: the insert
-    never commits, so a 500 here does not leave a slug taken by a series that does not exist.
+    `create_series` flushes the bare row, which makes it persistent, and `_apply_series` then reads
+    `s.translations` — a lazy load, which on an async session outside its greenlet raises MissingGreenlet.
+    Nothing in the suite posted this route, so the console was broken while the tests stayed green. The fix is
+    the explicit refresh `create_category` already used, and this asserts the whole round trip: the row lands,
+    the translation lands with it, and the response describes what was saved.
     """
-    body = series_body(slug=f"ghost-{uuid.uuid4().hex[:8]}")
+    body = series_body(slug=f"fresh-{uuid.uuid4().hex[:8]}")
     r = await env.client.post("/v1/admin/series", json=body)
-    assert r.status_code == 500
-    assert r.json()["detail"]["code"] == "internal_error"
+    assert r.status_code == 201, r.text
+    out = r.json()
+    assert out["slug"] == body["slug"]
+    assert [t["title"] for t in out["translations"]] == [body["translations"][0]["title"]]
     async with env.maker() as s:
-        assert await s.scalar(select(Series.id).where(Series.slug == body["slug"])) is None
+        saved = await s.scalar(select(Series.id).where(Series.slug == body["slug"]))
+        assert saved is not None, "the series was reported created but is not in the database"
 
 
 async def test_a_series_needs_at_least_one_translation(env):
@@ -206,7 +207,7 @@ async def test_a_series_needs_at_least_one_translation(env):
 
 
 async def test_a_duplicate_slug_is_refused(env):
-    """The slug check runs before the crash above, so this rule is still reachable through the API."""
+    """Two series cannot share a slug; the pre-check refuses it and the unique index backs that up."""
     existing = await seed_series(env)
     again = await env.client.post("/v1/admin/series", json=series_body(slug=existing["slug"]))
     assert again.status_code == 409
@@ -811,19 +812,25 @@ async def test_the_catalogue_is_closed_to_admins_who_are_not_editors(env):
     assert (await env.client.get("/v1/admin/series?limit=1")).status_code == 200
 
 
-async def test_uploads_are_open_to_every_admin_role(env, monkeypatch):
-    """Documented, not endorsed: `uploads.router` carries no `require_role`, so support and finance can upload.
+async def test_uploads_require_the_same_role_as_the_catalogue(env, monkeypatch):
+    """These routes are the catalogue by another door, so they are gated like it.
 
-    Asserted so that adding a role gate is a deliberate change with a failing test behind it, rather than
-    something nobody notices either way.
+    They mint presigned writes into the bucket and register, retry and delete video assets. The router carried
+    no role at all, so support and finance — who cannot edit an episode — could replace or destroy the video
+    behind one. Editor and above, matching `admin_catalog`.
     """
     monkeypatch.setattr(storage, "presign_put", lambda key, ct, **kw: f"https://bucket.test/{key}?sig=x")
+    body = {"kind": "image", "filename": "poster.png", "content_type": "image/png"}
+
+    # Support is the role this fixture carries below editor; finance sits at the same level in `require_role`.
     env.act_as(AdminRole.support)
-    r = await env.client.post(
-        "/v1/admin/uploads/presign",
-        json={"kind": "image", "filename": "poster.png", "content_type": "image/png"},
-    )
-    assert r.status_code == 200
+    refused = await env.client.post("/v1/admin/uploads/presign", json=body)
+    assert refused.status_code == 403, "support should not be able to write to the bucket"
+
+    for role in (AdminRole.editor, AdminRole.owner):
+        env.act_as(role)
+        allowed = await env.client.post("/v1/admin/uploads/presign", json=body)
+        assert allowed.status_code == 200, f"{role.value} should be able to upload: {allowed.text}"
 
 
 # ---- uploads: presign ----------------------------------------------------------------------------------

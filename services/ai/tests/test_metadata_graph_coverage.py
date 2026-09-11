@@ -7,6 +7,7 @@ is a stub throughout; the only thing the real provider would add is latency.
 """
 
 import asyncio
+import re
 
 import pytest
 
@@ -195,12 +196,25 @@ def test_slugify_caps_length_at_150():
     assert len(m.slugify("word " * 100)) == 150
 
 
-def test_slugify_returns_an_empty_slug_for_a_non_latin_title():
-    """BUG (pinned, not fixed): the regex keeps only a-z0-9, so a Hindi or Chinese title — exactly what
-    the graph produces when `language` is not English — slugs to the empty string, and two such series
-    would collide on it."""
-    assert m.slugify("रहस्यमयी उत्तराधिकारी") == ""
-    assert m.slugify("Café Romance") == "caf-romance"
+def test_slugify_survives_a_title_that_is_not_written_in_latin_script():
+    """The regression: a Hindi title slugged to "" and every such series collided on it.
+
+    This graph generates in whatever language it was asked for, on a catalogue built around Indian-language
+    drama, so the non-Latin case is the main one rather than an edge. Accents now fold to their base letters,
+    and a script with nothing to fold to falls back to a digest — stable, so regenerating the same title does
+    not move its URL, and distinct, so two titles do not land on top of each other.
+    """
+    assert m.slugify("Café Romance") == "cafe-romance", "accents fold rather than dropping the letter"
+
+    hindi = m.slugify("रहस्यमयी उत्तराधिकारी")
+    tamil = m.slugify("காதல் கதை")
+    assert hindi and tamil, "a non-Latin title must still get a slug"
+    assert hindi != tamil, "two different titles must not share one slug"
+    assert m.slugify("रहस्यमयी उत्तराधिकारी") == hindi, "the same title must slug the same way every time"
+    assert re.fullmatch(r"[a-z0-9-]+", hindi), f"a slug has to be URL-safe: {hindi!r}"
+
+    # Nothing at all is still nothing; the caller decides what to do with an untitled draft.
+    assert m.slugify("   ") == ""
 
 
 def test_build_graph_runs_draft_then_review_and_stops(monkeypatch):

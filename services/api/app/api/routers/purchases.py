@@ -186,7 +186,11 @@ async def stripe_webhook(request: Request, db: DB, stripe_signature: str = Heade
         event = payments.verify_stripe(payload, stripe_signature, s.stripe_webhook_secret)
     except Exception as exc:  # noqa: BLE001 - any verification failure is a 400
         raise AppError("Invalid Stripe signature", status_code=400, code="bad_signature") from exc
-    event = dict(event)
+    # `to_dict()`, not `dict(event)`. A stripe.Event stopped being a mapping in stripe-python 12, and the
+    # TypeError it raises instead lands here, outside the except above that turns a bad signature into a 400.
+    # So a correctly signed event verified, then died: no inbox row, no coins, and a purchase left pending
+    # for good. Everything downstream was right, which is why only a request through this route found it.
+    event = event.to_dict() if hasattr(event, "to_dict") else dict(event)
     return await _apply(db, "stripe", str(event.get("id")), event.get("type"), event, payments.apply_stripe_event)
 
 

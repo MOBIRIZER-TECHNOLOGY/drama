@@ -8,7 +8,9 @@ re-reads the draft as a demanding editor and tightens it; the output goes to the
 never straight to publish.
 """
 
+import hashlib
 import re
+import unicodedata
 from typing import Literal, TypedDict
 
 import structlog
@@ -100,7 +102,22 @@ async def review(state: State) -> State:
 
 
 def slugify(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:150]
+    """A URL slug for a generated title, which is not always written in Latin script.
+
+    Keeping only [a-z0-9] emptied the slug for every Hindi, Tamil or Bengali title — and this graph generates
+    in whatever language it was asked for, on a catalogue built around exactly those. Every such series then
+    collided on the same empty slug. Accented Latin lost characters the same way, turning "Café" into "caf".
+
+    So: fold accents to their base letters first, which recovers the Latin-script cases properly, and when a
+    script has nothing to fold to, fall back to a digest of the title. That is stable for the same title, so
+    regenerating metadata does not produce a different URL, and distinct for different ones.
+    """
+    folded = unicodedata.normalize("NFKD", text)
+    ascii_only = "".join(c for c in folded if not unicodedata.combining(c))
+    slug = re.sub(r"[^a-z0-9]+", "-", ascii_only.lower()).strip("-")[:150]
+    if slug:
+        return slug
+    return f"s-{hashlib.sha256(text.strip().encode()).hexdigest()[:12]}" if text.strip() else ""
 
 
 def build_graph():

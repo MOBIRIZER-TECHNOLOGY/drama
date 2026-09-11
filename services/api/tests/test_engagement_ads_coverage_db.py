@@ -1722,10 +1722,13 @@ async def test_config_carries_no_playback_url_and_no_secret(api, world):
     assert r.status_code == 200
     body = r.json()
     assert "m3u8" not in r.text
-    # Everything in /v1/config is published to every client. The scanner's own reading of this payload is that
-    # the only credential-shaped key in it is the Turnstile *site* key, which is public by design and is the
-    # one name the "public" exemption does not cover.
-    assert config_svc.find_secret_keys(body) == ["site.captcha_site_key"]
+    # Everything in /v1/config is published to every client, so the scanner reading its own output is the
+    # sharpest check there is: nothing here may look like a credential. It used to flag `site.captcha_site_key`
+    # — a site key is public by design — which was not merely noise: the same function gates
+    # `PUT /v1/admin/settings/{namespace}`, so it refused to save the very identifiers an operator must set.
+    assert config_svc.find_secret_keys(body) == []
+    # The exemption is for publishable names only. A real credential is still caught wherever it is nested.
+    assert config_svc.find_secret_keys({"site": {"stripe_secret_key": "x"}}) == ["site.stripe_secret_key"]
     assert body["platform"] == "android"
     assert isinstance(body["flags"], dict)
     assert isinstance(body["languages"], list)

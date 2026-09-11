@@ -255,13 +255,22 @@ async def experiment_results(key: str, db: DB) -> list[VariantResult]:
             )
         )
 
-    # Significance against the first declared variant. Computed here rather than in the console because the
-    # definition of "converted" belongs with the query that produces it, and two clients must not disagree
-    # about whether a price change won.
+    # Significance against the control arm. Computed here rather than in the console because the definition of
+    # "converted" belongs with the query that produces it, and two clients must not disagree about whether a
+    # price change won.
+    #
+    # The baseline used to be "the first declared variant", taken as the first key of `e.variants`. That is
+    # not recoverable: the column is JSONB, and Postgres returns its keys shortest-first rather than in the
+    # order they were written, so an experiment declared {"control": ..., "b": ...} came back with "b" as the
+    # baseline and every lift and p-value computed backwards — a wrong number, stated confidently, about the
+    # decision the screen exists to make. So the choice is explicit now: the arm actually named "control",
+    # and failing that the first in sorted order, which is at least the same arm on every call.
     if out:
-        control = out[0]
+        control = next((row for row in out if row.variant.lower() == "control"), None)
+        if control is None:
+            control = min(out, key=lambda row: row.variant)
         control.is_control = True
-        for row in out[1:]:
+        for row in (r for r in out if r is not control):
             verdict = stats.compare(control.purchasers, control.users, row.purchasers, row.users)
             row.lift_pct = verdict.lift_pct
             row.p_value = verdict.p_value

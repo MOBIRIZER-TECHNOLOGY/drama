@@ -60,14 +60,21 @@ NUMERIC_LIST_KEYS: dict[str, dict[str, tuple[int, int, int]]] = {
 }
 _SECRET_MARKERS = ("secret", "token", "password")
 
+# Key names that carry "key" and are published on purpose. A publishable identifier is not a credential: the
+# captcha site key is served to every client by `build()` below, and a gateway's key id travels in the
+# checkout payload. Without this list the scanner flagged the service's own public output as a secret, and
+# `PUT /v1/admin/settings/{namespace}` refused to save exactly the values an operator needs to set.
+_PUBLIC_KEY_NAMES = ("public", "site_key", "key_id", "publishable", "client_id")
+
 
 def find_secret_keys(data: Any, path: str = "") -> list[str]:
     """Every key, at any depth, that looks like it holds a credential.
 
     Settings are served to clients through /v1/config, so a secret saved here is a secret published. The check
     used to look at top-level keys only, which a nested `{"stripe": {"secret_key": ...}}` walked straight past.
-    "key" alone is exempt when the name says public — `public_key`, `razorpay_public_key` — because those are
-    the values that belong here.
+    "key" alone is exempt when the name is one of the publishable ones (`_PUBLIC_KEY_NAMES`): a site key or a
+    gateway key id is an identifier the client is meant to see, and those are the values that belong here.
+    A name carrying "secret", "token" or "password" is never exempt, whatever else it says.
     """
     found: list[str] = []
     if isinstance(data, dict):
@@ -75,7 +82,8 @@ def find_secret_keys(data: Any, path: str = "") -> list[str]:
             name = str(k)
             full = f"{path}.{name}" if path else name
             lowered = name.lower()
-            if any(m in lowered for m in _SECRET_MARKERS) or ("key" in lowered and "public" not in lowered):
+            is_public = any(n in lowered for n in _PUBLIC_KEY_NAMES)
+            if any(m in lowered for m in _SECRET_MARKERS) or ("key" in lowered and not is_public):
                 found.append(full)
             found.extend(find_secret_keys(v, full))
     elif isinstance(data, list):
