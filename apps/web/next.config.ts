@@ -88,11 +88,15 @@ export default async function config(phase: string): Promise<NextConfig> {
     ...(devOrigins.length ? { allowedDevOrigins: devOrigins } : {}),
     images: {
       remotePatterns,
-      // Development only. Media is served from a machine on the LAN (the emulator and the browser have to
-      // reach one hostname between them), and Next blocks private addresses by default to stop the image
-      // optimiser being used to probe an internal network. That protection matters in production, where this
-      // stays off; locally the "internal network" is this laptop.
-      dangerouslyAllowLocalIP: process.env.NODE_ENV === "development",
+      // Development only, or explicitly opted into with NEXT_PUBLIC_ALLOW_LOCAL_IMAGE_HOSTS=1. Media is
+      // served from a machine on the LAN (the emulator and the browser have to reach one hostname between
+      // them), and Next blocks private addresses by default to stop the image optimiser being used to probe
+      // an internal network. That protection guards against a *user-controlled* hostname resolving
+      // somewhere internal; `remotePatterns` above is a small fixed allowlist we set, not user input, so a
+      // deployment whose own DNS (or a local /etc/hosts override, for testing) happens to point one of
+      // those hostnames at a private IP is not the SSRF this exists to catch — opting in there is safe.
+      dangerouslyAllowLocalIP:
+        process.env.NODE_ENV === "development" || process.env.NEXT_PUBLIC_ALLOW_LOCAL_IMAGE_HOSTS === "1",
     },
     // IndexNow verification file: /<key>.txt must return the key. The path is dynamic, and the app root already
     // owns the `[lang]` segment, so it is rewritten onto a fixed route handler instead of a second dynamic segment.

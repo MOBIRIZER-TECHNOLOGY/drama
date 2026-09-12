@@ -17,23 +17,25 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from app.core.config import get_settings
 
 
+def _hls_signature(path: str, exp: int, user_id: str | uuid.UUID) -> str:
+    """The one HMAC-SHA256 a path/expiry/viewer triple ever gets, so `sign_hls_url`, `verify_hls_signature`
+    and `sign_path` cannot drift into checking three slightly different things."""
+    msg = f"{path}:{exp}:{user_id}".encode()
+    digest = hmac.new(get_settings().signing_key.encode(), msg, hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).decode().rstrip("=")
+
+
 def sign_hls_url(master_key: str, *, user_id: uuid.UUID, expires: datetime) -> str:
     s = get_settings()
     exp = int(expires.timestamp())
     path = f"/{master_key.lstrip('/')}"
-    msg = f"{path}:{exp}:{user_id}".encode()
-    sig = base64.urlsafe_b64encode(hmac.new(s.signing_key.encode(), msg, hashlib.sha256).digest()).decode().rstrip("=")
+    sig = _hls_signature(path, exp, user_id)
     query = urlencode({"exp": exp, "uid": str(user_id), "sig": sig})
     return f"{s.cdn_base_url.rstrip('/')}{path}?{query}"
 
 
 def verify_hls_signature(path: str, exp: int, user_id: str, sig: str) -> bool:
-    s = get_settings()
-    msg = f"{path}:{exp}:{user_id}".encode()
-    expected = (
-        base64.urlsafe_b64encode(hmac.new(s.signing_key.encode(), msg, hashlib.sha256).digest()).decode().rstrip("=")
-    )
-    return hmac.compare_digest(expected, sig)
+    return hmac.compare_digest(_hls_signature(path, exp, user_id), sig)
 
 
 def media_url(value: str | None) -> str | None:

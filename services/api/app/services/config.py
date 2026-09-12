@@ -216,7 +216,12 @@ async def _ads(session: AsyncSession, platform: str) -> dict:
     return {"enabled": bool(placements), "placements": placements}
 
 
-async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: str) -> dict:
+async def build_shared(session: AsyncSession, *, platform: str) -> dict:
+    """Everything `/v1/config` returns except `variants`: the same for every viewer on this platform until an
+    operator changes a setting, unlike `variant_map`, which is sticky per user and can write an assignment row.
+    Separated so the router can cache this half (mirroring `catalog.home`'s 60s cache) without caching one
+    user's experiment buckets for everyone, or skipping the write that a first-time bucketing needs.
+    """
     s = get_settings()
     flags = {f.key: f.enabled for f in (await session.scalars(select(FeatureFlag))).all()}
     languages = [
@@ -272,5 +277,8 @@ async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: s
         "languages": languages,
         "ads": await _ads(session, platform),
         "flags": flags,
-        "variants": await variant_map(session, user_id),
     }
+
+
+async def build(session: AsyncSession, *, user_id: uuid.UUID | None, platform: str) -> dict:
+    return {**await build_shared(session, platform=platform), "variants": await variant_map(session, user_id)}

@@ -6,6 +6,10 @@ name: Language
 - launchApp
 - tapOn:
     text: "Me(, tab.*)?"
+- scrollUntilVisible:
+    element:
+      text: "Language.*"
+    direction: DOWN
 - tapOn:
     text: "Language.*"
 - assertVisible: "Language"
@@ -16,6 +20,10 @@ name: Language
 # which a fresh local database has not filled, so the copy is not asserted here.
 - tapOn:
     text: "Me(, tab.*)?"
+- scrollUntilVisible:
+    element:
+      text: "Language.*(हिन्दी|Hindi).*"
+    direction: DOWN
 - assertVisible:
     text: "Language.*(हिन्दी|Hindi).*"
 - tapOn:
@@ -24,5 +32,9 @@ name: Language
     text: "English.*"
 - tapOn:
     text: "Me(, tab.*)?"
+- scrollUntilVisible:
+    element:
+      text: "Language.*English.*"
+    direction: DOWN
 - assertVisible:
     text: "Language.*English.*"

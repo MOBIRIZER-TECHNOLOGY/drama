@@ -23,6 +23,7 @@ import shutil
 import tempfile
 import uuid
 from datetime import UTC, datetime
+from functools import lru_cache
 from pathlib import Path
 
 import boto3
@@ -58,7 +59,11 @@ KEY_VERSION = CONTENT_KEY_LABEL.decode().rstrip(":").rsplit(":", 1)[-1]
 TRANSIENT_ERRORS = (BotoCoreError, ClientError, OperationalError, InterfaceError)
 
 
+@lru_cache
 def _s3():
+    # Cached like `app.services.storage._client()`: called several times per job (download, per-rendition
+    # upload, thumbnails), and building a fresh boto3 client is sync work on the worker's one event loop —
+    # uncached, it stalls every other job running concurrently on it, not just the one that triggered it.
     s = get_settings()
     return boto3.client(
         "s3",

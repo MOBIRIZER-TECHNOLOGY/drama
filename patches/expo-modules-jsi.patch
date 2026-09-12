@@ -1,0 +1,30 @@
+diff --git a/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h b/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
+index 6115e87a6e430f55570fbf759283dca0cca1ee80..fabc086d27f8d0dfbed367ff68925876dd3319fb 100644
+--- a/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
++++ b/apple/Sources/ExpoModulesJSI-Cxx/include/RuntimeScheduler.h
+@@ -50,7 +50,15 @@ public:
+    `scheduleTask` dispatches through `fn`, which the host implements against
+    the real react::RuntimeScheduler.
+    */
+-  SWIFT_RETURNS_RETAINED RuntimeScheduler(void *scheduler, ScheduleFn fn) noexcept
++  // SWIFT_RETURNS_RETAINED removed (patch-package): its own header defines it as applying to
++  // "functions and methods" returning a SWIFT_SHARED_REFERENCE type, not to constructors — a
++  // constructor of such a class doesn't have a return type in the C++ sense, and is always
++  // imported by Swift as producing an owned (+1) reference regardless of this attribute, per the
++  // class-level SWIFT_SHARED_REFERENCE(retainRuntimeScheduler, releaseRuntimeScheduler) below. A
++  // newer Swift toolchain (Xcode 26 / iOS 26 SDK) now diagnoses the previously-inert misuse as a
++  // hard error: "cannot be annotated ... because it is not returning a SWIFT_SHARED_REFERENCE
++  // type". Removing it changes no retain-count semantics.
++  RuntimeScheduler(void *scheduler, ScheduleFn fn) noexcept
+       : nativeScheduler(scheduler), scheduleFn(fn) {}
+ 
+   /**
+@@ -58,7 +66,7 @@ public:
+    caller's thread — intended for standalone runtimes (e.g. tests) that have
+    no React scheduler.
+    */
+-  SWIFT_RETURNS_RETAINED RuntimeScheduler() {}
++  RuntimeScheduler() {}
+ 
+   RuntimeScheduler(const RuntimeScheduler &) = delete;
+ 

@@ -22,3 +22,6 @@ allowBuilds:
   "@tailwindcss/oxide": true
   "@firebase/util": true
   protobufjs: true
+
+patchedDependencies:
+  expo-modules-jsi: patches/expo-modules-jsi.patch

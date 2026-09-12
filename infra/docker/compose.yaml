@@ -30,8 +30,10 @@ services:
     environment:
       MINIO_ROOT_USER: katha
       MINIO_ROOT_PASSWORD: katha-secret
-      # Presigned PUTs come straight from the admin and web origins.
-      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:3001"
+      # Presigned PUTs and (via nginx's /media/ proxy) HLS/image fetches come straight from the admin and
+      # web origins — local dev ones, plus the aicanon.dev deployment's, since a browser enforces CORS on
+      # cross-origin media the same way it enforces mixed-content on http:// media from an https:// page.
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:3000,http://localhost:3001,https://aicanon.dev,https://www.aicanon.dev,https://admin.aicanon.dev,https://api.aicanon.dev"
     ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: ["minio:/data"]
 
@@ -46,6 +48,8 @@ services:
       mc anonymous set download local/katha-media/avatars;
       mc anonymous set download local/katha-media/subtitles;
       mc anonymous set download local/katha-media/hls;
+      mc anonymous set download local/katha-media/developer-seed;
+      mc anonymous set download local/katha-media/media;
       exit 0"
 
   media-edge:

@@ -51,11 +51,14 @@ async def main() -> int:
         attached = 0
         missing: list[int] = []
         for episode in sorted(series.episodes, key=lambda e: e.number):
+            # Same string used for both: the stored key has to be where gen-hls.py actually wrote the file,
+            # since a plain `python -m http.server --directory seed-assets` serves it from exactly that
+            # path with no rewriting. A separate, invented "hls/seed/..." key here matched nothing on disk.
             local_key = f"media/heiress/ep{episode.number}/master.m3u8"
             if not (ASSETS / local_key).exists():
                 missing.append(episode.number)
                 continue
-            key = f"hls/seed/heiress/ep{episode.number}/master.m3u8"
+            key = local_key
 
             asset = await db.get(VideoAsset, episode.video_asset_id) if episode.video_asset_id else None
             if asset is None:

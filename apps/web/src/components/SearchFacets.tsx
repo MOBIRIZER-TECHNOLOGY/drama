@@ -86,6 +86,9 @@ export function SearchFacets({
             {labels[value]}
           </Link>
         ))}
+      </Row>
+
+      <Row label={labels.length}>
         {LENGTH.map((value) => (
           <Link
             key={value}

@@ -32,17 +32,30 @@ name: My List and Me
 - tapOn:
     text: "Me(, tab.*)?"
 
-# The legal pages both stores require, reached from Me.
+# The legal pages both stores require, reached from Me. Below the fold on a typical phone-sized viewport —
+# scrollUntilVisible is a no-op when the target is already on screen, so this is safe even where it isn't.
+- scrollUntilVisible:
+    element:
+      text: "Privacy policy.*"
+    direction: DOWN
 - tapOn:
     text: "Privacy policy.*"
 - assertVisible: "Privacy Policy"
 - tapOn: "Back"
+- scrollUntilVisible:
+    element:
+      text: "Terms of service.*"
+    direction: DOWN
 - tapOn:
     text: "Terms of service.*"
 - assertVisible: "Terms of Service"
 - tapOn: "Back"
 
 # Housekeeping that must not need an account.
+- scrollUntilVisible:
+    element:
+      text: "Clear cache.*"
+    direction: DOWN
 - tapOn:
     text: "Clear cache.*"
 - assertVisible: "Cache cleared"

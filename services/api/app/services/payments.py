@@ -310,9 +310,17 @@ async def mark_paid(
     purchase.status = PurchaseStatus.paid
     purchase.paid_at = now
     if purchase.coupon_code:
+        # `resolve_coupon` only checked the cap when this purchase was quoted; a second checkout created
+        # concurrently with the same single-use code could have passed that same check before either paid.
+        # The row lock here makes the check-and-increment atomic, so `used` itself never runs past `max_uses`
+        # even though both purchases still complete — the coupon was already priced into this purchase, and
+        # there is no payment left to refuse by the time a webhook confirms it.
         coupon = await session.scalar(select(Coupon).where(Coupon.code == purchase.coupon_code).with_for_update())
         if coupon is not None:
-            coupon.used += 1
+            if coupon.max_uses is not None and coupon.used >= coupon.max_uses:
+                log.warning("purchase.coupon_exhausted_at_capture", purchase_id=str(purchase_id), code=coupon.code)
+            else:
+                coupon.used += 1
     if gateway_payment_id:
         purchase.gateway_payment_id = gateway_payment_id
     if raw is not None:

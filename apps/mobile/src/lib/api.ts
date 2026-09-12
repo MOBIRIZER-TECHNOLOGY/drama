@@ -26,6 +26,12 @@ function isPrivateHost(hostname: string): boolean {
 // leaks is plaintext crossing the internet — a build pointed at a private address is someone testing against
 // their own machine, and refusing that only pushes them towards weakening the check for the real case too.
 // A store build aimed at a public host over http still refuses, which is the case this exists for.
+//
+// The private-network exemption itself is further limited to non-production EAS profiles. A `preview` or
+// `development` build is handed to internal testers on a known LAN; a `production` build is the one that
+// reaches a real user's device, possibly on a private network of their own (a hotel, an office), where a
+// plaintext bearer token is just as readable as it would be on the open internet. So production always
+// requires https, with no private-host carve-out, even if a build is ever misconfigured to point at one.
 if (!__DEV__ && !baseUrl.startsWith("https://")) {
   const host = (() => {
     try {
@@ -34,7 +40,7 @@ if (!__DEV__ && !baseUrl.startsWith("https://")) {
       return "";
     }
   })();
-  if (!isPrivateHost(host)) {
+  if (extra.appEnv === "production" || !isPrivateHost(host)) {
     throw new Error(`Refusing to start: API base URL must use https outside a private network (got ${baseUrl}).`);
   }
 }

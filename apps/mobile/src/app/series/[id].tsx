@@ -113,7 +113,9 @@ function SeriesBody({ series, openEpisode }: { series: SeriesDetail; openEpisode
   const unitPrice = locked.length > 0 ? Math.round(lockedPrice / locked.length) : 0;
   const firstLocked = locked[0]?.number;
   // Free episodes still ahead of where this viewer left off; null until they have actually started.
-  const freeLeft = resuming ? Math.max(0, series.free_episodes - (continueNumber - 1)) || null : null;
+  // `Math.max` already floors at 0, so a viewer who has watched past every free episode gets that literal 0
+  // here, never null — `|| null` would collapse it back to "hasn't started", the one state this is not.
+  const freeLeft = resuming ? Math.max(0, series.free_episodes - (continueNumber - 1)) : null;
 
   const play = useCallback(
     (episodeNumber: number) => {

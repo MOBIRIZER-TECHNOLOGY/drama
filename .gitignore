@@ -75,3 +75,7 @@ e2e/.auth/
 e2e/test-results/
 e2e/playwright-report/
 apps/web/test-results/
+
+# Local pm2 process definitions for running this repo on a specific machine's reserved subdomains.
+# Carries real secrets (JWT/media-encryption keys) for that one deployment, not the repo's own config.
+deploy/
