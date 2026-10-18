@@ -35,7 +35,7 @@ function slugify(text: string, taken: Set<string>): string {
   const base =
     text
       .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, "-")
+      .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 60) || "section";
   let id = base;

@@ -79,6 +79,11 @@ jobs:
         run: git diff --exit-code -- packages/api-client/src/schema.d.ts
       - run: pnpm -r --if-present typecheck
       - run: pnpm -r --if-present lint
+      # The thresholds live in each app's vitest.config.ts (95% on every metric), so a drop fails the step.
+      - name: web unit tests with coverage
+        run: pnpm --filter web test:coverage
+      - name: admin unit tests with coverage
+        run: pnpm --filter admin test:coverage
       # One key means one English string across both clients: they share the server's translation table, so a
       # key that says "Retry" on mobile and "Try again" on web is one row each will overwrite for the other.
       - name: i18n catalogue is current and consistent
