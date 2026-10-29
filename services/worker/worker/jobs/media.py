@@ -47,6 +47,8 @@ LADDER = {
     "1080p": {"height": 1920, "v_bitrate": "3500k", "a_bitrate": "128k", "bandwidth": 3800000},
     "720p": {"height": 1280, "v_bitrate": "1800k", "a_bitrate": "96k", "bandwidth": 2000000},
     "480p": {"height": 854, "v_bitrate": "900k", "a_bitrate": "64k", "bandwidth": 1000000},
+    # Slow mobile networks: a one-minute episode is about 3 MB here, so it still starts quickly on 2G/3G-class links.
+    "360p": {"height": 640, "v_bitrate": "500k", "a_bitrate": "48k", "bandwidth": 600000},
 }
 
 # Which key derivation a rendition was packaged under, recorded on every rendition so a future rotation of the
@@ -275,10 +277,12 @@ async def transcode_asset(ctx: dict, asset_id: str) -> dict:
             key_info.write_text(f"{PLACEHOLDER_KEY_URI}\n{key_file.as_posix()}\n", encoding="utf-8")  # noqa: ASYNC240
 
         renditions: dict[str, dict] = {}
-        for name in get_worker_settings().hls_ladder:
+        # Never upscale: a rung taller than the source only costs storage and bandwidth. If the source is smaller
+        # than every rung, keep the smallest so the asset still has something to play.
+        ladder = get_worker_settings().hls_ladder
+        eligible = [n for n in ladder if LADDER[n]["height"] <= long_edge] or [min(ladder, key=lambda n: LADDER[n]["height"])]
+        for name in eligible:
             spec = LADDER[name]
-            if spec["height"] > long_edge and renditions:
-                continue  # never upscale, but always keep at least one rendition
             await _transcode_rendition(src, out_root / name, name, spec, info["has_audio"], portrait, key_info)
             short_edge = max(2, int(round(spec["height"] * min(info["width"], info["height"]) / long_edge / 2) * 2))
             renditions[name] = {

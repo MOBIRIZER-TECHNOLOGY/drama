@@ -49,9 +49,9 @@ VARIANT_RE = re.compile(r"^[A-Za-z0-9_-]{1,32}$")
 URI_RE = re.compile(r'URI="[^"]*"')
 
 PLAYLIST_MEDIA_TYPE = "application/vnd.apple.mpegurl"
-# Long enough for a viewer to finish an episode without a mid-stream 403, short enough that a leaked manifest
-# URL is not a permanent grant.
-LINK_TTL = timedelta(hours=2)
+# Long enough for a viewer to finish an episode (they run about a minute) and to pause for a while, short enough
+# that a copied playlist or segment URL stops working soon. The edge enforces it on every segment request.
+LINK_TTL = timedelta(minutes=30)
 FETCH_TIMEOUT = 10.0
 
 

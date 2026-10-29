@@ -256,9 +256,8 @@ async def test_a_ready_asset_is_not_transcoded_again(monkeypatch):
     assert asset.status == AssetStatus.ready and session.commits == 0
 
 
-async def test_the_ladder_never_upscales_but_always_keeps_one_rendition(monkeypatch):
-    """A 480p source gets a 480p rendition; 720p is skipped as an upscale. The 1080p entry is kept because
-    dropping every rung would leave an asset with no playable rendition at all."""
+async def test_the_ladder_never_upscales(monkeypatch):
+    """A 480p source gets its own 480p rung and the smaller 360p one; 1080p and 720p are skipped as upscales."""
     asset = SimpleNamespace(status=AssetStatus.queued, error=None, source_key="uploads/small.mp4")
     statuses: list[tuple[AssetStatus, dict]] = []
     done: list[str] = []
@@ -284,13 +283,13 @@ async def test_the_ladder_never_upscales_but_always_keeps_one_rendition(monkeypa
     monkeypatch.setattr(media, "_transcode_rendition", rendition)
     monkeypatch.setattr(media, "_upload_dir", upload)
     monkeypatch.setattr(
-        media, "get_worker_settings", lambda: SimpleNamespace(hls_encrypt=False, hls_ladder=["1080p", "720p", "480p"])
+        media, "get_worker_settings", lambda: SimpleNamespace(hls_encrypt=False, hls_ladder=["1080p", "720p", "480p", "360p"])
     )
 
     out = await media.transcode_asset({}, str(ASSET_ID))
 
-    assert done == ["1080p", "480p"]
-    assert out["renditions"] == ["1080p", "480p"]
+    assert done == ["480p", "360p"]
+    assert out["renditions"] == ["480p", "360p"]
     status, fields = statuses[-1]
     assert status == AssetStatus.ready
     assert fields["hls_master_key"] == f"hls/{ASSET_ID}/master.m3u8"
@@ -449,3 +448,68 @@ async def test_run_does_not_kill_a_child_that_already_exited(monkeypatch):
 
 async def _immediately(value):
     return value
+
+
+async def test_a_source_smaller_than_every_rung_keeps_only_the_smallest(monkeypatch):
+    """Dropping every rung would leave an asset with nothing to play, so the smallest one stays."""
+    asset = SimpleNamespace(status=AssetStatus.queued, error=None, source_key="uploads/tiny.mp4")
+    done: list[str] = []
+
+    async def set_status(aid, status, **fields):
+        pass
+
+    async def probe(path):
+        return {"duration": 5.0, "width": 240, "height": 426, "has_audio": True}
+
+    async def rendition(src, out_dir, name, spec, has_audio, portrait, key_info):
+        done.append(name)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    async def upload(local, prefix):
+        return 1
+
+    monkeypatch.setattr(media, "SessionLocal", lambda: ScalarSession(asset))
+    monkeypatch.setattr(media, "_set_status", set_status)
+    monkeypatch.setattr(media, "_s3", lambda: FakeS3())
+    monkeypatch.setattr(media, "get_settings", lambda: SimpleNamespace(s3_bucket="katha"))
+    monkeypatch.setattr(media, "_probe", probe)
+    monkeypatch.setattr(media, "_transcode_rendition", rendition)
+    monkeypatch.setattr(media, "_upload_dir", upload)
+    monkeypatch.setattr(
+        media, "get_worker_settings", lambda: SimpleNamespace(hls_encrypt=False, hls_ladder=["1080p", "720p", "480p", "360p"])
+    )
+
+    assert (await media.transcode_asset({}, str(ASSET_ID)))["renditions"] == ["360p"]
+    assert done == ["360p"]
+
+
+async def test_a_720p_master_is_not_upscaled_to_1080p(monkeypatch):
+    asset = SimpleNamespace(status=AssetStatus.queued, error=None, source_key="uploads/master.mp4")
+    done: list[str] = []
+
+    async def set_status(aid, status, **fields):
+        pass
+
+    async def probe(path):
+        return {"duration": 57.0, "width": 720, "height": 1280, "has_audio": True}
+
+    async def rendition(src, out_dir, name, spec, has_audio, portrait, key_info):
+        done.append(name)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    async def upload(local, prefix):
+        return 1
+
+    monkeypatch.setattr(media, "SessionLocal", lambda: ScalarSession(asset))
+    monkeypatch.setattr(media, "_set_status", set_status)
+    monkeypatch.setattr(media, "_s3", lambda: FakeS3())
+    monkeypatch.setattr(media, "get_settings", lambda: SimpleNamespace(s3_bucket="katha"))
+    monkeypatch.setattr(media, "_probe", probe)
+    monkeypatch.setattr(media, "_transcode_rendition", rendition)
+    monkeypatch.setattr(media, "_upload_dir", upload)
+    monkeypatch.setattr(
+        media, "get_worker_settings", lambda: SimpleNamespace(hls_encrypt=False, hls_ladder=["1080p", "720p", "480p", "360p"])
+    )
+
+    await media.transcode_asset({}, str(ASSET_ID))
+    assert done == ["720p", "480p", "360p"]

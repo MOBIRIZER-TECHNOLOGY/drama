@@ -421,6 +421,10 @@ export function VideoPlayer(props: VideoPlayerProps) {
         playsInline
         preload="metadata"
         crossOrigin={needsCors ? "anonymous" : undefined}
+        // No browser "save video" affordances. Not a security boundary (the stream is encrypted and its links
+        // are signed and short-lived; that is), just no invitation.
+        controlsList="nodownload noremoteplayback"
+        onContextMenu={(event) => event.preventDefault()}
         className="h-full w-full object-contain"
         onLoadedMetadata={(event) => {
           const video = event.currentTarget;
