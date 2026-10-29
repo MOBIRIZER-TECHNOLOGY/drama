@@ -63,6 +63,9 @@ export function PlayerPoolProvider({ children }: PropsWithChildren) {
         player.loop = false;
         player.timeUpdateEventInterval = 0;
         player.preservesPitch = true;
+        // iOS defaults to 0 ("let the system decide"), which pulls whole episodes ahead and starves a slow link.
+        // Twenty seconds matches Android's default and leaves bandwidth for the episode actually being watched.
+        player.bufferOptions = { preferredForwardBufferDuration: 20, waitsToMinimizeStalling: true };
         player.audioMixingMode = "auto";
         players.current.set(id, player);
         return player;

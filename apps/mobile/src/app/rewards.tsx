@@ -302,7 +302,8 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xxl },
   checkinCard: { gap: spacing.md },
-  cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  // Stacked: the streak caption is a full sentence, and beside the title it ran off the edge of the card.
+  cardHead: { gap: spacing.xs },
   strip: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   day: {
     width: 44,

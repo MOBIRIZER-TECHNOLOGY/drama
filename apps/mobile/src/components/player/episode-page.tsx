@@ -141,6 +141,12 @@ export const EpisodePage = memo(function EpisodePage({
   const [holding, setHolding] = useState(false);
   const [cue, setCue] = useState<string | null>(null);
   const progress = useRef<ProgressBox>({ position: 0, lastWriteAt: 0, ended: false });
+  /**
+   * The viewer paused on purpose. `player.playing` is false while the player is buffering too, so it cannot tell
+   * "paused" from "waiting for data", and a tap during a stall used to call play() instead of pausing. The
+   * grant renewal also re-runs the activation effect below, which must not restart a video the viewer stopped.
+   */
+  const userPaused = useRef(false);
   const qoe = useRef<QoeBox>({ startedAt: 0, firstFrameSent: false, stalledAt: 0, wasPlaying: false, lastTrackId: null, errorSent: false, completeSent: false });
   const cueState = useRef<{ cues: Cue[] | null; index: number }>({ cues: null, index: -1 });
   const holdRef = useRef(false);
@@ -282,6 +288,7 @@ export const EpisodePage = memo(function EpisodePage({
   useEffect(() => {
     if (!player || !grant?.hls_url) return;
     if (!active) {
+      userPaused.current = false;
       setTimeUpdateInterval(player, 0);
       safePlayerCall(player, (p) => p.pause());
       return undefined;
@@ -295,7 +302,7 @@ export const EpisodePage = memo(function EpisodePage({
     track("play_start", { ...beacon(), position_sec: Math.round(grant.resume_position_sec ?? 0) });
     safePlayerCall(player, (p) => {
       p.playbackRate = holdRef.current ? 2 : speedRef.current;
-      p.play();
+      if (!userPaused.current) p.play();
     });
     return () => {
       flushProgress();
@@ -333,11 +340,15 @@ export const EpisodePage = memo(function EpisodePage({
 
   const togglePlay = useCallback(() => {
     if (!player || !grant?.hls_url) return;
+    // Intent, not `p.playing`: a buffering player reports not-playing but is still meant to be.
+    const wantsPlay = !userPaused.current && !progress.current.ended;
     safePlayerCall(player, (p) => {
-      if (p.playing) {
+      if (wantsPlay) {
+        userPaused.current = true;
         p.pause();
         setFlash("pause");
       } else {
+        userPaused.current = false;
         p.play();
         setFlash("play");
       }
@@ -360,6 +371,7 @@ export const EpisodePage = memo(function EpisodePage({
 
   const replay = useCallback(() => {
     if (!player) return;
+    userPaused.current = false;
     safePlayerCall(player, (p) => {
       p.currentTime = 0;
       p.play();

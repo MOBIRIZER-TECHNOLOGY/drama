@@ -1,7 +1,7 @@
 import { colors, radii, spacing } from "@katha/tokens";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { AppState, Modal, Pressable, ScrollView, StyleSheet, View } from "react-native";
 import PagerView, { type PagerViewOnPageSelectedEvent } from "react-native-pager-view";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AgeGateSheet } from "@/components/age-gate";
@@ -58,6 +58,8 @@ type UnlockTarget = { episode: Episode; index: number; reason: "swiped" | "ended
 
 /** Seconds between an episode ending and the next one starting on its own. */
 const AUTO_ADVANCE_SEC = 4;
+/** How long the neighbouring episodes wait after the one in view has loaded, so they do not compete with it. */
+const NEIGHBOUR_PRELOAD_DELAY_MS = 2500;
 
 function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber: number }) {
   const t = useT();
@@ -201,8 +203,45 @@ function Player({ series, initialNumber }: { series: SeriesDetail; initialNumber
       window.map((e) => e.id),
       episodes[index]?.id ?? null,
     );
-    for (const ep of window) void load(ep);
+    // The episode in view loads first; the neighbours wait for it, so a slow link is not split three ways.
+    const current = episodes[index];
+    let cancelled = false;
+    const neighbours = window.filter((e) => e.id !== current?.id);
+    const timer = { id: undefined as ReturnType<typeof setTimeout> | undefined };
+    const loadNeighbours = () => {
+      if (cancelled) return;
+      timer.id = setTimeout(() => {
+        if (!cancelled) for (const ep of neighbours) void load(ep);
+      }, NEIGHBOUR_PRELOAD_DELAY_MS);
+    };
+    if (current) void load(current).finally(loadNeighbours);
+    else loadNeighbours();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer.id);
+    };
   }, [index, episodes, total, pool, load, attempt]);
+
+  // Playback links last 30 minutes. A viewer who paused, or put the app away, and comes back later would hit a
+  // 403 on the next segment, so the grant is renewed (position kept) when the app returns or while paused.
+  useEffect(() => {
+    const ep = episodes[index];
+    if (!ep) return;
+    const renewIfStale = () => {
+      if (!grantsRef.current[ep.id] || grantIsFresh(grantsRef.current[ep.id])) return;
+      void load(ep, true);
+    };
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") renewIfStale();
+    });
+    const timer = setInterval(() => {
+      if (!pool.get(ep.id)?.playing) renewIfStale();
+    }, 60_000);
+    return () => {
+      sub.remove();
+      clearInterval(timer);
+    };
+  }, [index, episodes, pool, load]);
 
   // Leaving the player releases every instance so the Shorts tab starts from a clean pool.
   useEffect(() => () => pool.releaseAll(), [pool]);
