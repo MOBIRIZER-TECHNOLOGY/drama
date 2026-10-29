@@ -21,6 +21,9 @@ ref/             purchased SnapReels package (local only, git-ignored)
 
 ## First run
 
+On a new machine, after cloning: `pnpm bootstrap`. It downloads the `.env` files and demo videos (one bundle file from
+Google Drive), installs, migrates and seeds. See `docs/developer-setup.md` and `seed/README.md`. The manual steps:
+
 ```bash
 corepack enable && pnpm install
 pnpm infra:up                                   # needs Docker

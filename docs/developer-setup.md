@@ -1,5 +1,17 @@
 # Setting Katha up on a new machine
 
+## The short way
+
+```bash
+git clone git@github.com:MOBIRIZER-TECHNOLOGY/drama.git && cd drama
+pnpm bootstrap
+```
+
+That checks your tools, installs the packages, downloads one bundle (`katha-dev-bundle.zip`: the `.env` files and the
+demo videos) from Google Drive, unpacks it, and seeds the database, storage and demo series. Then run
+`pnpm api:dev`, `pnpm --filter web dev` and `pnpm --filter admin dev`. You still need the tools in section 1 and
+repository access. The rest of this page is the same thing step by step, for when you want control or something fails.
+
 This gets a developer from a fresh clone to the web app, admin console, API, worker and mobile app running locally.
 The short version is in the root `README.md`; this page adds what it leaves out: the worker, the demo series,
 sign-in and payments, and the mobile builds.
@@ -39,7 +51,7 @@ pnpm infra:up        # Postgres 5432, Redis 6379, MinIO 9000 (console 9001), Mai
 ## 4. API and database
 
 ```bash
-cp .env.example services/api/.env
+cp .env.example services/api/.env      # skip if the bundle gave you one
 cd services/api
 uv sync --extra dev
 uv run alembic upgrade head
@@ -71,23 +83,15 @@ pnpm --filter admin dev        # http://localhost:3001
 pnpm --filter mobile start     # Expo dev server
 ```
 
-Copy `apps/web/.env.example` and `apps/mobile/.env.example` to `.env.local` and `.env`. For the mobile app set
+The bundle already placed these files. Otherwise copy `apps/web/.env.example` and `apps/mobile/.env.example` to `.env.local` and `.env`. For the mobile app set
 `EXPO_PUBLIC_API_URL` to an address the phone can reach: `http://10.0.2.2:8000` for the Android emulator, your
 machine's LAN address for a real phone, `http://localhost:8000` for the iOS simulator.
 
-## 7. Demo content (one command)
+## 7. Demo content
 
-The five AI-generated series live in `seed/ai-series/` (scripts, covers, thumbnails and subtitles are in git). The
-**videos are not**: ask the owner for `katha-seed-videos.zip` (about 430 MB) and unpack it at the repository root.
-
-```bash
-unzip katha-seed-videos.zip -d .
-pnpm seed
-```
-
-`pnpm seed` runs the migrations, creates the admin user (`admin@katha.local` / `katha-local-admin`), loads the
-translations and pages, starts a worker for the encoding, imports the 5 series, waits for the encrypted 720p/480p/360p
-streams to be built and publishes them. It is safe to re-run. Options and the folder layout are in `seed/README.md`.
+The five series are in `seed/ai-series/` (scripts, covers, thumbnails, subtitles in git). The videos are not; they
+come in the bundle. If you used `pnpm bootstrap` (see the top of this page) this is already done. To redo just this
+step: `pnpm seed`. Layout, options and how to verify the videos are in `seed/README.md`.
 
 ## 8. Sign-in and payments (optional locally)
 

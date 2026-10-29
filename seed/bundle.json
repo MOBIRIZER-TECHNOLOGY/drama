@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "file": "katha-dev-bundle.zip",
+  "drive_file_id": "",
+  "sha256": "017e5ad505276b52caffaac3e2468187c980ff604635dcaffca0182e2b4ba2a3",
+  "contents": "env files for api, web, admin and mobile (no Razorpay keys, no production secrets) plus the 32 light demo videos"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One command from a fresh checkout to a populated local app.
+# Seeds a local install (use `pnpm bootstrap` on a fresh checkout: it also downloads the .env files and videos).
 #
 #   pnpm seed                    infra, migrations, admin user, translations, pages, the 5 demo series (published)
 #   pnpm seed -- --no-series     everything except the demo series (no videos needed)
@@ -60,12 +60,9 @@ if [ "$series" = 1 ]; then
   step "Demo series (5 Hindi series, 32 episodes)"
   if ! find "$PACK" -name video.mp4 -print -quit | grep -q .; then
     cat >&2 <<MSG
-The demo videos are not in $PACK (they are too large for git).
-Get katha-seed-videos.zip from the project owner and unpack it at the repository root:
-    unzip katha-seed-videos.zip -d "$ROOT"
-or build them from the delivered masters:
-    scripts/encode-seed-videos.sh <masters folder>
-Then run this again. To skip the demo series for now: pnpm seed -- --no-series
+The demo videos are not in $PACK (they are too large for git). Run  pnpm bootstrap  to download them with the .env
+files, or save katha-dev-bundle.zip in $ROOT and run:  unzip -n katha-dev-bundle.zip
+To skip the demo series for now: pnpm seed -- --no-series
 MSG
     exit 1
   fi

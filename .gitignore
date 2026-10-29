@@ -84,3 +84,4 @@ deploy/
 seed/ai-series/**/video.mp4
 seed/ai-series/**/video.mp4.part
 .seed-worker.log
+/katha-dev-bundle.zip
