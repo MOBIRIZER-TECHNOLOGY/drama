@@ -591,6 +591,12 @@ const styles = StyleSheet.create({
   sheetWrap: { position: "absolute", left: 0, right: 0, bottom: 0, top: 0, justifyContent: "flex-end", backgroundColor: "transparent" },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.5)" } as const,
   episodesSheet: {
+    // A bottom sheet. Without anchoring it, the modal's root stacks it at the top of the screen, where the title
+    // and close button ended up under the status bar.
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.lg,
     borderTopRightRadius: radii.lg,

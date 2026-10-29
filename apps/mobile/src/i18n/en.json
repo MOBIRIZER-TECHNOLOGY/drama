@@ -29,6 +29,7 @@
   "auth.reset_sent": "If that address has an account, a reset link is on its way. Check your spam folder too.",
   "auth.sign_in": "Sign in",
   "auth.sign_up": "Sign up free",
+  "auth.unavailable": "Sign-in is temporarily unavailable. Please try again soon.",
   "common.back": "Back",
   "common.cancel": "Cancel",
   "common.clear": "Clear",

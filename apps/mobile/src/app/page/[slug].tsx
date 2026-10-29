@@ -51,6 +51,14 @@ export default function CmsPageScreen() {
             html: wrap(page.data.body_html, page.data.updated_at, t("page.updated"), t("page.contents")),
           }}
           onShouldStartLoadWithRequest={onShouldStartLoad}
+          // The first WebView on a cold start takes a few seconds to render, and until it does the screen is a
+          // blank rectangle that looks broken.
+          startInLoadingState
+          renderLoading={() => (
+            <View style={StyleSheet.absoluteFill}>
+              <Loading />
+            </View>
+          )}
           style={styles.web}
           setSupportMultipleWindows={false}
           javaScriptEnabled={false}

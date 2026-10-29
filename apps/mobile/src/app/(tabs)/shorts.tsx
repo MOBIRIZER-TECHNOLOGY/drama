@@ -376,7 +376,8 @@ function ShortOverlay({
         <RailButton icon="share" label={t("shorts.share")} onPress={() => actions.share(item.title, item.slug, item.episode_number)} />
       </View>
 
-      <View style={[styles.captionBox, { bottom: bottomInset + 56 }]} pointerEvents="box-none">
+      <BottomScrim />
+      <View style={[styles.captionBox, { bottom: bottomInset + 76 }]} pointerEvents="box-none">
         <View style={styles.metaRow}>
           {genre ? (
             <View style={styles.genrePill}>
@@ -389,11 +390,11 @@ function ShortOverlay({
             {t("player.unlock_position", { n: item.episode_number, total: item.episode_count })}
           </Text>
         </View>
-        <Text variant="title" numberOfLines={1}>
+        <Text variant="title" numberOfLines={1} style={styles.legible}>
           {item.title}
         </Text>
         {caption ? (
-          <Text variant="body" color={colors.ink2} numberOfLines={2}>
+          <Text variant="body" color={colors.ink2} numberOfLines={2} style={styles.legible}>
             {caption}
           </Text>
         ) : null}
@@ -415,6 +416,21 @@ function ShortOverlay({
       <View style={[styles.progress, { top: topInset }]} pointerEvents="none">
         <View style={[styles.progressFill, { width: `${((index + 1) / Math.max(1, total)) * 100}%` }]} />
       </View>
+    </View>
+  );
+}
+
+/**
+ * A dark fade behind the caption so white text stays readable over bright frames. Stacked translucent bands
+ * stand in for a gradient, which would need a native module this app does not otherwise carry.
+ */
+function BottomScrim() {
+  const bands = 10;
+  return (
+    <View style={styles.scrimWrap} pointerEvents="none">
+      {Array.from({ length: bands }, (_, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: `rgba(0,0,0,${(((i + 1) / bands) * 0.62).toFixed(3)})` }} />
+      ))}
     </View>
   );
 }
@@ -441,6 +457,8 @@ const styles = StyleSheet.create({
   railBtn: { alignItems: "center", gap: 4 },
   roundBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
   captionBox: { position: "absolute", left: spacing.lg, right: 80, gap: spacing.xs },
+  scrimWrap: { position: "absolute", left: 0, right: 0, bottom: 0, height: "46%" },
+  legible: { textShadowColor: "rgba(0,0,0,0.75)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   genrePill: { backgroundColor: colors.accent, borderRadius: 999, paddingHorizontal: spacing.sm, paddingVertical: 1 },
   watchFull: { alignSelf: "flex-start", marginTop: spacing.sm, borderRadius: radii.pill },

@@ -313,6 +313,7 @@ export const en: Record<string, string> = {
   "auth.pitch": "Your coins, list and progress follow you across devices.",
   "auth.no_account": "New to Katha?",
   "auth.have_account": "Already have an account?",
+  "auth.unavailable": "Sign-in is temporarily unavailable. Please try again soon.",
   "auth.phone_soon": "Phone sign-in arrives with the native build (phase 2).",
   "auth.err_invalid_email": "That email address looks wrong",
   "auth.err_bad_credentials": "Email or password is incorrect",

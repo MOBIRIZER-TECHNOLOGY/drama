@@ -170,10 +170,14 @@ export default function AuthScreen() {
     });
   }, [run, signInWithApple]);
 
-  const emailEnabled = config.auth.email !== false;
-  const googleEnabled = config.auth.google !== false && googleSignInAvailable();
-  const appleEnabled = Platform.OS === "ios" && config.auth.apple !== false && appleAvailable;
-  const phoneEnabled = config.auth.phone !== false;
+  // Every method here signs in through Firebase. With no Firebase config, offering them only lets a viewer type
+  // credentials into a form that cannot work, so release builds show the notice above and nothing else.
+  const signInUsable = firebaseConfigured() || __DEV__;
+  const emailEnabled = signInUsable && config.auth.email !== false;
+  const googleEnabled = signInUsable && config.auth.google !== false && googleSignInAvailable();
+  const appleEnabled = signInUsable && Platform.OS === "ios" && config.auth.apple !== false && appleAvailable;
+  // Phone OTP needs the native Firebase SDK, which this build does not carry, so the option is only shown in development.
+  const phoneEnabled = __DEV__ && config.auth.phone !== false;
 
   return (
     <Screen edges={["top", "bottom", "left", "right"]}>
@@ -188,8 +192,11 @@ export default function AuthScreen() {
           <Text variant="body">{t("auth.pitch")}</Text>
 
           {!firebaseConfigured() ? (
+            // Viewers get a plain sentence; the setup instructions are for whoever built the app.
             <Text variant="caption" color={colors.warning}>
-              Firebase is not configured for this build (EXPO_PUBLIC_FIREBASE_* or config.firebase). Sign-in will fail until it is.
+              {__DEV__
+                ? "Firebase is not configured for this build (EXPO_PUBLIC_FIREBASE_* or config.firebase). Sign-in will fail until it is."
+                : t("auth.unavailable")}
             </Text>
           ) : null}
 

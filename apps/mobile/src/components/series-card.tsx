@@ -61,7 +61,7 @@ export const SeriesCard = memo(function SeriesCard({
       <Text variant="label" numberOfLines={1} style={styles.title}>
         {series.title}
       </Text>
-      <Text variant="caption" numberOfLines={1}>
+      <Text variant="caption" numberOfLines={2}>
         {subtitle ?? metaLine(series)}
       </Text>
     </Pressable>
@@ -75,7 +75,8 @@ export const SeriesCard = memo(function SeriesCard({
 function metaLine(series: SeriesCardModel): string {
   const genre = series.categories?.[0]?.name;
   const free = series.free_episodes > 0 ? `${series.free_episodes} free` : null;
-  const parts = [genre, `${series.episode_count} ep`, free ?? `${formatCount(series.view_count)} views`];
+  // The promise leads so a narrow card cuts the genre, which the rail heading already names, and not "3 free".
+  const parts = [`${series.episode_count} ep`, free ?? `${formatCount(series.view_count)} views`, genre];
   return parts.filter(Boolean).join(" · ");
 }
 
