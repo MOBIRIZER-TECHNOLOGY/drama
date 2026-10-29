@@ -48,7 +48,7 @@ else
     if [ -n "${KATHA_BUNDLE_URL:-}" ]; then
       uvx gdown --fuzzy "$KATHA_BUNDLE_URL" -O "$BUNDLE"
     elif [ -n "$fid" ]; then
-      uvx gdown --id "$fid" -O "$BUNDLE"
+      uvx gdown "$fid" -O "$BUNDLE"
     else
       cat >&2 <<MSG
 No download source is configured. Either:
