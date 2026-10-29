@@ -79,3 +79,8 @@ apps/web/test-results/
 # Local pm2 process definitions for running this repo on a specific machine's reserved subdomains.
 # Carries real secrets (JWT/media-encryption keys) for that one deployment, not the repo's own config.
 deploy/
+
+# Demo series: the pack is in git, but the light development videos (about 640 MB) are shared outside it.
+seed/ai-series/**/video.mp4
+seed/ai-series/**/video.mp4.part
+.seed-worker.log

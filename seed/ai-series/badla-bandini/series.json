@@ -1,0 +1,133 @@
+{
+  "slug": "badla-bandini",
+  "title": "Badla Bandini",
+  "title_hi": "बदला बंदिनी",
+  "synopsis": "Seven years ago a fire in the Thakur family's grain warehouse killed three workers. Gauri, the young daughter-in-law who found the ledger proving the family ordered it, was framed for arson and jailed. Released, she returns under the name Kamla as the haveli's new cook, to expose the family one truth at a time. Her father-in-law, Thakur Dalip Singh, is believed to have died five years ago.",
+  "synopsis_hi": "",
+  "year": 2026,
+  "original_language": "hi",
+  "audio": "Hindi dialogue",
+  "categories": [
+    "Drama",
+    "Revenge"
+  ],
+  "content_rating": "UA13",
+  "content_advisory": "emotional cruelty and implied danger, no gore, no strong language",
+  "completion_status": "Ongoing",
+  "free_episodes": 3,
+  "cover_path": "cover.jpg",
+  "banner_path": "banner.jpg",
+  "ai_disclosure": "ai_generated",
+  "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+  "tools": [
+    {
+      "stage": "keyframe",
+      "name": "qwen-image-2512 + qwen-image-edit-2511 (fp8, Lightning 8-step LoRA)",
+      "version": "2512/2511"
+    },
+    {
+      "stage": "video",
+      "name": "infinitetalk-single (wan2.1-i2v-14b-720p fp8 + lightx2v-4step)",
+      "version": ""
+    },
+    {
+      "stage": "video",
+      "name": "wan2.2-i2v-14b",
+      "version": "A14B fp8_scaled + lightx2v, motion recipe distill1022"
+    },
+    {
+      "stage": "video",
+      "name": "wan2.2-s2v-14b",
+      "version": "fp8_scaled + lightx2v 4-step v1.1"
+    },
+    {
+      "stage": "voice",
+      "name": "indic-parler-tts",
+      "version": "ai4bharat/indic-parler-tts"
+    },
+    {
+      "stage": "lipsync",
+      "name": "infinitetalk-single (wan2.1-i2v-14b-720p fp8 + lightx2v-4step) (audio-driven)",
+      "version": ""
+    },
+    {
+      "stage": "lipsync",
+      "name": "wan2.2-s2v-14b (audio-driven generation)",
+      "version": "fp8_scaled + lightx2v 4-step v1.1"
+    },
+    {
+      "stage": "music",
+      "name": "ace-step-1.5",
+      "version": "turbo aio"
+    }
+  ],
+  "talent": [
+    {
+      "character": "GAURI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "CHHOTU",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "BHAVANI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "VIKRAM",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "RAMLAL",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    }
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "title": "Naya Naam",
+      "title_hi": "नया नाम",
+      "description": "Released after seven years, Gauri walks into the haveli that jailed her as the new cook.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 2,
+      "title": "Pehla Sach",
+      "title_hi": "पहला सच",
+      "description": "A taste from the past shakes the household, and a boy begins to guess who Kamla is.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 3,
+      "title": "Tahkhane Ka Sandook",
+      "title_hi": "तहख़ाने का संदूक",
+      "description": "In the cellar Gauri finds proof of the fire's cause, and Vikram finds her.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 4,
+      "title": "Ramlal Ki Gawahi",
+      "title_hi": "रामलाल की गवाही",
+      "description": "Vikram learns the truth, Bhavani prepares to destroy the evidence, and old Ramlal chooses to testify.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 5,
+      "title": "Haveli Ki Adalat",
+      "title_hi": "हवेली की अदालत",
+      "description": "At the family gathering Gauri unmasks herself, the ledger speaks, and a bigger secret rises from the upper floor.",
+      "duration_sec": 57,
+      "is_free": false
+    }
+  ]
+}

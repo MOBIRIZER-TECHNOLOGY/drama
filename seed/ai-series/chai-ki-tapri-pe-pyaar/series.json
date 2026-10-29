@@ -1,0 +1,123 @@
+{
+  "slug": "chai-ki-tapri-pe-pyaar",
+  "title": "Chai Ki Tapri Pe Pyaar",
+  "title_hi": "चाय की टपरी पे प्यार",
+  "synopsis": "Chhavi, 22, runs her late mother's blue-canopy stall with her father Shankar. Across the lane, Lalan's red-canopy stall has been Shankar's enemy for years. Lalan's son Veer returns from the city, and when the town announces that only one stall will survive after the annual fair, the two must compete, and slowly fall for each other.",
+  "synopsis_hi": "",
+  "year": 2026,
+  "original_language": "hi",
+  "audio": "Hindi dialogue",
+  "categories": [
+    "Romance",
+    "Drama"
+  ],
+  "content_rating": "UA13",
+  "content_advisory": "family quarrels and heartbreak, no violence, no strong language",
+  "completion_status": "Ongoing",
+  "free_episodes": 3,
+  "cover_path": "cover.jpg",
+  "banner_path": "banner.jpg",
+  "ai_disclosure": "ai_generated",
+  "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+  "tools": [
+    {
+      "stage": "keyframe",
+      "name": "qwen-image-2512 + qwen-image-edit-2511 (fp8, Lightning 8-step LoRA)",
+      "version": "2512/2511"
+    },
+    {
+      "stage": "video",
+      "name": "wan2.2-i2v-14b",
+      "version": "A14B fp8_scaled + lightx2v 4-step v1"
+    },
+    {
+      "stage": "voice",
+      "name": "indic-parler-tts",
+      "version": "ai4bharat/indic-parler-tts"
+    },
+    {
+      "stage": "lipsync",
+      "name": "wan2.2-s2v-14b (audio-driven generation)",
+      "version": "fp8_scaled + lightx2v 4-step v1.1"
+    },
+    {
+      "stage": "music",
+      "name": "ace-step-1.5",
+      "version": "turbo aio"
+    }
+  ],
+  "talent": [
+    {
+      "character": "CHHAVI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "LALAN",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "VEER",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "MUNNI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "SHANKAR",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "BUILDER",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    }
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "title": "Do Tapri, Ek Gali",
+      "title_hi": "दो टपरी, एक गली",
+      "description": "Veer comes home to the lane, collides with Chhavi, and the town announces only one stall will survive.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 2,
+      "title": "Baarish Wali Chai",
+      "title_hi": "बारिश वाली चाय",
+      "description": "Rain wrecks both stalls and Chhavi helps her enemy, and then both fathers catch them together.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 3,
+      "title": "Galat Fehmi",
+      "title_hi": "ग़लतफ़हमी",
+      "description": "A rooftop evening of confessions ends when Chhavi sees Veer with a man who wants to buy the lane.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 4,
+      "title": "Mele Ki Raat",
+      "title_hi": "मेले की रात",
+      "description": "At the fair, rivalry turns to worry for Lalan, and the lane's new owner is announced.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 5,
+      "title": "Chai Ka Teesra Pyaala",
+      "title_hi": "चाय का तीसरा प्याला",
+      "description": "The truth about the lane, two fathers share one cup, and an old photo opens a new secret.",
+      "duration_sec": 57,
+      "is_free": false
+    }
+  ]
+}

@@ -1,0 +1,471 @@
+{
+ "generated": "2026-10-28",
+ "language": "hi",
+ "aspect": "9:16 vertical",
+ "paths": "relative to this file",
+ "series": [
+  {
+   "order": 1,
+   "slug": "neel-mahal-ka-raaz",
+   "title": "Neel Mahal Ka Raaz",
+   "title_hi": "नील महल का राज़",
+   "synopsis": "Meera, a young archivist, takes a month-long job cataloguing a palace sealed for 100 years. Its old caretaker seems to have been waiting for her. A blue mirror holds the imprisoned spirit of Queen Neelambari, and Meera's family is bound to her curse.",
+   "categories": [
+    "Fantasy",
+    "Mystery",
+    "Romance"
+   ],
+   "content_rating": "UA13",
+   "content_advisory": "supernatural peril, no gore, no strong language",
+   "completion_status": "Ongoing",
+   "free_episodes": 3,
+   "cover": "neel-mahal-ka-raaz/cover.jpg",
+   "banner": "neel-mahal-ka-raaz/banner.jpg",
+   "ai_disclosure": "ai_generated",
+   "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+   "series_json": "neel-mahal-ka-raaz/series.json",
+   "episodes": [
+    {
+     "number": 1,
+     "title": "Neelgarh Ki Chaabi",
+     "title_hi": "नीलगढ़ की चाबी",
+     "description": "Meera reaches the sealed palace and the caretaker greets her by name.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "neel-mahal-ka-raaz/episode-01/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-01/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-01/subtitles.hi.srt"
+    },
+    {
+     "number": 2,
+     "title": "Neela Aaina",
+     "title_hi": "नीला आईना",
+     "description": "Meera ignores the warning and finds the blue mirror, and the heir finds her.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "neel-mahal-ka-raaz/episode-02/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-02/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-02/subtitles.hi.srt"
+    },
+    {
+     "number": 3,
+     "title": "Dadi Ka Raaz",
+     "title_hi": "दादी का राज़",
+     "description": "The curse's history, a photo of Meera's mother, and a new villain.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "neel-mahal-ka-raaz/episode-03/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-03/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-03/subtitles.hi.srt"
+    },
+    {
+     "number": 4,
+     "title": "Poornima Ki Raat",
+     "title_hi": "पूर्णिमा की रात",
+     "description": "Full moon: the mirror opens and the queen steps out.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-04/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-04/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-04/subtitles.hi.srt"
+    },
+    {
+     "number": 5,
+     "title": "Aakhri Darwaza",
+     "title_hi": "आख़िरी दरवाज़ा",
+     "description": "A choice, a betrayal revealed, and the mirror breaks.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-05/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-05/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-05/subtitles.hi.srt"
+    },
+    {
+     "number": 6,
+     "title": "Neeli Aankhein",
+     "title_hi": "नीली आँखें",
+     "description": "Meera's mother walks out of the broken mirror, and the queen now lives behind Meera's eyes.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-06/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-06/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-06/subtitles.hi.srt"
+    },
+    {
+     "number": 7,
+     "title": "Maa",
+     "title_hi": "माँ",
+     "description": "Mother and daughter meet after 22 years, the old deal comes to light, and Bhairav takes Dadi.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-07/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-07/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-07/subtitles.hi.srt"
+    },
+    {
+     "number": 8,
+     "title": "Sauda",
+     "title_hi": "सौदा",
+     "description": "The queen's power slips out of Meera's control, Rudra admits what he feels, and Meera goes to Bhairav alone.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-08/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-08/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-08/subtitles.hi.srt"
+    },
+    {
+     "number": 9,
+     "title": "Baoli",
+     "title_hi": "बावड़ी",
+     "description": "In the stepwell beneath the palace Bhairav begins his ritual, and the queen speaks through Meera.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-09/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-09/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-09/subtitles.hi.srt"
+    },
+    {
+     "number": 10,
+     "title": "Rudra Ka Vaada",
+     "title_hi": "रुद्र का वादा",
+     "description": "Rudra and Gauri storm the stepwell, Gauri names the man who trapped her, and Rudra falls.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-10/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-10/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-10/subtitles.hi.srt"
+    },
+    {
+     "number": 11,
+     "title": "Rani Ka Sach",
+     "title_hi": "रानी का सच",
+     "description": "Inside her own mind Meera meets the queen face to face, learns the truth, and makes a pact.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-11/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-11/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-11/subtitles.hi.srt"
+    },
+    {
+     "number": 12,
+     "title": "Aazaad",
+     "title_hi": "आज़ाद",
+     "description": "Meera and the queen break Bhairav's cane, the queen goes free at dawn, and something still waits in the water.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "neel-mahal-ka-raaz/episode-12/video.mp4",
+     "thumbnail": "neel-mahal-ka-raaz/episode-12/thumbnail.jpg",
+     "subtitles_hi": "neel-mahal-ka-raaz/episode-12/subtitles.hi.srt"
+    }
+   ]
+  },
+  {
+   "order": 2,
+   "slug": "chai-ki-tapri-pe-pyaar",
+   "title": "Chai Ki Tapri Pe Pyaar",
+   "title_hi": "चाय की टपरी पे प्यार",
+   "synopsis": "Chhavi, 22, runs her late mother's blue-canopy stall with her father Shankar. Across the lane, Lalan's red-canopy stall has been Shankar's enemy for years. Lalan's son Veer returns from the city, and when the town announces that only one stall will survive after the annual fair, the two must compete, and slowly fall for each other.",
+   "categories": [
+    "Romance",
+    "Drama"
+   ],
+   "content_rating": "UA13",
+   "content_advisory": "family quarrels and heartbreak, no violence, no strong language",
+   "completion_status": "Ongoing",
+   "free_episodes": 3,
+   "cover": "chai-ki-tapri-pe-pyaar/cover.jpg",
+   "banner": "chai-ki-tapri-pe-pyaar/banner.jpg",
+   "ai_disclosure": "ai_generated",
+   "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+   "series_json": "chai-ki-tapri-pe-pyaar/series.json",
+   "episodes": [
+    {
+     "number": 1,
+     "title": "Do Tapri, Ek Gali",
+     "title_hi": "दो टपरी, एक गली",
+     "description": "Veer comes home to the lane, collides with Chhavi, and the town announces only one stall will survive.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "chai-ki-tapri-pe-pyaar/episode-01/video.mp4",
+     "thumbnail": "chai-ki-tapri-pe-pyaar/episode-01/thumbnail.jpg",
+     "subtitles_hi": "chai-ki-tapri-pe-pyaar/episode-01/subtitles.hi.srt"
+    },
+    {
+     "number": 2,
+     "title": "Baarish Wali Chai",
+     "title_hi": "बारिश वाली चाय",
+     "description": "Rain wrecks both stalls and Chhavi helps her enemy, and then both fathers catch them together.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "chai-ki-tapri-pe-pyaar/episode-02/video.mp4",
+     "thumbnail": "chai-ki-tapri-pe-pyaar/episode-02/thumbnail.jpg",
+     "subtitles_hi": "chai-ki-tapri-pe-pyaar/episode-02/subtitles.hi.srt"
+    },
+    {
+     "number": 3,
+     "title": "Galat Fehmi",
+     "title_hi": "ग़लतफ़हमी",
+     "description": "A rooftop evening of confessions ends when Chhavi sees Veer with a man who wants to buy the lane.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "chai-ki-tapri-pe-pyaar/episode-03/video.mp4",
+     "thumbnail": "chai-ki-tapri-pe-pyaar/episode-03/thumbnail.jpg",
+     "subtitles_hi": "chai-ki-tapri-pe-pyaar/episode-03/subtitles.hi.srt"
+    },
+    {
+     "number": 4,
+     "title": "Mele Ki Raat",
+     "title_hi": "मेले की रात",
+     "description": "At the fair, rivalry turns to worry for Lalan, and the lane's new owner is announced.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "chai-ki-tapri-pe-pyaar/episode-04/video.mp4",
+     "thumbnail": "chai-ki-tapri-pe-pyaar/episode-04/thumbnail.jpg",
+     "subtitles_hi": "chai-ki-tapri-pe-pyaar/episode-04/subtitles.hi.srt"
+    },
+    {
+     "number": 5,
+     "title": "Chai Ka Teesra Pyaala",
+     "title_hi": "चाय का तीसरा प्याला",
+     "description": "The truth about the lane, two fathers share one cup, and an old photo opens a new secret.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "chai-ki-tapri-pe-pyaar/episode-05/video.mp4",
+     "thumbnail": "chai-ki-tapri-pe-pyaar/episode-05/thumbnail.jpg",
+     "subtitles_hi": "chai-ki-tapri-pe-pyaar/episode-05/subtitles.hi.srt"
+    }
+   ]
+  },
+  {
+   "order": 3,
+   "slug": "baraat-bhaag-gayi",
+   "title": "Baraat Bhaag Gayi",
+   "title_hi": "बारात भाग गई",
+   "synopsis": "The night before the pheras, groom Rohan vanishes from a lavish wedding. The bride's cousin Kavya and the groom's best friend Jugnu, who start out blaming each other, have 24 hours to find him across the city, and fall for each other on the way.",
+   "categories": [
+    "Comedy",
+    "Romance"
+   ],
+   "content_rating": "UA",
+   "content_advisory": "slapstick and light peril, no violence, no strong language",
+   "completion_status": "Ongoing",
+   "free_episodes": 3,
+   "cover": "baraat-bhaag-gayi/cover.jpg",
+   "banner": "baraat-bhaag-gayi/banner.jpg",
+   "ai_disclosure": "ai_generated",
+   "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+   "series_json": "baraat-bhaag-gayi/series.json",
+   "episodes": [
+    {
+     "number": 1,
+     "title": "Dulha Gayab",
+     "title_hi": "दूल्हा ग़ायब",
+     "description": "The groom vanishes the night before the pheras and the 24-hour search begins.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "baraat-bhaag-gayi/episode-01/video.mp4",
+     "thumbnail": "baraat-bhaag-gayi/episode-01/thumbnail.jpg",
+     "subtitles_hi": "baraat-bhaag-gayi/episode-01/subtitles.hi.srt"
+    },
+    {
+     "number": 2,
+     "title": "Phoolon Ki Mandi",
+     "title_hi": "फूलों की मंडी",
+     "description": "A chase through the flower market ends in a decoy, a clue and a glimpse of Rohan on a train.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "baraat-bhaag-gayi/episode-02/video.mp4",
+     "thumbnail": "baraat-bhaag-gayi/episode-02/thumbnail.jpg",
+     "subtitles_hi": "baraat-bhaag-gayi/episode-02/subtitles.hi.srt"
+    },
+    {
+     "number": 3,
+     "title": "Baraat Mein Baraat",
+     "title_hi": "बारात में बारात",
+     "description": "They catch the train at the next halt, get swept into another wedding procession, and Rohan's phone rings.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "baraat-bhaag-gayi/episode-03/video.mp4",
+     "thumbnail": "baraat-bhaag-gayi/episode-03/thumbnail.jpg",
+     "subtitles_hi": "baraat-bhaag-gayi/episode-03/subtitles.hi.srt"
+    },
+    {
+     "number": 4,
+     "title": "Ghaat Ki Raat",
+     "title_hi": "घाट की रात",
+     "description": "Kavya learns her cousin knew everything, and a lake crossing brings the two closer.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "baraat-bhaag-gayi/episode-04/video.mp4",
+     "thumbnail": "baraat-bhaag-gayi/episode-04/thumbnail.jpg",
+     "subtitles_hi": "baraat-bhaag-gayi/episode-04/subtitles.hi.srt"
+    },
+    {
+     "number": 5,
+     "title": "Pheron Se Pehle",
+     "title_hi": "फेरों से पहले",
+     "description": "Rohan is found and brought back in time, but now the bride is missing.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "baraat-bhaag-gayi/episode-05/video.mp4",
+     "thumbnail": "baraat-bhaag-gayi/episode-05/thumbnail.jpg",
+     "subtitles_hi": "baraat-bhaag-gayi/episode-05/subtitles.hi.srt"
+    }
+   ]
+  },
+  {
+   "order": 4,
+   "slug": "aakhri-local",
+   "title": "Aakhri Local",
+   "title_hi": "आख़िरी लोकल",
+   "synopsis": "Anjali, a young nurse, boards the last local after her shift and sees fixer Kisan Mhatre's men push a man off the train. She is left holding his leather pouch. Dinkar Kaka, a retired ticket collector, and Sunny, a street-smart delivery boy, help her stay alive until dawn while Kisan's men search every compartment.",
+   "categories": [
+    "Thriller",
+    "Crime"
+   ],
+   "content_rating": "UA13",
+   "content_advisory": "tension and threat, violence only implied, no gore, no strong language",
+   "completion_status": "Ongoing",
+   "free_episodes": 3,
+   "cover": "aakhri-local/cover.jpg",
+   "banner": "aakhri-local/banner.jpg",
+   "ai_disclosure": "ai_generated",
+   "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+   "series_json": "aakhri-local/series.json",
+   "episodes": [
+    {
+     "number": 1,
+     "title": "Aakhri Gaadi",
+     "title_hi": "आख़िरी गाड़ी",
+     "description": "Anjali boards the last local after her night shift and sees something she should never have seen.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "aakhri-local/episode-01/video.mp4",
+     "thumbnail": "aakhri-local/episode-01/thumbnail.jpg",
+     "subtitles_hi": "aakhri-local/episode-01/subtitles.hi.srt"
+    },
+    {
+     "number": 2,
+     "title": "Kaka Ki Chaabi",
+     "title_hi": "काका की चाबी",
+     "description": "Dinkar hides Anjali using old railway tricks, and a delivery boy leaps aboard at Neelwadi.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "aakhri-local/episode-02/video.mp4",
+     "thumbnail": "aakhri-local/episode-02/thumbnail.jpg",
+     "subtitles_hi": "aakhri-local/episode-02/subtitles.hi.srt"
+    },
+    {
+     "number": 3,
+     "title": "Bhaagti Patri",
+     "title_hi": "भागती पटरी",
+     "description": "Cornered at Neelwadi, the three escape onto the tracks as Kisan himself steps off the train.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "aakhri-local/episode-03/video.mp4",
+     "thumbnail": "aakhri-local/episode-03/thumbnail.jpg",
+     "subtitles_hi": "aakhri-local/episode-03/subtitles.hi.srt"
+    },
+    {
+     "number": 4,
+     "title": "Signal Cabin",
+     "title_hi": "सिग्नल केबिन",
+     "description": "In the signal cabin they try to stop the train and call for help, but the line is cut and Dinkar is taken.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "aakhri-local/episode-04/video.mp4",
+     "thumbnail": "aakhri-local/episode-04/thumbnail.jpg",
+     "subtitles_hi": "aakhri-local/episode-04/subtitles.hi.srt"
+    },
+    {
+     "number": 5,
+     "title": "Subah Ka Sach",
+     "title_hi": "सुबह का सच",
+     "description": "As dawn breaks, Anjali and Sunny reach her hospital and learn why Kaka was really on that train.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "aakhri-local/episode-05/video.mp4",
+     "thumbnail": "aakhri-local/episode-05/thumbnail.jpg",
+     "subtitles_hi": "aakhri-local/episode-05/subtitles.hi.srt"
+    }
+   ]
+  },
+  {
+   "order": 5,
+   "slug": "badla-bandini",
+   "title": "Badla Bandini",
+   "title_hi": "बदला बंदिनी",
+   "synopsis": "Seven years ago a fire in the Thakur family's grain warehouse killed three workers. Gauri, the young daughter-in-law who found the ledger proving the family ordered it, was framed for arson and jailed. Released, she returns under the name Kamla as the haveli's new cook, to expose the family one truth at a time. Her father-in-law, Thakur Dalip Singh, is believed to have died five years ago.",
+   "categories": [
+    "Drama",
+    "Revenge"
+   ],
+   "content_rating": "UA13",
+   "content_advisory": "emotional cruelty and implied danger, no gore, no strong language",
+   "completion_status": "Ongoing",
+   "free_episodes": 3,
+   "cover": "badla-bandini/cover.jpg",
+   "banner": "badla-bandini/banner.jpg",
+   "ai_disclosure": "ai_generated",
+   "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+   "series_json": "badla-bandini/series.json",
+   "episodes": [
+    {
+     "number": 1,
+     "title": "Naya Naam",
+     "title_hi": "नया नाम",
+     "description": "Released after seven years, Gauri walks into the haveli that jailed her as the new cook.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "badla-bandini/episode-01/video.mp4",
+     "thumbnail": "badla-bandini/episode-01/thumbnail.jpg",
+     "subtitles_hi": "badla-bandini/episode-01/subtitles.hi.srt"
+    },
+    {
+     "number": 2,
+     "title": "Pehla Sach",
+     "title_hi": "पहला सच",
+     "description": "A taste from the past shakes the household, and a boy begins to guess who Kamla is.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "badla-bandini/episode-02/video.mp4",
+     "thumbnail": "badla-bandini/episode-02/thumbnail.jpg",
+     "subtitles_hi": "badla-bandini/episode-02/subtitles.hi.srt"
+    },
+    {
+     "number": 3,
+     "title": "Tahkhane Ka Sandook",
+     "title_hi": "तहख़ाने का संदूक",
+     "description": "In the cellar Gauri finds proof of the fire's cause, and Vikram finds her.",
+     "duration_sec": 57,
+     "is_free": true,
+     "video": "badla-bandini/episode-03/video.mp4",
+     "thumbnail": "badla-bandini/episode-03/thumbnail.jpg",
+     "subtitles_hi": "badla-bandini/episode-03/subtitles.hi.srt"
+    },
+    {
+     "number": 4,
+     "title": "Ramlal Ki Gawahi",
+     "title_hi": "रामलाल की गवाही",
+     "description": "Vikram learns the truth, Bhavani prepares to destroy the evidence, and old Ramlal chooses to testify.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "badla-bandini/episode-04/video.mp4",
+     "thumbnail": "badla-bandini/episode-04/thumbnail.jpg",
+     "subtitles_hi": "badla-bandini/episode-04/subtitles.hi.srt"
+    },
+    {
+     "number": 5,
+     "title": "Haveli Ki Adalat",
+     "title_hi": "हवेली की अदालत",
+     "description": "At the family gathering Gauri unmasks herself, the ledger speaks, and a bigger secret rises from the upper floor.",
+     "duration_sec": 57,
+     "is_free": false,
+     "video": "badla-bandini/episode-05/video.mp4",
+     "thumbnail": "badla-bandini/episode-05/thumbnail.jpg",
+     "subtitles_hi": "badla-bandini/episode-05/subtitles.hi.srt"
+    }
+   ]
+  }
+ ]
+}

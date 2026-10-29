@@ -1,0 +1,165 @@
+{
+ "note": "Light development copies (720x1280 H.264, about 2.5 Mbps). Made by scripts/encode-seed-videos.sh from the delivered masters.",
+ "files": {
+  "aakhri-local/episode-01/video.mp4": {
+   "sha256": "ef413d80838db16ef9ac712c8103ecab490aea184cc05fdfe45c19988720a42c",
+   "bytes": 15497904,
+   "duration_sec": 57.0
+  },
+  "aakhri-local/episode-02/video.mp4": {
+   "sha256": "4c55948144beeb69418114b91f4529f331d70a1bcc840ba4dd65a6268e3186b7",
+   "bytes": 14425730,
+   "duration_sec": 57.0
+  },
+  "aakhri-local/episode-03/video.mp4": {
+   "sha256": "c8a500e583d298c968973b16f54b493d1c4075b4229de8b9d7aebd6355792cf6",
+   "bytes": 14818396,
+   "duration_sec": 57.0
+  },
+  "aakhri-local/episode-04/video.mp4": {
+   "sha256": "379110d77467350bc4032332e0f2eb3d5c4deed0e1cae4523226679f991af4d3",
+   "bytes": 12763539,
+   "duration_sec": 57.0
+  },
+  "aakhri-local/episode-05/video.mp4": {
+   "sha256": "7ac4c79aade829f057de854377f97577b75a5dd31a7fe5c5e30c373397463cfc",
+   "bytes": 16240440,
+   "duration_sec": 57.0
+  },
+  "badla-bandini/episode-01/video.mp4": {
+   "sha256": "35673ca536fd491eafd1966d791f7634712f8cde00b77656e3b412a7fdb1dcf2",
+   "bytes": 13021708,
+   "duration_sec": 57.0
+  },
+  "badla-bandini/episode-02/video.mp4": {
+   "sha256": "0326e8c06d5f0db3704b67fa16091962fb1926bed316a5940682a1edf8450306",
+   "bytes": 12418109,
+   "duration_sec": 57.0
+  },
+  "badla-bandini/episode-03/video.mp4": {
+   "sha256": "20c01f040441d0ef6d179754f9b5ff2ee82509c9085ef85b71cc37c1cd3ccb32",
+   "bytes": 11834657,
+   "duration_sec": 57.1
+  },
+  "badla-bandini/episode-04/video.mp4": {
+   "sha256": "bf2ab79aed12e8c5d6a1d8a12663171575ccf3bcff36ae87aba29c58c582579a",
+   "bytes": 13345076,
+   "duration_sec": 57.0
+  },
+  "badla-bandini/episode-05/video.mp4": {
+   "sha256": "8c2faefe1ded086d28a0c12c45b4a71ce0e6966788d0171318eb4c0e0fbccd22",
+   "bytes": 14606920,
+   "duration_sec": 57.1
+  },
+  "baraat-bhaag-gayi/episode-01/video.mp4": {
+   "sha256": "37aabf7bf8a6713809d87acb899c4e8f02a81890040af2840811dd7e467e0920",
+   "bytes": 15468674,
+   "duration_sec": 57.0
+  },
+  "baraat-bhaag-gayi/episode-02/video.mp4": {
+   "sha256": "c15e325b09fb5a1b1fbd88eca76b482b479be3225d653476ea7be65eecc3833c",
+   "bytes": 16834666,
+   "duration_sec": 57.0
+  },
+  "baraat-bhaag-gayi/episode-03/video.mp4": {
+   "sha256": "f9fa1a06dc8de93a77537a4c6af1a7a638682378640123d06a4b7ce1c1400de8",
+   "bytes": 16485554,
+   "duration_sec": 57.0
+  },
+  "baraat-bhaag-gayi/episode-04/video.mp4": {
+   "sha256": "10c940584d4099c926242f6ffbd60d39aa75aabda036c8fa1d7e6a03e53dd62d",
+   "bytes": 15679286,
+   "duration_sec": 57.0
+  },
+  "baraat-bhaag-gayi/episode-05/video.mp4": {
+   "sha256": "a2aa185d51d88f4acacdb1c3bbb80e2aa63160bacfb9ef58fd00ffa1719b21e3",
+   "bytes": 15462488,
+   "duration_sec": 57.2
+  },
+  "chai-ki-tapri-pe-pyaar/episode-01/video.mp4": {
+   "sha256": "3a9a44e99e28e9863581b009069267e6ecd577e89966978ccf27a71e9ffa4774",
+   "bytes": 14169744,
+   "duration_sec": 57.0
+  },
+  "chai-ki-tapri-pe-pyaar/episode-02/video.mp4": {
+   "sha256": "2781b8c1f3034b3fb8927ea85b9a73906b5e0c45226fcc411086b50e0ff2c6e5",
+   "bytes": 14299868,
+   "duration_sec": 57.0
+  },
+  "chai-ki-tapri-pe-pyaar/episode-03/video.mp4": {
+   "sha256": "e5075faedcaee79d3a827e4cc8533f72ee0d7c53e5270287ea7efb35fe30d1f1",
+   "bytes": 13430504,
+   "duration_sec": 57.0
+  },
+  "chai-ki-tapri-pe-pyaar/episode-04/video.mp4": {
+   "sha256": "c364e91ba5bab4ba75432066b10cc9e93239f55acbbf8bf6ae124ddb87ba11a6",
+   "bytes": 13430672,
+   "duration_sec": 57.0
+  },
+  "chai-ki-tapri-pe-pyaar/episode-05/video.mp4": {
+   "sha256": "f6985631baaceb73cb5925004e5129c57b3d59996d0410ade3b43c7170cc6603",
+   "bytes": 12322594,
+   "duration_sec": 57.0
+  },
+  "neel-mahal-ka-raaz/episode-01/video.mp4": {
+   "sha256": "bc508c841786c3b1b02421b6f6fc0224ae203ef8f61faaf7e016888de76fd411",
+   "bytes": 11338905,
+   "duration_sec": 57.0
+  },
+  "neel-mahal-ka-raaz/episode-02/video.mp4": {
+   "sha256": "80bee2cc7aaaca5f76311034fb83fd3bb08aeab5890d3121363354250de6ec8d",
+   "bytes": 12322454,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-03/video.mp4": {
+   "sha256": "920d984649770151f39c3a679019368e2687db94088c8ec921bda66dd00979ab",
+   "bytes": 10307942,
+   "duration_sec": 56.9
+  },
+  "neel-mahal-ka-raaz/episode-04/video.mp4": {
+   "sha256": "af884080c7f38f56ec899fb182181320e17c2c08ccb21ad14d923ed00eafd89e",
+   "bytes": 11983372,
+   "duration_sec": 57.0
+  },
+  "neel-mahal-ka-raaz/episode-05/video.mp4": {
+   "sha256": "10840c19c2743ef69750112f93ca8d313f7e4fd263ad0c5dc78e7acaaa32b1bd",
+   "bytes": 12426443,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-06/video.mp4": {
+   "sha256": "d18dffe103fd82b42a5e78066aab3ebcc96aec094b9ad584238bdc6d837853ad",
+   "bytes": 10501150,
+   "duration_sec": 57.0
+  },
+  "neel-mahal-ka-raaz/episode-07/video.mp4": {
+   "sha256": "bd01cda35709d42b048a15d6a1c2a98cb30a377b69b18eea8f18ab0476a87609",
+   "bytes": 11944257,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-08/video.mp4": {
+   "sha256": "164df309d85c74957024879a8d8df025d7721e81105bee1d6b13a6b28a48165b",
+   "bytes": 10140568,
+   "duration_sec": 57.0
+  },
+  "neel-mahal-ka-raaz/episode-09/video.mp4": {
+   "sha256": "ea0d42c00e54f761205c7602e950060ebe11b1ba9c48b30bedadc9c42b4a1fe2",
+   "bytes": 10199597,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-10/video.mp4": {
+   "sha256": "3719fcbd092ddbb4ab643c6ce5f07385faf0bb4ed379cd1241eb29adbc582b8f",
+   "bytes": 13289009,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-11/video.mp4": {
+   "sha256": "0bd4252139ce2adcbc532697261c51aeb5e8418ebed62c364b868cf2d1fc58c5",
+   "bytes": 12372892,
+   "duration_sec": 57.1
+  },
+  "neel-mahal-ka-raaz/episode-12/video.mp4": {
+   "sha256": "f83d63398cb30c456f252d71301a8dab6a594c6a3c8defd7544f7d9a013930ab",
+   "bytes": 12883234,
+   "duration_sec": 57.0
+  }
+ }
+}

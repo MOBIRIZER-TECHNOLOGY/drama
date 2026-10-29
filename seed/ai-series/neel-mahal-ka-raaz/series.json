@@ -1,0 +1,180 @@
+{
+  "slug": "neel-mahal-ka-raaz",
+  "title": "Neel Mahal Ka Raaz",
+  "title_hi": "नील महल का राज़",
+  "synopsis": "Meera, a young archivist, takes a month-long job cataloguing a palace sealed for 100 years. Its old caretaker seems to have been waiting for her. A blue mirror holds the imprisoned spirit of Queen Neelambari, and Meera's family is bound to her curse.",
+  "synopsis_hi": "",
+  "year": 2026,
+  "original_language": "hi",
+  "audio": "Hindi dialogue",
+  "categories": [
+    "Fantasy",
+    "Mystery",
+    "Romance"
+  ],
+  "content_rating": "UA13",
+  "content_advisory": "supernatural peril, no gore, no strong language",
+  "completion_status": "Ongoing",
+  "free_episodes": 3,
+  "cover_path": "cover.jpg",
+  "banner_path": "banner.jpg",
+  "ai_disclosure": "ai_generated",
+  "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+  "tools": [
+    {
+      "stage": "keyframe",
+      "name": "qwen-image-2512 + qwen-image-edit-2511 (fp8, Lightning 8-step LoRA)",
+      "version": "2512/2511"
+    },
+    {
+      "stage": "video",
+      "name": "wan2.2-i2v-14b",
+      "version": "A14B fp8_scaled + lightx2v 4-step v1"
+    },
+    {
+      "stage": "voice",
+      "name": "indic-parler-tts",
+      "version": "ai4bharat/indic-parler-tts"
+    },
+    {
+      "stage": "lipsync",
+      "name": "wan2.2-s2v-14b (audio-driven generation)",
+      "version": "fp8_scaled + lightx2v 4-step v1.1"
+    },
+    {
+      "stage": "music",
+      "name": "ace-step-1.5",
+      "version": "turbo aio"
+    }
+  ],
+  "talent": [
+    {
+      "character": "MEERA",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "DADI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "NEELAMBARI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "RUDRA",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "BHAIRAV",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "GAURI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    }
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "title": "Neelgarh Ki Chaabi",
+      "title_hi": "नीलगढ़ की चाबी",
+      "description": "Meera reaches the sealed palace and the caretaker greets her by name.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 2,
+      "title": "Neela Aaina",
+      "title_hi": "नीला आईना",
+      "description": "Meera ignores the warning and finds the blue mirror, and the heir finds her.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 3,
+      "title": "Dadi Ka Raaz",
+      "title_hi": "दादी का राज़",
+      "description": "The curse's history, a photo of Meera's mother, and a new villain.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 4,
+      "title": "Poornima Ki Raat",
+      "title_hi": "पूर्णिमा की रात",
+      "description": "Full moon: the mirror opens and the queen steps out.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 5,
+      "title": "Aakhri Darwaza",
+      "title_hi": "आख़िरी दरवाज़ा",
+      "description": "A choice, a betrayal revealed, and the mirror breaks.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 6,
+      "title": "Neeli Aankhein",
+      "title_hi": "नीली आँखें",
+      "description": "Meera's mother walks out of the broken mirror, and the queen now lives behind Meera's eyes.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 7,
+      "title": "Maa",
+      "title_hi": "माँ",
+      "description": "Mother and daughter meet after 22 years, the old deal comes to light, and Bhairav takes Dadi.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 8,
+      "title": "Sauda",
+      "title_hi": "सौदा",
+      "description": "The queen's power slips out of Meera's control, Rudra admits what he feels, and Meera goes to Bhairav alone.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 9,
+      "title": "Baoli",
+      "title_hi": "बावड़ी",
+      "description": "In the stepwell beneath the palace Bhairav begins his ritual, and the queen speaks through Meera.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 10,
+      "title": "Rudra Ka Vaada",
+      "title_hi": "रुद्र का वादा",
+      "description": "Rudra and Gauri storm the stepwell, Gauri names the man who trapped her, and Rudra falls.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 11,
+      "title": "Rani Ka Sach",
+      "title_hi": "रानी का सच",
+      "description": "Inside her own mind Meera meets the queen face to face, learns the truth, and makes a pact.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 12,
+      "title": "Aazaad",
+      "title_hi": "आज़ाद",
+      "description": "Meera and the queen break Bhairav's cane, the queen goes free at dawn, and something still waits in the water.",
+      "duration_sec": 57,
+      "is_free": false
+    }
+  ]
+}

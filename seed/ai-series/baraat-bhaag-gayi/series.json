@@ -1,0 +1,133 @@
+{
+  "slug": "baraat-bhaag-gayi",
+  "title": "Baraat Bhaag Gayi",
+  "title_hi": "बारात भाग गई",
+  "synopsis": "The night before the pheras, groom Rohan vanishes from a lavish wedding. The bride's cousin Kavya and the groom's best friend Jugnu, who start out blaming each other, have 24 hours to find him across the city, and fall for each other on the way.",
+  "synopsis_hi": "",
+  "year": 2026,
+  "original_language": "hi",
+  "audio": "Hindi dialogue",
+  "categories": [
+    "Comedy",
+    "Romance"
+  ],
+  "content_rating": "UA",
+  "content_advisory": "slapstick and light peril, no violence, no strong language",
+  "completion_status": "Ongoing",
+  "free_episodes": 3,
+  "cover_path": "cover.jpg",
+  "banner_path": "banner.jpg",
+  "ai_disclosure": "ai_generated",
+  "ai_disclosure_note": "Story and dialogue written with AI assistance; images, motion, voices and music generated with AI tools.",
+  "tools": [
+    {
+      "stage": "keyframe",
+      "name": "qwen-image-2512 + qwen-image-edit-2511 (fp8, Lightning 8-step LoRA)",
+      "version": "2512/2511"
+    },
+    {
+      "stage": "video",
+      "name": "wan2.2-i2v-14b",
+      "version": "A14B fp8_scaled + lightx2v 4-step v1"
+    },
+    {
+      "stage": "voice",
+      "name": "indic-parler-tts",
+      "version": "ai4bharat/indic-parler-tts"
+    },
+    {
+      "stage": "lipsync",
+      "name": "wan2.2-s2v-14b (audio-driven generation)",
+      "version": "fp8_scaled + lightx2v 4-step v1.1"
+    },
+    {
+      "stage": "music",
+      "name": "ace-step-1.5",
+      "version": "turbo aio"
+    }
+  ],
+  "talent": [
+    {
+      "character": "KAVYA",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "PAPPU",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "JUGNU",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "TRUMPETER",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "OLD DHOLWALA",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "TANVI",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "BOATMAN",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    },
+    {
+      "character": "ROHAN",
+      "voice_source": "licensed TTS voice",
+      "consent_ref": "Indic Parler-TTS (ai4bharat/indic-parler-tts), Apache-2.0 licence; text-described synthetic voice, no cloning"
+    }
+  ],
+  "episodes": [
+    {
+      "number": 1,
+      "title": "Dulha Gayab",
+      "title_hi": "दूल्हा ग़ायब",
+      "description": "The groom vanishes the night before the pheras and the 24-hour search begins.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 2,
+      "title": "Phoolon Ki Mandi",
+      "title_hi": "फूलों की मंडी",
+      "description": "A chase through the flower market ends in a decoy, a clue and a glimpse of Rohan on a train.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 3,
+      "title": "Baraat Mein Baraat",
+      "title_hi": "बारात में बारात",
+      "description": "They catch the train at the next halt, get swept into another wedding procession, and Rohan's phone rings.",
+      "duration_sec": 57,
+      "is_free": true
+    },
+    {
+      "number": 4,
+      "title": "Ghaat Ki Raat",
+      "title_hi": "घाट की रात",
+      "description": "Kavya learns her cousin knew everything, and a lake crossing brings the two closer.",
+      "duration_sec": 57,
+      "is_free": false
+    },
+    {
+      "number": 5,
+      "title": "Pheron Se Pehle",
+      "title_hi": "फेरों से पहले",
+      "description": "Rohan is found and brought back in time, but now the bride is missing.",
+      "duration_sec": 57,
+      "is_free": false
+    }
+  ]
+}

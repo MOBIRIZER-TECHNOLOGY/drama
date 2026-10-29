@@ -3,7 +3,11 @@
 Videos go in as queued `video_assets` and the arq worker builds the HLS ladder, exactly as an admin upload does.
 Nothing is published here: series and episodes stay drafts until an operator publishes them.
 
-    python scripts/import_ai_series.py --pack <dir with catalog.json> [--video-root <dir with re-encoded masters>] [--apply]
+    python scripts/import_ai_series.py [--pack <dir with catalog.json>] [--video-root <dir>] [--apply] [--wait] [--publish]
+
+The default pack is seed/ai-series at the repository root (see seed/README.md). `--wait` blocks until the worker has
+finished every transcode, and `--publish` then makes the series and episodes live, so a fresh checkout is one command
+away from a populated app. Re-running is safe: series that are already imported are skipped.
 """
 
 import argparse
@@ -11,11 +15,13 @@ import asyncio
 import json
 import re
 import sys
+import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import SessionLocal  # noqa: E402
@@ -158,11 +164,67 @@ async def import_pack(pack: Path, video_root: Path, catalog: dict) -> None:
     print(f"queued {len(queued)} transcodes")
 
 
+DEFAULT_PACK = Path(__file__).resolve().parents[3] / "seed" / "ai-series"
+
+
+async def wait_for_transcodes(slugs: list[str], timeout_s: int) -> None:
+    """Block until every video of the given series is `ready`; stop early if one fails."""
+    deadline = time.monotonic() + timeout_s
+    while True:
+        async with SessionLocal() as db:
+            rows = (
+                await db.execute(
+                    select(VideoAsset.status, func.count())
+                    .join(Episode, Episode.video_asset_id == VideoAsset.id)
+                    .join(Series, Series.id == Episode.series_id)
+                    .where(Series.slug.in_(slugs))
+                    .group_by(VideoAsset.status)
+                )
+            ).all()
+        counts = {status: n for status, n in rows}
+        total = sum(counts.values())
+        ready = counts.get(AssetStatus.ready, 0)
+        print(f"  transcodes: {ready}/{total} ready", flush=True)
+        if counts.get(AssetStatus.failed, 0):
+            sys.exit("a transcode failed; check the worker log, then re-run")
+        if total and ready == total:
+            return
+        if time.monotonic() > deadline:
+            sys.exit(f"timed out after {timeout_s}s with {ready}/{total} ready; is the worker running?")
+        await asyncio.sleep(10)
+
+
+async def publish_pack(slugs: list[str]) -> None:
+    """Make the imported series and their episodes live. Only ready videos are published."""
+    now = datetime.now(UTC)
+    async with SessionLocal() as db:
+        for slug in slugs:
+            series = await db.scalar(select(Series).where(Series.slug == slug))
+            if series is None:
+                continue
+            eps = (await db.scalars(select(Episode).where(Episode.series_id == series.id))).all()
+            published = 0
+            for ep in eps:
+                asset = await db.get(VideoAsset, ep.video_asset_id) if ep.video_asset_id else None
+                if asset is None or asset.status != AssetStatus.ready:
+                    continue
+                if ep.status != PublishStatus.published:
+                    ep.status, ep.published_at = PublishStatus.published, now
+                published += 1
+            if published:
+                series.status = PublishStatus.published
+            await db.commit()
+            print(f"published {slug}: {published}/{len(eps)} episodes", flush=True)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--pack", type=Path, required=True, help="folder holding catalog.json, covers, thumbnails, subtitles")
+    ap.add_argument("--pack", type=Path, default=DEFAULT_PACK, help="folder holding catalog.json, covers, thumbnails, subtitles (default: seed/ai-series)")
     ap.add_argument("--video-root", type=Path, help="folder mirroring the pack with the video files to upload (default: the pack)")
-    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--apply", action="store_true", help="upload and import (otherwise only a preview)")
+    ap.add_argument("--wait", action="store_true", help="after importing, wait until the worker has transcoded every video")
+    ap.add_argument("--publish", action="store_true", help="publish series and episodes whose video is ready (implies --wait)")
+    ap.add_argument("--timeout", type=int, default=3600, help="seconds to wait for transcodes (default 3600)")
     args = ap.parse_args()
     catalog = json.loads((args.pack / "catalog.json").read_text(encoding="utf-8"))
     root = args.video_root or args.pack
@@ -180,7 +242,12 @@ def main() -> None:
     if not args.apply:
         print("Preview only. Use --apply to upload and import drafts.")
         return
+    slugs = [s["slug"] for s in catalog["series"]]
     asyncio.run(import_pack(args.pack, root, catalog))
+    if args.wait or args.publish:
+        asyncio.run(wait_for_transcodes(slugs, args.timeout))
+    if args.publish:
+        asyncio.run(publish_pack(slugs))
 
 
 if __name__ == "__main__":
