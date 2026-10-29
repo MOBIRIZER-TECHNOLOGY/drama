@@ -1,4 +1,5 @@
 import { colors, radii, spacing } from "@katha/tokens";
+import { Image } from "expo-image";
 import { memo, useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Icon } from "@/components/icons";
@@ -77,20 +78,43 @@ export const EpisodeGrid = memo(function EpisodeGrid({
             accessibilityLabel={`Episode ${ep.number}${locked ? ", locked" : ""}`}
             style={({ pressed }) => [
               styles.cell,
+              ep.thumbnail_url ? styles.cellThumb : null,
               isCurrent && styles.cellCurrent,
               state === "locked_sequential" && styles.cellDim,
               pressed && { opacity: 0.7 },
             ]}
           >
-            <Text variant="label" color={isCurrent ? colors.accentInk : colors.ink}>
-              {ep.number}
-            </Text>
+            {ep.thumbnail_url ? (
+              <>
+                {/* Small decoded size and a disk cache: twelve full-size posters would be the heaviest thing on the screen. */}
+                <Image
+                  source={{ uri: ep.thumbnail_url }}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                  cachePolicy="disk"
+                  recyclingKey={ep.id}
+                  transition={100}
+                />
+                <View style={[StyleSheet.absoluteFill, styles.scrim]} />
+                <Text variant="label" color="#fff" style={styles.number}>
+                  {ep.number}
+                </Text>
+              </>
+            ) : (
+              <Text variant="label" color={isCurrent ? colors.accentInk : colors.ink}>
+                {ep.number}
+              </Text>
+            )}
             {locked ? (
               <View style={styles.lock}>
                 <Icon name="lock" size={9} />
               </View>
             ) : state === "free" ? (
-              <Text variant="caption" color={isCurrent ? colors.accentInk : colors.success} style={styles.tag}>
+              <Text
+                variant="caption"
+                color={isCurrent && !ep.thumbnail_url ? colors.accentInk : colors.success}
+                style={[styles.tag, ep.thumbnail_url ? styles.tagThumb : null]}
+              >
                 Free
               </Text>
             ) : null}
@@ -130,8 +154,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  cellThumb: { width: 64, height: 114, overflow: "hidden", justifyContent: "flex-end", alignItems: "flex-start" },
+  scrim: { backgroundColor: "rgba(0,0,0,0.28)" },
+  number: { position: "absolute", left: 6, bottom: 5 },
   cellCurrent: { backgroundColor: colors.accent, borderColor: colors.accent },
   cellDim: { opacity: 0.55 },
-  lock: { position: "absolute", top: 3, right: 3 },
+  lock: { position: "absolute", top: 4, right: 4 },
   tag: { fontSize: 9, lineHeight: 11, position: "absolute", bottom: 4 },
+  tagThumb: { right: 6, bottom: 6 },
 });

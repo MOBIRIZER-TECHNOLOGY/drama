@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useT } from "@/lib/app-context";
 import type { EpisodeOut } from "@/lib/types";
+import { ShowArtwork } from "../ShowArtwork";
 import { IconCoin, IconLock, IconPlay } from "../ui/icons";
 import { highestAccessibleNumber, lockState } from "./lock-state";
 
@@ -43,6 +44,9 @@ export function EpisodeGrid({
   });
 
   const visible = ranges.length === 0 ? episodes : episodes.slice(range * RANGE_SIZE, (range + 1) * RANGE_SIZE);
+  // Thumbnails make the tiles portrait, so the grid uses fewer, larger columns; a series with none keeps the
+  // compact number grid.
+  const hasThumbs = visible.some((e) => e.thumbnail_url);
 
   return (
     <div>
@@ -69,7 +73,11 @@ export function EpisodeGrid({
         <Legend className="border border-gold/60 text-gold">{t("series.legend_next", "Unlock next")}</Legend>
         <Legend className="bg-surface text-muted opacity-60">{t("series.legend_later", "Unlock previous first")}</Legend>
       </div>
-      <ul className="grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12" aria-label={t("series.episodes", "Episodes")}>
+      <ul className={
+          hasThumbs
+            ? "grid grid-cols-4 gap-2 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10"
+            : "grid grid-cols-5 gap-2 sm:grid-cols-8 md:grid-cols-10 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12"
+        } aria-label={t("series.episodes", "Episodes")}>
         {visible.map((ep) => {
           const state = lockState(ep, highest);
           const current = ep.id === currentId;
@@ -82,8 +90,10 @@ export function EpisodeGrid({
                 : state === "next"
                   ? t("series.unlock_for", "Unlock for {price} coins", { price: ep.price })
                   : t("series.unlock_previous_first", "Unlock previous episodes first");
-          const base =
-            "relative flex aspect-square w-full flex-col items-center justify-center rounded-md border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent";
+          const thumb = ep.thumbnail_url;
+          const base = `relative flex w-full flex-col items-center justify-center overflow-hidden rounded-md border text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+            thumb ? "aspect-[9/16]" : "aspect-square"
+          }`;
           const cls = current
             ? "border-accent bg-accent text-accent-ink"
             : state === "next"
@@ -101,18 +111,45 @@ export function EpisodeGrid({
                 title={ep.title ? `${ep.number}. ${ep.title} — ${label}` : label}
                 className={`${base} ${cls}`}
               >
-                <span className="font-display text-base leading-none sm:text-lg">{ep.number}</span>
-                {current ? (
-                  <IconPlay size={12} className="mt-1" />
-                ) : state === "next" ? (
-                  <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-gold">
-                    <IconCoin size={11} />
-                    {ep.price}
-                  </span>
-                ) : state === "later" ? (
-                  <IconLock size={12} className="mt-1" />
+                {thumb ? (
+                  <>
+                    <ShowArtwork
+                      kind="poster"
+                      src={thumb}
+                      alt=""
+                      fill
+                      sizes="(min-width: 1024px) 96px, 22vw"
+                      className={`object-cover ${state === "later" ? "opacity-70" : ""}`}
+                    />
+                    <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/5 to-transparent" aria-hidden />
+                    <span className="absolute bottom-1 start-1.5 font-display text-sm leading-none text-white drop-shadow">{ep.number}</span>
+                    {current ? (
+                      <IconPlay size={14} className="absolute bottom-1 end-1.5 text-white" />
+                    ) : state === "next" ? (
+                      <span className="absolute bottom-1 end-1.5 inline-flex items-center gap-0.5 text-[10px] font-semibold text-gold">
+                        <IconCoin size={11} />
+                        {ep.price}
+                      </span>
+                    ) : state === "later" ? (
+                      <IconLock size={13} className="absolute bottom-1 end-1.5 text-white/90" />
+                    ) : null}
+                  </>
                 ) : (
-                  <span className="mt-1 h-3" />
+                  <>
+                    <span className="font-display text-base leading-none sm:text-lg">{ep.number}</span>
+                    {current ? (
+                      <IconPlay size={12} className="mt-1" />
+                    ) : state === "next" ? (
+                      <span className="mt-1 inline-flex items-center gap-0.5 text-[10px] text-gold">
+                        <IconCoin size={11} />
+                        {ep.price}
+                      </span>
+                    ) : state === "later" ? (
+                      <IconLock size={12} className="mt-1" />
+                    ) : (
+                      <span className="mt-1 h-3" />
+                    )}
+                  </>
                 )}
                 {isContinue && (
                   <span className="absolute -top-1.5 start-1/2 -translate-x-1/2 rounded-pill bg-accent px-1.5 text-[9px] font-semibold uppercase text-accent-ink rtl:translate-x-1/2">

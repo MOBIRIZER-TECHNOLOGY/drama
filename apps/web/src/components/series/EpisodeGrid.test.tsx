@@ -64,3 +64,40 @@ describe("EpisodeGrid", () => {
     });
   });
 });
+
+describe("EpisodeGrid thumbnails", () => {
+  const thumbs = [
+    ep(1, { is_free: true, title: "Pilot", thumbnail_url: "https://cdn.test/e1.jpg" }),
+    ep(2, { accessible: true, thumbnail_url: "https://cdn.test/e2.jpg" }),
+    ep(3, { price: 25, thumbnail_url: "https://cdn.test/e3.jpg" }),
+    ep(4, { thumbnail_url: "https://cdn.test/e4.jpg" }),
+  ];
+
+  it("shows a thumbnail on every tile that has one, keeping labels and the number", () => {
+    renderWithApp(<EpisodeGrid episodes={thumbs} currentId={null} continueNumber={null} onSelect={() => {}} />);
+    expect(document.querySelectorAll("li img")).toHaveLength(4);
+    expect(screen.getByLabelText("Episode 1 – Pilot. Free").textContent).toContain("1");
+    expect(screen.getByLabelText("Episode 3. Unlock for 25 coins").textContent).toContain("25");
+    expect(screen.getByLabelText("Episode 4. Unlock previous episodes first")).toBeInTheDocument();
+  });
+
+  it("marks the current episode and still selects on click", () => {
+    const onSelect = vi.fn();
+    renderWithApp(<EpisodeGrid episodes={thumbs} currentId="ep-1" continueNumber={null} onSelect={onSelect} />);
+    expect(screen.getByLabelText(/^Episode 1/).getAttribute("aria-current")).toBe("true");
+    fireEvent.click(screen.getByLabelText(/^Episode 3/));
+    expect(onSelect).toHaveBeenCalledWith(thumbs[2]);
+  });
+
+  it("falls back to the number tile when an episode has no thumbnail", () => {
+    const mixed = [thumbs[0], ep(2, { accessible: true })];
+    renderWithApp(<EpisodeGrid episodes={mixed} currentId={null} continueNumber={null} onSelect={() => {}} />);
+    expect(document.querySelectorAll("li img")).toHaveLength(1);
+    expect(screen.getByLabelText("Episode 2. Unlocked").querySelector("img")).toBeNull();
+  });
+
+  it("uses the compact grid when no episode has a thumbnail", () => {
+    renderWithApp(<EpisodeGrid episodes={small} currentId={null} continueNumber={null} onSelect={() => {}} />);
+    expect(screen.getByRole("list").className).toContain("grid-cols-5");
+  });
+});
